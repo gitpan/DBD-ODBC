@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c,v 1.10 1998/08/08 16:58:30 timbo Exp $
+/* $Id: dbdimp.c,v 1.11 1998/08/14 18:28:20 timbo Exp $
  * 
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -37,6 +37,7 @@ dbd_discon_all(drh, imp_drh)
     SV *drh;
     imp_drh_t *imp_drh;
 {
+    dTHR;
     /* The disconnect_all concept is flawed and needs more work */
     if (!dirty && !SvTRUE(perl_get_sv("DBI::PERL_ENDING",0))) {
 	sv_setiv(DBIc_ERR(imp_drh), (IV)1);
@@ -77,6 +78,7 @@ dbd_db_login(dbh, imp_dbh, dbname, uid, pwd)
 {
     D_imp_drh_from_dbh;
     int ret;
+    dTHR;
 
     RETCODE rc;
 
@@ -143,6 +145,7 @@ dbd_db_disconnect(dbh, imp_dbh)
 {
     RETCODE rc;
     D_imp_drh_from_dbh;
+    dTHR;
 
     /* We assume that disconnect will always work	*/
     /* since most errors imply already disconnected.	*/
@@ -174,6 +177,7 @@ dbd_db_commit(dbh, imp_dbh)
     imp_dbh_t *imp_dbh;
 {
     RETCODE rc;
+    dTHR;
 
     rc = SQLTransact(imp_dbh->henv, imp_dbh->hdbc, SQL_COMMIT);
     if (!SQL_ok(rc)) {
@@ -189,6 +193,7 @@ dbd_db_rollback(dbh, imp_dbh)
     imp_dbh_t *imp_dbh;
 {
     RETCODE rc;
+    dTHR;
 
     rc = SQLTransact(imp_dbh->henv, imp_dbh->hdbc, SQL_ROLLBACK);
     if (!SQL_ok(rc)) {
@@ -210,6 +215,7 @@ dbd_error(h, err_rc, what)
     char *what;
 {
     D_imp_xxh(h);
+    dTHR;
 
     struct imp_dbh_st *imp_dbh = NULL;
     struct imp_sth_st *imp_sth = NULL;
@@ -217,7 +223,6 @@ dbd_error(h, err_rc, what)
     HDBC hdbc = SQL_NULL_HDBC;
     HSTMT hstmt = SQL_NULL_HSTMT;
     SV *errstr;
-    int i;
 
     if (err_rc == SQL_SUCCESS && dbis->debug<3)	/* nothing to do */
 	return;
@@ -252,12 +257,12 @@ dbd_error(h, err_rc, what)
 	RETCODE rc = 0;
 
 	if (dbis->debug >= 3)
-	    fprintf(DBILOGFP, "dbd_error: err_rc=%d rc=%d i=%d s/d/e: %d/%d/%d\n", 
-	       err_rc, rc, i, hstmt,hdbc,henv);
+	    fprintf(DBILOGFP, "dbd_error: err_rc=%d rc=%d s/d/e: %d/%d/%d\n", 
+	       err_rc, rc, hstmt,hdbc,henv);
 
 	while( (rc=SQLError(henv, hdbc, hstmt,
-		      sqlstate, &NativeError,
-		      ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen
+		    sqlstate, &NativeError,
+		    ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen
 		)) == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO
 	) {
 	    sv_setpvn(DBIc_STATE(imp_xxh), sqlstate, 5);
@@ -328,6 +333,7 @@ dbd_preparse(imp_sth, statement)
     imp_sth_t *imp_sth;
     char *statement;
 {
+    dTHR;
     bool in_literal = FALSE;
     char *src, *start, *dest;
     phs_t phs_tpl, *phs;
@@ -429,6 +435,7 @@ dbd_st_tables(dbh, sth, qualifier, table_type)
     RETCODE rc;
     SV **svp;
     char cname[128];					/* cursorname */
+    dTHR;
 
     imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
     imp_sth->hdbc = imp_dbh->hdbc;
@@ -503,6 +510,7 @@ dbd_st_prepare(sth, imp_sth, statement, attribs)
     char *statement;
     SV *attribs;
 {
+    dTHR;
     D_imp_dbh_from_sth;
     RETCODE rc;
     SV **svp;
@@ -624,6 +632,7 @@ dbd_describe(h, imp_sth)
     SV *h;
     imp_sth_t *imp_sth;
 {
+    dTHR;
     RETCODE rc;
 
     UCHAR *cbuf_ptr;		
@@ -826,6 +835,7 @@ dbd_st_execute(sth, imp_sth)	/* <= -2:error, >=0:ok row count, (-1=unknown count
     SV *sth;
     imp_sth_t *imp_sth;
 {
+    dTHR;
     RETCODE rc;
     int debug = dbis->debug;
 
@@ -873,6 +883,7 @@ dbd_st_fetch(sth, imp_sth)
     SV *	sth;
     imp_sth_t *imp_sth;
 {
+    dTHR;
     int debug = dbis->debug;
     int i;
     AV *av;
@@ -973,6 +984,7 @@ dbd_st_finish(sth, imp_sth)
     SV *sth;
     imp_sth_t *imp_sth;
 {
+    dTHR;
     D_imp_dbh_from_sth;
     RETCODE rc;
     int ret = 0;
@@ -1000,6 +1012,7 @@ dbd_st_destroy(sth, imp_sth)
     SV *sth;
     imp_sth_t *imp_sth;
 {
+    dTHR;
     D_imp_dbh_from_sth;
     RETCODE rc;
 
@@ -1054,6 +1067,7 @@ _dbd_rebind_ph(sth, imp_sth, phs, maxlen)
     phs_t *phs;
     int maxlen;
 {
+    dTHR;
     RETCODE rc;
     /* args of SQLBindParameter() call */
     SWORD fParamType;
@@ -1213,6 +1227,7 @@ dbd_bind_ph(sth, imp_sth, ph_namesv, newvalue, sql_type, attribs, is_inout, maxl
     int is_inout;		/* inout for procedure calls only */
     IV maxlen;			/* ??? */
 {
+    dTHR;
     SV **phs_svp;
     STRLEN name_len;
     char *name;
@@ -1252,6 +1267,7 @@ dbd_bind_ph(sth, imp_sth, ph_namesv, newvalue, sql_type, attribs, is_inout, maxl
             if (!imp_sth->out_params_av)
                 imp_sth->out_params_av = newAV();
             av_push(imp_sth->out_params_av, SvREFCNT_inc(*phs_svp));
+			croak("Can't bind output values (currently)");	/* XXX */
         }
  
         /* some types require the trailing null included in the length. */
@@ -1291,6 +1307,7 @@ dbd_st_blob_read(sth, imp_sth, field, offset, len, destrv, destoffset)
     SV *destrv;
     long destoffset;
 {
+    dTHR;
     SDWORD retl;
     SV *bufsv;
     RETCODE rc;
@@ -1390,6 +1407,7 @@ dbd_db_STORE_attrib(dbh, imp_dbh, keysv, valuesv)
     SV *keysv;
     SV *valuesv;
 {
+    dTHR;
     D_imp_drh_from_dbh;
     RETCODE rc;
     STRLEN kl;
@@ -1449,6 +1467,7 @@ dbd_db_FETCH_attrib(dbh, imp_dbh, keysv)
     imp_dbh_t *imp_dbh;
     SV *keysv;
 {
+    dTHR;
     D_imp_drh_from_dbh;
     RETCODE rc;
     STRLEN kl;
@@ -1533,6 +1552,7 @@ dbd_st_FETCH_attrib(sth, imp_sth, keysv)
     imp_sth_t *imp_sth;
     SV *keysv;
 {
+    dTHR;
     STRLEN kl;
     char *key = SvPV(keysv,kl);
     int i;
@@ -1642,6 +1662,7 @@ dbd_st_STORE_attrib(sth, imp_sth, keysv, valuesv)
     SV *keysv;
     SV *valuesv;
 {
+    dTHR;
     D_imp_dbh_from_sth;
     STRLEN kl;
     STRLEN vl;
@@ -1671,6 +1692,7 @@ odbc_get_info(dbh, ftype)
     SV *dbh;
     int ftype;
 {
+    dTHR;
     D_imp_dbh(dbh);
     RETCODE rc;
     SV *retsv = NULL;
@@ -1742,6 +1764,7 @@ odbc_get_type_info(dbh, sth, ftype)
     SV *sth;
     int ftype;
 {
+    dTHR;
     D_imp_dbh(dbh);
     D_imp_sth(sth);
     RETCODE rc;
@@ -1816,13 +1839,14 @@ odbc_col_attributes(sth, colno, desctype)
    int colno;
    int desctype;
 {
+    dTHR;
     D_imp_sth(sth);
     RETCODE rc;
     SV *retsv = NULL;
     int i;
     char rgbInfoValue[256];
     SWORD cbInfoValue = -2;
-    SDWORD fDesc;
+    SDWORD fDesc = -2;
     
     for (i = 0; i < 6; i++)
 	rgbInfoValue[i] = 0xFF;
@@ -1841,31 +1865,45 @@ odbc_col_attributes(sth, colno, desctype)
 */
     if (colno == 0) {
 	dbd_error(sth, SQL_ERROR,
-	      "can not obtain SQLColAttributes for column 0");
+		  "can not obtain SQLColAttributes for column 0");
 	return Nullsv;
     }
 
     rc = SQLColAttributes(imp_sth->hstmt, colno, desctype,
-		  rgbInfoValue, sizeof(rgbInfoValue)-1, &cbInfoValue, &fDesc);
+	      rgbInfoValue, sizeof(rgbInfoValue)-1, &cbInfoValue, &fDesc);
     if (!SQL_ok(rc)) {
-	    dbd_error(sth, rc, "odbc_col_attributes/SQLColAttributes");
-	    return Nullsv;
+	dbd_error(sth, rc, "odbc_col_attributes/SQLColAttributes");
+	return Nullsv;
     }
 
-    if (dbis->debug >= 2)
+    if (dbis->debug >= 2) {
 	fprintf(DBILOGFP,
-		"SQLColAttributes: colno = %d, desctype = %d, cbInfoValue = %d, fDesc = %d\n",
-		colno, desctype, cbInfoValue, fDesc);
+	    "SQLColAttributes: colno=%d, desctype=%d, cbInfoValue=%d, fDesc=%d",
+	    colno, desctype, cbInfoValue, fDesc
+	);
+	if (dbis->debug>=4)
+	    fprintf(DBILOGFP,
+		" rgbInfo=[%02x,%02x,%02x,%02x,%02x,%02x\n",
+		rgbInfoValue[0] & 0xff, rgbInfoValue[1] & 0xff, rgbInfoValue[2] & 0xff, 
+		rgbInfoValue[3] & 0xff, rgbInfoValue[4] & 0xff, rgbInfoValue[5] & 0xff
+	    );
+	fprintf(DBILOGFP,"\n");
+    }
 
-    /* sigh...Oracle's ODBC driver version 8.0.4 resets cbInfoValue to 0, when
-       putting a value in fDesc.  This is a change!
-    */
-    if (cbInfoValue == -2 || cbInfoValue == 0)
-	    retsv = newSViv(fDesc);
+    /*
+     * sigh...Oracle's ODBC driver version 8.0.4 resets cbInfoValue to 0, when
+     * putting a value in fDesc.  This is a change!
+     *
+     * double sigh.  SQL Server (and MySql under Unix) set cbInfoValue
+     * but use fdesc, not rgbInfoValue.  This change may be problematic
+     * for other drivers. (the additional || fDesc != -2...)
+     */
+    if (cbInfoValue == -2 || cbInfoValue == 0 || fDesc != -2)
+	retsv = newSViv(fDesc);
     else if (cbInfoValue != 2 && cbInfoValue != 4)
-	    retsv = newSVpv(rgbInfoValue, 0);
+	retsv = newSVpv(rgbInfoValue, 0);
     else if (rgbInfoValue[cbInfoValue+1] == '\0')
-	    retsv = newSVpv(rgbInfoValue, 0);
+	retsv = newSVpv(rgbInfoValue, 0);
     else {
 	if (cbInfoValue == 2)
 	    retsv = newSViv(*(short *)rgbInfoValue);
@@ -1876,7 +1914,6 @@ odbc_col_attributes(sth, colno, desctype)
     return sv_2mortal(retsv);
 }
 
-
 int	
 odbc_db_columns(dbh, sth, catalog, schema, table, column)
     SV *dbh;
@@ -1886,6 +1923,7 @@ odbc_db_columns(dbh, sth, catalog, schema, table, column)
     char *table;
     char *column;
 {
+    dTHR;
     D_imp_dbh(dbh);
     D_imp_sth(sth);
     RETCODE rc;

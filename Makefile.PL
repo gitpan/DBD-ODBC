@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -sw
 #
-# $Id: Makefile.PL,v 1.10 1998/08/08 16:58:30 timbo Exp $
+# $Id: Makefile.PL,v 1.11 1998/08/14 18:28:20 timbo Exp $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -30,7 +30,7 @@ my %opts =
 );
 if ($ExtUtils::MakeMaker::VERSION >= 5.43) {
     $opts{AUTHOR} = 'Tim Bunce and Jeff Urlwin (dbi-users@fugue.com)';
-    $opts{ABSTRACT_FROM} = 'ODBC driver for the DBI module.';
+    $opts{ABSTRACT} = 'ODBC driver for the DBI module.';
     $opts{PREREQ_PM} = { DBI => 0 };
     $opts{CAPI} = 'TRUE' if $Config{archname} =~ /-object\b/i;
 }
@@ -67,6 +67,9 @@ if ($^O eq 'MSWin32') {
     print SQLH "#include <sql.h> \n#include <sqlext.h>\n";
 }
 else {
+
+    # for Adabas
+    $ENV{ODBCHOME} = $ENV{DBROOT} if $ENV{DBROOT} && -f "$ENV{DBROOT}/lib/odbclib.a";
 
     my $odbchome= $::opt_o || $ENV{ODBCHOME};
     unless ($odbchome) {

@@ -34,7 +34,7 @@ $dbh->{'AutoCommit'} = 1;
 
 my $rows = 0;
 # TBD: Check for tables function working.  
-if ($sth = $dbh->tables()) {
+if ($sth = $dbh->table_info()) {
     while (@row = $sth->fetchrow()) {
         $rows++;
     }

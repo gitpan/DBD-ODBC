@@ -83,8 +83,8 @@ require 5.004;
 
 	$rc = -1;
 
-	unless ($sth = $dbh->tables()) {
-	    print "Can't list tables\n";
+	unless ($sth = $dbh->table_info()) {
+	    print "Can't list tables: $DBI::errstr\n";
 	    return -1;
 	}
 	# TABLE_QUALIFIER,TABLE_OWNER,TABLE_NAME,TABLE_TYPE,REMARKS
