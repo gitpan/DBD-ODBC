@@ -13,7 +13,7 @@ BEGIN {
 
 use DBI qw(:sql_types);
 use ODBCTEST;
-# use Data::Dumper;
+use Data::Dumper;
 {
     my $numTest = 0;
     sub Test($;$) {
@@ -347,7 +347,7 @@ Test($sth->{odbc_force_rebind});
 # works with multiple statements.
 #
 eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
-$dbh->do("CREATE PROCEDURE  PERL_DBD_TESTPRC
+$dbh->do("CREATE PROCEDURE  PERL_DBD_PROC1
 \@parameter1 int = 22
 AS
 	/* SET NOCOUNT ON */
@@ -358,7 +358,7 @@ AS
 my $queryInputParameter1 = 2222;
 my $queryOutputParameter = 0;
 	
-$sth = $dbh->prepare('{? = call PERL_DBD_TESTPRC(?) }');
+$sth = $dbh->prepare('{? = call PERL_DBD_PROC1(?) }');
 $sth->bind_param_inout(1, \$queryOutputParameter, 30, { TYPE => DBI::SQL_INTEGER });
 $sth->bind_param(2, $queryInputParameter1, { TYPE => DBI::SQL_INTEGER });
 					
@@ -376,10 +376,11 @@ do {
 	 Test($outputData{some_more_data} == 3);
 	 Test(!defined($outputData{some_data}));
       }
-      # print 'outputData ', Dumper(\%outputData), "\n";
+      print 'outputData ', Dumper(\%outputData), "\n";
    }
+   print "out of for loop\n";
 } while($sth->{odbc_more_results});
-
+print "out of while loop\n";
 Test($queryOutputParameter == $queryInputParameter1 + 1);
 
 # clean up test table and procedure

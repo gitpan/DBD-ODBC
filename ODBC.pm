@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.45_16';
+$DBD::ODBC::VERSION = '0.45_17';
 
 {
     package DBD::ODBC;
@@ -453,6 +453,10 @@ do {
       # do stuff here
    }
 } while ($sth->{odbc_more_results});
+
+Note that with multiple result sets and output parameters (i.e. using
+bind_param_inout, don't expect output parameters to be bound until ALL
+result sets have been retrieved.
 
 =item odbc_ignore_named_placeholders
 

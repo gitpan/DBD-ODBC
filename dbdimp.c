@@ -102,11 +102,33 @@ void
     DBIS = dbistate;
 }
 
+static void odbc_clear_result_set(imp_sth_t *imp_sth)
+{
+   Safefree(imp_sth->fbh);
+   Safefree(imp_sth->ColNames);
+   Safefree(imp_sth->RowBuffer);
 
-static void odbc_handle_outparams(imp_sth_t *imp_sth)
+   /* dgood - Yikes!  I don't want to go down to this level, */
+   /*         but if I don't, it won't figure out that the   */
+   /*         number of columns have changed...              */
+   if (DBIc_FIELDS_AV(imp_sth)) {
+      sv_free((SV*)DBIc_FIELDS_AV(imp_sth));
+      DBIc_FIELDS_AV(imp_sth) = Nullav;
+   }
+
+   imp_sth->fbh       = NULL;
+   imp_sth->ColNames  = NULL;
+   imp_sth->RowBuffer = NULL;
+   imp_sth->done_desc = 0;
+   
+}
+
+static void odbc_handle_outparams(imp_sth_t *imp_sth, int debug)
 {
    int i = (imp_sth->out_params_av) ? AvFILL(imp_sth->out_params_av)+1 : 0;
-   int debug = DBIc_DEBUGIV(imp_sth);
+   if (debug >= 3)
+      PerlIO_printf(DBIc_LOGPIO(imp_sth),
+		    "       handling %d output parameters\n", i);
    while (--i >= 0) {
       phs_t *phs = (phs_t*)(void*)SvPVX(AvARRAY(imp_sth->out_params_av)[i]);
       SV *sv = phs->sv;
@@ -116,31 +138,31 @@ static void odbc_handle_outparams(imp_sth_t *imp_sth)
 		       phs->name, phs->cbValue);
       }
 
-	    /* phs->cbValue has been updated by ODBC to hold the length of the result	*/
+      /* phs->cbValue has been updated by ODBC to hold the length of the result	*/
       if (phs->cbValue != SQL_NULL_DATA) {	/* is okay	*/
-		/*
-		 * When ODBC fills an output parameter buffer, the size of the
-		 * data that were available is written into the memory location
-		 * provided by cbValue pointer argument during the SQLBindParameter() call.
-		 * (In this case, the cbValue pointer has been set to &phs->cbValue).
-		 *
-		 * If the number of bytes available exceeds the size of the output buffer,
-		 * ODBC will truncate the data such that it fits in the available buffer.
-		 * However, the cbValue will still reflect the size of the data before it
-		 * was truncated.
-		 *
-		 * This fact provides us a way to detect truncation on this particular
-		 * output parameter.  Otherwise, the only way to detect truncation is
-		 * through a follow-up to a SQL_SUCCESS_WITH_INFO result.  Such a call
-		 * cannot return enough information to state exactly where the truncation
-		 * occurred.
-		 * -jeremy
-		 */
+	 /*
+	  * When ODBC fills an output parameter buffer, the size of the
+	  * data that were available is written into the memory location
+	  * provided by cbValue pointer argument during the SQLBindParameter() call.
+	  * (In this case, the cbValue pointer has been set to &phs->cbValue).
+	  *
+	  * If the number of bytes available exceeds the size of the output buffer,
+	  * ODBC will truncate the data such that it fits in the available buffer.
+	  * However, the cbValue will still reflect the size of the data before it
+	  * was truncated.
+	  *
+	  * This fact provides us a way to detect truncation on this particular
+	  * output parameter.  Otherwise, the only way to detect truncation is
+	  * through a follow-up to a SQL_SUCCESS_WITH_INFO result.  Such a call
+	  * cannot return enough information to state exactly where the truncation
+	  * occurred.
+	  * -jeremy
+	  */
 
 	 if (phs->cbValue > phs->maxlen) {
-		    /* a truncation occurred */
+	    /* a truncation occurred */
 	    SvPOK_only(sv);
-	    SvCUR(sv) = phs->maxlen;
+	    SvCUR_set(sv, phs->maxlen);
 	    *SvEND(sv) = '\0';
 
 	    if (debug >= 2) {
@@ -149,7 +171,7 @@ static void odbc_handle_outparams(imp_sth_t *imp_sth)
 			     phs->name, SvPV(sv,na), phs->cbValue, (long)phs->maxlen);
 	    }
 	 } else {
-		    /* no truncation occurred */
+	    /* no truncation occurred */
 	    SvPOK_only(sv);
 	    SvCUR(sv) = phs->cbValue;
 	    *SvEND(sv) = '\0';
@@ -158,6 +180,10 @@ static void odbc_handle_outparams(imp_sth_t *imp_sth)
 			     "       out %s = '%s'\t(len %ld)\n",
 			     phs->name, SvPV(sv,na), (long)phs->cbValue);
 	    }
+#if 0
+	    if (phs->sql_type == SQL_INTEGER) {
+	    }
+#endif
 	 }
       } else {			/* is NULL	*/
 	 (void)SvOK_off(phs->sv);
@@ -1809,7 +1835,7 @@ imp_sth_t *imp_sth;
         * attribute to force a re-describe after every execute? */
        if (imp_sth->odbc_force_rebind) {
 	  /* force calling dbd_describe after each execute */
-	  imp_sth->done_desc = 0;
+	  odbc_clear_result_set(imp_sth);
        }
 #if 0
        if (imp_sth->done_desc) {
@@ -1861,7 +1887,7 @@ imp_sth_t *imp_sth;
     imp_sth->eod = SQL_SUCCESS;
 
     if (outparams) {	/* check validity of bound output SV's	*/
-       odbc_handle_outparams(imp_sth);
+       odbc_handle_outparams(imp_sth, debug);
     }
 
     /*
@@ -1928,22 +1954,7 @@ imp_sth_t *imp_sth;
 		 if (DBIc_DEBUGIV(imp_sth) > 0) {
 		    PerlIO_printf(DBIc_LOGPIO(imp_dbh), "MORE Results!\n");
 		 }
-		 Safefree(imp_sth->fbh);
-		 Safefree(imp_sth->ColNames);
-		 Safefree(imp_sth->RowBuffer);
-		 
-		 /* dgood - Yikes!  I don't want to go down to this level, */
-		 /*         but if I don't, it won't figure out that the   */
-		 /*         number of columns have changed...              */
-		 if (DBIc_FIELDS_AV(imp_sth)) {
-		    sv_free((SV*)DBIc_FIELDS_AV(imp_sth));
-		    DBIc_FIELDS_AV(imp_sth) = Nullav;
-		 }
-		 
-		 imp_sth->fbh       = NULL;
-		 imp_sth->ColNames  = NULL;
-		 imp_sth->RowBuffer = NULL;
-		 imp_sth->done_desc = 0;
+		 odbc_clear_result_set(imp_sth);
 
        		 imp_sth->odbc_force_rebind = 1; /* force future executes to rebind automatically */
 		 /* tell the odbc driver that we need to unbind the
@@ -1973,7 +1984,7 @@ imp_sth_t *imp_sth;
 		 imp_sth->moreResults = 0;
 
 		 if (outparams) {
-		    odbc_handle_outparams(imp_sth);
+		    odbc_handle_outparams(imp_sth, debug);
 		 }
 		 /* XXX need to 'finish' here */
 		 dbd_st_finish(sth, imp_sth);
@@ -2007,7 +2018,7 @@ imp_sth_t *imp_sth;
 	imp_sth->RowCount = 0;
     imp_sth->RowCount++;
 
-    av = DBIS->get_fbav(imp_sth);
+    av = DBIc_DBISTATE(imp_sth)->get_fbav(imp_sth);
     num_fields = AvFILL(av)+1;
 
     if (DBIc_DEBUGIV(imp_sth) >= 3)
@@ -3163,6 +3174,9 @@ SV *keysv;
 	case 0:			/* NUM_OF_PARAMS */
 	    return Nullsv;	/* handled by DBI */
 	case 1:			/* NUM_OF_FIELDS */
+	   if (DBIc_DEBUGIV(imp_sth) > 8) {
+	      PerlIO_printf(DBIc_LOGPIO(imp_sth), " dbd_st_FETCH_attrib NUM_OF_FIELDS %d\n", i);
+	   }
 	    retsv = newSViv(i);
 	    break;
 	case 2: 			/* NAME */
@@ -3767,6 +3781,7 @@ static void AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output, PerlIO 
 	rc=SQLError(henv, hdbc, hstmt,
 		    sqlstate, &NativeError,
 		    ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen);
+	
 	if (output && SQL_ok(rc))
 	    PerlIO_printf(logfp, "%s %s\n", sqlstate, ErrorMsg);
 
