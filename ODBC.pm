@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.41';
+$DBD::ODBC::VERSION = '0.42';
 
 {
     package DBD::ODBC;
@@ -173,6 +173,29 @@ $DBD::ODBC::VERSION = '0.41';
     sub ping {
 	my $dbh = shift;
 	my $state = undef;
+
+ 	my ($catalog, $schema, $table, $type);
+
+	$catalog = "";
+	$schema = "";
+	$table = "NOXXTABLE";
+	$type = "";
+
+	# create a "blank" statement handle
+	my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLTables_PING" });
+
+	DBD::ODBC::st::_tables($dbh,$sth, $catalog, $schema, $table, $type)
+	      or return 0;
+	$sth->finish;
+	return 1;
+
+    }
+
+    # saved, just for posterity.
+    sub oldping  {
+	my $dbh = shift;
+	my $state = undef;
+
 	# should never 'work' but if it does, that's okay!
 	# JLU incorporated patches from Jon Smirl 5/4/99
 	{
@@ -200,6 +223,7 @@ $DBD::ODBC::VERSION = '0.41';
  	return 1 if $state eq '42S02';  # Base table not found.Solid EE v3.51
 	return 1 if $state eq 'S0022';	# Column not found
 	return 1 if $state eq '37000';  # statement could not be prepared (19991011, JLU)
+	# return 1 if $state eq 'S1000';  # General Error? ? 5/30/02, JLU.  This is what Openlink is returning
 	# We assume that any other error means the database
 	# is no longer connected.
 	# Some special cases may need to be added to the code above.
@@ -392,6 +416,22 @@ See L<DBI> for more information.
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
 
+=item B<DBD::ODBC 0.42>
+
+A patch to the tests to get past any potential problems with
+a user not defining the DBI_DSN environment variable.  Hopefully
+this will allow ActiveState to keep up with DBD::ODBC in
+their automated builds.  Thanks to Jan Dubois for helping
+me determine what the issue(s) may be when testing.
+Now skips all tests except the dll/so load if DBI_DSN is
+not defined.  Also, issues a skip on a known Oracle ODBC
+test.
+ 
+A patch to fix ping() when a S1000 was returned.  I don't know how this
+one is going to go, but it's worth a shot.  Now calls SQLTables with unlikely
+parameters.  If SQLTables() succeeds and returns a result set, ping() will
+now return true.  Thanks to Tim Bunce for the suggestion.
+ 
 =item B<DBD::ODBC 0.41>
 
 A patch to handle SQLDescribeParam failing in some
@@ -631,7 +671,7 @@ SQL_ROWSET_SIZE attribute patch from Andrew Brown
 > selects are possible.
 >
 > The code change allows for:
-> $dbh->{SQL_ROWSET_SIZE} = 2;    # Any value > 1
+> $dbh->{odbc_SQL_ROWSET_SIZE} = 2;    # Any value > 1
 >
 > For this very purpose.
 >

@@ -857,6 +857,10 @@ SV *attribs;
     /* parse the (possibly edited) SQL statement */
     rc = SQLPrepare(imp_sth->hstmt, 
 		    imp_sth->statement, strlen(imp_sth->statement));
+    if (DBIS->debug >= 2)
+       PerlIO_printf(DBILOGFP, "    SQLPrepare returned %d\n\n",
+		     rc);
+
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "st_prepare/SQLPrepare");
 	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);

@@ -18,6 +18,16 @@ DBI::Changes - Log of significant changes to the DBI
 
  See DBD::ODBC POD for more detail.
 
+=head2 DBD::ODBC 0.41
+
+Fixed problem where SQLDescribeParam would fail (probably
+bug in ODBC driver).  Now reverts to SQL_VARCHAR if that
+happens, instead of failing the query.
+
+Fixed error report when using Oracle's driver.  There is
+a known problem.  Left the error on the test, but added
+warning indicating it's a known problem.
+
 =head2 DBD::ODBC 0.40
 
 Most significant change is the change in the default binding
