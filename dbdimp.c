@@ -11,6 +11,7 @@
 
 #include "ODBC.h"
 
+
 static const char *S_SqlTypeToString (SWORD sqltype);
 static const char *S_SqlCTypeToString (SWORD sqltype);
 static const char *cSqlTables = "SQLTables(%s,%s,%s,%s)";
@@ -41,6 +42,29 @@ void dbd_error2 _((SV *h, RETCODE err_rc, char *what, HENV henv, HDBC hdbc, HSTM
 
 DBISTATE_DECLARE;
 
+
+/*
+ * A section of code to help map ODBC 2.x to ODBC 3.x without too much
+ * pain and allow for the potential to go back, quickly (at least
+ * temporarily).  This may be unnecessary, but I am unsure of how many
+ * ODBC 2.x needs there really are... Here are the simple ones!
+ * */
+#if 0
+#define SQLAllocEnv(p) SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, p)
+#define SQLFreeEnv(e)  SQLFreeHandle(SQL_HANDLE_ENV, e)
+
+#define SQLAllocConnect(e, c) SQLAllocHandle(SQL_HANDLE_DBC, e, c)
+#define SQLFreeConnect(d) SQLFreeHandle(SQL_HANDLE_DBC, d)
+
+#define SQLAllocStmt(d, s) SQLAllocHandle(SQL_HANDLE_STMT, d, s)
+#define SQLFreeStmt(s) SQLFreeHandle(SQL_HANDLE_STMT, s)
+
+/* knowing that we use SQLTransact with both an env and hdbc */
+#define SQLTransact(e, d, t) SQLEndTran(SQL_NULL_HDBC, d, t)
+
+/* TBD: SQLColAttributes --> SQLColAttribute */
+#endif
+
 void
    dbd_init(dbistate)
    dbistate_t *dbistate;
@@ -69,7 +93,7 @@ int
     imp_sth->eod = -1;
 
     if (!dbd_describe(sth, imp_sth)) {
-	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP); /* TBD: 3.0 update */
 	imp_sth->hstmt = SQL_NULL_HSTMT;
 	return 0; /* dbd_describe already called dbd_error()	*/
     }
@@ -119,7 +143,7 @@ int dbd_db_execdirect( SV *dbh,
    SQLINTEGER rows;
    SQLHSTMT stmt;
 
-   ret = SQLAllocStmt( imp_dbh->hdbc, &stmt );
+   ret = SQLAllocStmt( imp_dbh->hdbc, &stmt ); /* TBD: 3.0 update */
    if (!SQL_ok(ret)) {
       dbd_error( dbh, ret, "Statement allocation error" );
       return(-2);
@@ -147,7 +171,7 @@ int dbd_db_execdirect( SV *dbh,
     * drivers.
     */
    /* ret = SQLFreeHandle( SQL_HANDLE_STMT, stmt ); */
-   ret = SQLFreeStmt(stmt, SQL_DROP);
+   ret = SQLFreeStmt(stmt, SQL_DROP); /* TBD: 3.0 update */
    if (!SQL_ok(ret)) {
       dbd_error2( dbh, ret, "Statement destruction error", imp_dbh->henv, imp_dbh->hdbc, stmt );
    }
@@ -206,7 +230,7 @@ SV   *attr;
 #endif
 
     if (!imp_drh->connects) {
-	rc = SQLAllocEnv(&imp_drh->henv);
+	rc = SQLAllocEnv(&imp_drh->henv);		/* TBD: 3.0 update */
 	dbd_error(dbh, rc, "db_login/SQLAllocEnv");
 	if (!SQL_ok(rc))
 	    return 0;
@@ -220,7 +244,7 @@ SV   *attr;
 	    if (!SQL_ok(rc)) {
 		dbd_error(dbh, rc, "db_login/SQLSetEnvAttr");
 		if (imp_drh->connects == 0) {
-		    SQLFreeEnv(imp_drh->henv);
+		    SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
 		    imp_drh->henv = SQL_NULL_HENV;
 		}
 		return 0;
@@ -229,11 +253,11 @@ SV   *attr;
     }
     imp_dbh->henv = imp_drh->henv;	/* needed for dbd_error */
 
-    rc = SQLAllocConnect(imp_drh->henv, &imp_dbh->hdbc);
+    rc = SQLAllocConnect(imp_drh->henv, &imp_dbh->hdbc); /* TBD: 3.0 update */
     if (!SQL_ok(rc)) {
 	dbd_error(dbh, rc, "db_login/SQLAllocConnect");
 	if (imp_drh->connects == 0) {
-	    SQLFreeEnv(imp_drh->henv);
+	    SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
 	    imp_drh->henv = SQL_NULL_HENV;
 	}
 	return 0;
@@ -299,9 +323,9 @@ SV   *attr;
 	    * real problem.
 	    */
 	   dbd_error(dbh, rc, "db_login/SQLConnect");
-	   SQLFreeConnect(imp_dbh->hdbc);
+	   SQLFreeConnect(imp_dbh->hdbc); /* TBD: 3.0 update */
 	   if (imp_drh->connects == 0) {
-	      SQLFreeEnv(imp_drh->henv);
+	      SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
 	      imp_drh->henv = SQL_NULL_HENV;
 	   }
 	   return 0;
@@ -323,9 +347,9 @@ SV   *attr;
 
     if (!SQL_ok(rc)) {
 	dbd_error(dbh, rc, "db_login/SQLConnect");
-	SQLFreeConnect(imp_dbh->hdbc);
+	SQLFreeConnect(imp_dbh->hdbc);/* TBD: 3.0 update */
 	if (imp_drh->connects == 0) {
-	    SQLFreeEnv(imp_drh->henv);
+	    SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
 	    imp_drh->henv = SQL_NULL_HENV;
 	}
 	return 0;
@@ -336,13 +360,14 @@ SV   *attr;
     }
 
     /* DBI spec requires AutoCommit on */
+    /* TBD: 3.0 update */
     rc = SQLSetConnectOption(imp_dbh->hdbc,
 			     SQL_AUTOCOMMIT, SQL_AUTOCOMMIT_ON);
     if (!SQL_ok(rc)) {
 	dbd_error(dbh, rc, "dbd_db_login/SQLSetConnectOption");
-	SQLFreeConnect(imp_dbh->hdbc);
+	SQLFreeConnect(imp_dbh->hdbc);/* TBD: 3.0 update */
 	if (imp_drh->connects == 0) {
-	    SQLFreeEnv(imp_drh->henv);
+	    SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
 	    imp_drh->henv = SQL_NULL_HENV;
 	}
 	return 0;
@@ -393,7 +418,11 @@ imp_dbh_t *imp_dbh;
      * appropriate.  -- TBD: Need to check this, maybe we should
      * rollback?
      */
-    rc = SQLGetConnectOption(imp_dbh->hdbc, SQL_AUTOCOMMIT, &autoCommit);
+    if (DBIS->debug > 5) {
+       PerlIO_printf(DBILOGFP, "dbd_db_disconnect disconnecting\n");
+    }
+
+    rc = SQLGetConnectOption(imp_dbh->hdbc, SQL_AUTOCOMMIT, &autoCommit);/* TBD: 3.0 update */
     /* quietly handle a problem with SQLGetConnectOption() */
     if (!SQL_ok(rc) || rc == SQL_SUCCESS_WITH_INFO) {
 	AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0, (DBIS->debug > 3));
@@ -412,11 +441,11 @@ imp_dbh_t *imp_dbh;
 	/* return 0;	XXX if disconnect fails, fall through... */
     }
 
-    SQLFreeConnect(imp_dbh->hdbc);
+    SQLFreeConnect(imp_dbh->hdbc);/* TBD: 3.0 update */
     imp_dbh->hdbc = SQL_NULL_HDBC;
     imp_drh->connects--;
     if (imp_drh->connects == 0) {
-	SQLFreeEnv(imp_drh->henv);
+	SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
     }
     /* We don't free imp_dbh since a reference still exists	*/
     /* The DESTROY method is the only one to 'free' memory.	*/
@@ -434,6 +463,7 @@ imp_dbh_t *imp_dbh;
     RETCODE rc;
     dTHR;
 
+    /* TBD: 3.0 update */
     rc = SQLTransact(imp_dbh->henv, imp_dbh->hdbc, SQL_COMMIT);
     if (!SQL_ok(rc)) {
 	dbd_error(dbh, rc, "db_commit/SQLTransact");
@@ -450,6 +480,7 @@ imp_dbh_t *imp_dbh;
     RETCODE rc;
     dTHR;
 
+    /* TBD: 3.0 update */
     rc = SQLTransact(imp_dbh->henv, imp_dbh->hdbc, SQL_ROLLBACK);
     if (!SQL_ok(rc)) {
 	dbd_error(dbh, rc, "db_rollback/SQLTransact");
@@ -489,6 +520,7 @@ HSTMT hstmt;
 	 PerlIO_printf(DBILOGFP, "dbd_error: err_rc=%d rc=%d s/d/e: %d/%d/%d\n", 
 		       err_rc, rc, hstmt,hdbc,henv);
 
+      /* TBD: 3.0 update */
       while( (rc=SQLError(henv, hdbc, hstmt,
 			  sqlstate, &NativeError,
 			  ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen
@@ -736,7 +768,7 @@ char *table_type;
     imp_sth->hdbc = imp_dbh->hdbc;
 
     imp_sth->done_desc = 0;
-    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (rc != SQL_SUCCESS) {
 	dbd_error(sth, rc, "st_tables/SQLAllocStmt");
 	return 0;
@@ -765,7 +797,7 @@ char *table_type;
 
     dbd_error(sth, rc, "st_tables/SQLTables");
     if (!SQL_ok(rc)) {
-	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);/* TBD: 3.0 update */
 	imp_sth->hstmt = SQL_NULL_HSTMT;
 	return 0;
     }
@@ -790,7 +822,7 @@ char *table;
    imp_sth->hdbc = imp_dbh->hdbc;
     
    imp_sth->done_desc = 0;
-   rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+   rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
    if (rc != SQL_SUCCESS) {
       dbd_error(sth, rc, "odbc_db_primary_key_info/SQLAllocStmt");
       return 0;
@@ -819,7 +851,7 @@ char *table;
    dbd_error(sth, rc, "st_primary_key_info/SQLPrimaryKeys");
     
    if (!SQL_ok(rc)) {
-      SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+      SQLFreeStmt(imp_sth->hstmt, SQL_DROP);/* TBD: 3.0 update */
       imp_sth->hstmt = SQL_NULL_HSTMT;
       return 0;
    }
@@ -845,7 +877,7 @@ SV *attribs;
     imp_sth->hdbc = imp_dbh->hdbc;
     imp_sth->odbc_ignore_named_placeholders = imp_dbh->odbc_ignore_named_placeholders;
     imp_sth->odbc_default_bind_type = imp_dbh->odbc_default_bind_type;
-    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "st_prepare/SQLAllocStmt");
 	return 0;
@@ -863,7 +895,7 @@ SV *attribs;
 
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "st_prepare/SQLPrepare");
-	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);/* TBD: 3.0 update */
 	imp_sth->hstmt = SQL_NULL_HSTMT;
 	return 0;
     }
@@ -983,6 +1015,10 @@ imp_sth_t *imp_sth;
     if (imp_sth->done_desc)
 	return 1;	/* success, already done it */
 
+    if (DBIS->debug >= 5)
+       PerlIO_printf(DBILOGFP, "    dbd_describe %d getting num fields\n",
+		     imp_sth->hstmt);
+
     rc = SQLNumResultCols(imp_sth->hstmt, &num_fields);
     if (!SQL_ok(rc)) {
 	dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
@@ -1025,17 +1061,24 @@ imp_sth_t *imp_sth;
 	    break;
 	}
 
-	ColName[fbh->ColNameLen] = 0;
+	ColName[fbh->ColNameLen] = '\0';
 
-	t_cbufl += fbh->ColNameLen;
+	t_cbufl += fbh->ColNameLen + 1;
+
+	if (DBIS->debug >= 8) {
+	   PerlIO_printf(DBILOGFP, "   colname %d = %s, len = %d (%d)\n", i+1, ColName, fbh->ColNameLen,
+			t_cbufl);
+	   PerlIO_flush(DBILOGFP);
+	}
 
 #ifdef SQL_COLUMN_DISPLAY_SIZE
 	rc = SQLColAttributes(imp_sth->hstmt,i+1,SQL_COLUMN_DISPLAY_SIZE,
-			      NULL, 0, NULL ,&fbh->ColDisplaySize);
+			      NULL, 0, NULL ,&fbh->ColDisplaySize);/* TBD: 3.0 update */
 	if (!SQL_ok(rc)) {
 	    dbd_error(h, rc, "describe/SQLColAttributes/SQL_COLUMN_DISPLAY_SIZE");
 	    break;
 	}
+	/* TBD: should we only add a terminator if it's a char??? */
 	fbh->ColDisplaySize += 1; /* add terminator */
 #else
 	/* XXX we should at least allow an attribute to set this */
@@ -1085,10 +1128,15 @@ imp_sth_t *imp_sth;
 #endif
 	}
 
+	/* make sure alignment is accounted for on all types, including
+	 * chars */
+#if 0
 	if (fbh->ftype != SQL_C_CHAR) { 
-	   t_dbsize += t_dbsize % sizeof(int);     /* alignment */
-	} 
+	   t_dbsize += t_dbsize % sizeof(int);     /* alignment (JLU incorrect!) */
+	}
+#endif
 	t_dbsize += fbh->ColDisplaySize;
+	t_dbsize += (sizeof(int) - (t_dbsize % sizeof(int))) % sizeof(int);     /* alignment -- always pad so the next column is aligned on a word boundary*/
 
 	if (DBIS->debug >= 2)
 	    PerlIO_printf(DBILOGFP, 
@@ -1104,7 +1152,17 @@ imp_sth_t *imp_sth;
     }
 
     /* allocate a buffer to hold all the column names	*/
-    Newz(42, imp_sth->ColNames, t_cbufl + num_fields, UCHAR);
+    if (DBIS->debug >= 8) {
+       PerlIO_printf(DBILOGFP, "  colname buffer size = %d\n", t_cbufl + num_fields);
+       PerlIO_flush(DBILOGFP);
+    }
+
+    /* quick fix for FoxPro: allocate extra 255 bytes as Foxpro seems
+     * to clear out the buffer during SQLDescribeCol, as we are passing
+     * the 255 there.  Probably need to fix this and call
+     * SqlDescribeCol with the right size, if known!
+     * */
+    Newz(42, imp_sth->ColNames, t_cbufl + num_fields+255, UCHAR);
     /* allocate Row memory */
     Newz(42, imp_sth->RowBuffer, t_dbsize + num_fields, UCHAR);
 
@@ -1118,19 +1176,28 @@ imp_sth_t *imp_sth;
 
     for(i=0, fbh = imp_sth->fbh; i < num_fields && SQL_ok(rc); i++, fbh++)
     {
+       /* not sure I need this anymore, since we are trying to align
+        * the columns anyway
+        * */
 	switch(fbh->ftype)
 	{
 	    case SQL_C_BINARY:
 	    case SQL_C_TIMESTAMP:
-		rbuf_ptr += (rbuf_ptr - imp_sth->RowBuffer) % sizeof(int);
+	        /* make sure pointer is on word boundary for Solaris */
+		rbuf_ptr += (sizeof(int) - ((rbuf_ptr - imp_sth->RowBuffer) % sizeof(int))) % sizeof(int);
+		
 		break;
 	}
 
+	if (DBIS->debug > 8) 
+	   PerlIO_printf(DBILOGFP, 
+			 "\t\t pre SQLDescribeCol %d: fbh[0]=%x fbh=%x, cbuf_ptr=%x\n",
+			 i, &(imp_sth->fbh[0]), fbh, cbuf_ptr);
 	rc = SQLDescribeCol(imp_sth->hstmt, 
 			    i+1, 
 			    cbuf_ptr, 255,
-			    &fbh->ColNameLen, &fbh->ColSqlType,
-			    &fbh->ColDef, &fbh->ColScale, &fbh->ColNullable
+			    &(fbh->ColNameLen), &(fbh->ColSqlType),
+			    &(fbh->ColDef), &(fbh->ColScale), &(fbh->ColNullable)
 			   );
 	if (!SQL_ok(rc)) {	/* should never fail */
 	    dbd_error(h, rc, "describe/SQLDescribeCol");
@@ -1139,28 +1206,65 @@ imp_sth_t *imp_sth;
 
 	fbh->ColName = cbuf_ptr;
 	cbuf_ptr[fbh->ColNameLen] = 0;
+	cbuf_ptr[fbh->ColNameLen+1] = 0;
+
+	    // debug
+	if (DBIS->debug > 8) 
+	   PerlIO_printf(DBILOGFP, 
+			 "\t\t post SQLDescribeCol     col %2d: '%s' (%x)\n",
+			 0, imp_sth->fbh[0].ColName, imp_sth->fbh[0].ColName);
+
+	if (DBIS->debug >= 8) {
+	   PerlIO_printf(DBILOGFP, "   colname %d = %s, len = %d (sp = %d)\n", i+1, fbh->ColName, fbh->ColNameLen,
+			cbuf_ptr - imp_sth->ColNames);
+	   PerlIO_flush(DBILOGFP);
+	}
+
 	cbuf_ptr += fbh->ColNameLen+1;
 
 	fbh->data = rbuf_ptr;
+
+	    // debug
+	if (DBIS->debug > 8) 
+	   PerlIO_printf(DBILOGFP, 
+			 "\t\t pre   SQLBindCol     col %2d: '%s', %x, %x, %x\n",
+			 0, imp_sth->fbh[0].ColName, imp_sth->fbh[0].ColName, fbh->data, imp_sth->ColNames);
+
 	rbuf_ptr += fbh->ColDisplaySize;
+	rbuf_ptr += (sizeof(int) - ((rbuf_ptr - imp_sth->RowBuffer) % sizeof(int))) % sizeof(int);     /* alignment -- always pad so the next column is aligned on a word boundary*/
 
 	/* Bind output column variables */
 	rc = SQLBindCol(imp_sth->hstmt,
 			i+1,
 			fbh->ftype, fbh->data,
 			fbh->ColDisplaySize, &fbh->datalen);
+	    // debug
+	if (DBIS->debug > 8) 
+	   PerlIO_printf(DBILOGFP, 
+			 "\t\t post  SQLBindCol     col %2d: '%s', %x, %x, %x\n",
+			 0, imp_sth->fbh[0].ColName, imp_sth->fbh[0].ColName, fbh->data, imp_sth->ColNames);
+	
 	if (DBIS->debug >= 2)
 	    PerlIO_printf(DBILOGFP, 
-			  "      col %2d: '%s' sqltype=%s, ctype=%s, maxlen=%d\n",
+			  "      col %2d: '%s' sqltype=%s, ctype=%s, maxlen=%d, (dp = %d, cp = %d)\n",
 			  i+1, fbh->ColName,
 			  S_SqlTypeToString(fbh->ColSqlType),
 			  S_SqlCTypeToString(fbh->ftype),
-			  fbh->ColDisplaySize);
+			  fbh->ColDisplaySize,
+			  fbh->data - imp_sth->RowBuffer,
+			 fbh->ColName - imp_sth->ColNames);
 	if (!SQL_ok(rc)) {
 	    dbd_error(h, rc, "describe/SQLBindCol");
 	    break;
 	}
+	
+	    // debug
+	if (DBIS->debug > 8) 
+	   PerlIO_printf(DBILOGFP, 
+			 "\t\t DEBUG     col %2d: '%s' \n",
+			 0, imp_sth->fbh[0].ColName);
     } /* end pass 2 */
+
 
     if (!SQL_ok(rc)) {
 	/* dbd_error called above */
@@ -1224,8 +1328,8 @@ imp_sth_t *imp_sth;
     rc = SQLExecute(imp_sth->hstmt);
     if (debug >= 8) {
 	PerlIO_printf(DBILOGFP,
-		      "    dbd_st_execute (for hstmt %d after)...\n",
-		      imp_sth->hstmt);
+		      "    dbd_st_execute (for hstmt %d after, rc = %d)...\n",
+		      imp_sth->hstmt, rc);
 	PerlIO_flush(DBILOGFP);
     }
     /* patches to handle blobs better, via Jochen Wiedmann */
@@ -1262,11 +1366,19 @@ imp_sth_t *imp_sth;
 	return -2;
     }
 
+    if (debug >= 7)
+       PerlIO_printf(DBILOGFP,
+		     "    dbd_st_execute getting row count\n");
+
     rc = SQLRowCount(imp_sth->hstmt, &imp_sth->RowCount);
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "st_execute/SQLRowCount");	/* XXX ? */
 	imp_sth->RowCount = -1;
     }
+
+    if (debug >= 7)
+       PerlIO_printf(DBILOGFP,
+		     "    dbd_st_execute got row count\n");
 
     if (!imp_sth->done_desc) {
 	/* This needs to be done after SQLExecute for some drivers!	*/
@@ -1422,6 +1534,9 @@ imp_sth_t *imp_sth;
 	   }
 	   if (imp_dbh->odbc_sqlmoreresults_supported == 1) {
 	      /* Check for multiple results */
+	      if (DBIS->debug > 5) {
+		 PerlIO_printf(DBILOGFP, "Getting more results:\n");
+	      }
 	      rc = SQLMoreResults(imp_sth->hstmt);
 	      if (SQL_ok(rc)){
 		 /* More results detected.  Clear out the old result */
@@ -1448,7 +1563,7 @@ imp_sth_t *imp_sth;
 
 		 /* tell the odbc driver that we need to unbind the
 		  * bound columns.  Fix bug for 0.35 (2/8/02) */
-		 rc = SQLFreeStmt(imp_sth->hstmt, SQL_UNBIND);
+		 rc = SQLFreeStmt(imp_sth->hstmt, SQL_UNBIND);/* TBD: 3.0 update */
 		 if (!SQL_ok(rc)) {
 		    AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
 				  (DBIS->debug > 0));
@@ -1464,6 +1579,9 @@ imp_sth_t *imp_sth;
 	      }
 	      else if (rc == SQL_NO_DATA_FOUND){
 		 /* No more results */
+		 if (DBIS->debug > 5) {
+		    PerlIO_printf(DBILOGFP, "No more results\n");
+		 }
 		 imp_sth->moreResults = 0;
 		 
 		 /* XXX need to 'finish' here */
@@ -1587,10 +1705,17 @@ imp_sth_t *imp_sth;
     /* XXX semantics of finish (eg oracle vs odbc) need lots more thought */
     /* re-read latest DBI specs and ODBC manuals */
     if (DBIc_ACTIVE(imp_sth) && imp_dbh->hdbc != SQL_NULL_HDBC) {
-	rc = SQLFreeStmt(imp_sth->hstmt, SQL_CLOSE);
+       if (DBIS->debug > 5) {
+	  PerlIO_printf(DBILOGFP, "dbd_st_finish closing query:\n");
+       }
+
+	rc = SQLFreeStmt(imp_sth->hstmt, SQL_CLOSE);/* TBD: 3.0 update */
 	if (!SQL_ok(rc)) {
 	    dbd_error(sth, rc, "finish/SQLFreeStmt(SQL_CLOSE)");
 	    return 0;
+	}
+	if (DBIS->debug > 5) {
+	   PerlIO_printf(DBILOGFP, "dbd_st_finish closed query:\n");
 	}
     }
     DBIc_ACTIVE_off(imp_sth);
@@ -1607,27 +1732,32 @@ imp_sth_t *imp_sth;
     D_imp_dbh_from_sth;
     RETCODE rc;
 
-    /* SQLxxx functions dump core when no connection exists. This happens
-     * when the db was disconnected before perl ending.
-     */
-    if (imp_dbh->hdbc != SQL_NULL_HDBC) {
-
-	rc = SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
-
-	if (DBIS->debug >= 5)
-	    PerlIO_printf(DBILOGFP, "   SQLFreeStmt called, returned %d.\n", rc);
-
-	if (!SQL_ok(rc)) {
-	    dbd_error(sth, rc, "st_destroy/SQLFreeStmt(SQL_DROP)");
-	    /* return 0; */
-	}
-    }
-
     /* Free contents of imp_sth	*/
 
+    if (DBIS->debug >= 8) {
+       PerlIO_printf(DBILOGFP, "   dbd_st_destroy: free fbh %x\n", rc, imp_sth->fbh);
+       PerlIO_flush(DBILOGFP);
+    }
     Safefree(imp_sth->fbh);
-    Safefree(imp_sth->ColNames);
+
+    if (DBIS->debug >= 8) {
+       PerlIO_printf(DBILOGFP, "   dbd_st_destroy: free RowBuffer %x\n", rc, imp_sth->RowBuffer);
+       PerlIO_flush(DBILOGFP);
+    }
     Safefree(imp_sth->RowBuffer);
+
+    if (DBIS->debug >= 8) {
+       
+       PerlIO_printf(DBILOGFP, "   dbd_st_destroy: free ColNames %x\n", rc, imp_sth->ColNames);
+       PerlIO_flush(DBILOGFP);
+    }
+    Safefree(imp_sth->ColNames);
+
+
+    if (DBIS->debug >= 8) {
+       PerlIO_printf(DBILOGFP, "   dbd_st_destroy: free statement\n", rc);
+       PerlIO_flush(DBILOGFP);
+    }
     Safefree(imp_sth->statement);
 
     if (imp_sth->out_params_av)
@@ -1646,6 +1776,24 @@ imp_sth_t *imp_sth;
 	    }
 	}
 	sv_free((SV*)imp_sth->all_params_hv);
+    }
+
+    /* SQLxxx functions dump core when no connection exists. This happens
+     * when the db was disconnected before perl ending.
+     */
+    if (imp_dbh->hdbc != SQL_NULL_HDBC) {
+
+       rc = SQLFreeStmt(imp_sth->hstmt, SQL_DROP);/* TBD: 3.0 update */
+
+       if (DBIS->debug >= 5) {
+	  PerlIO_printf(DBILOGFP, "   SQLFreeStmt called, returned %d.\n", rc);
+	  PerlIO_flush(DBILOGFP);
+       }
+
+       if (!SQL_ok(rc)) {
+	  dbd_error(sth, rc, "st_destroy/SQLFreeStmt(SQL_DROP)");
+	    /* return 0; */
+       }
     }
 
     DBIc_IMPSET_off(imp_sth);		/* let DBI know we've done it	*/
@@ -1941,8 +2089,21 @@ IV maxlen;			/* ??? */
 	name = SvPV(ph_namesv, name_len);
     }
 
-    if (SvTYPE(newvalue) > SVt_PVMG)    /* hook for later array logic   */
+    /* the problem with the code below is we are getting SVt_PVLV when
+     * an "undef" value from a hash lookup that doesn't exist.  It's an
+     * "undef" value, but it doesn't come in as a scalar.
+     * from a hash is arriving.  Let's leave this out until we are
+     * handling arrays. JLU 7/12/02
+     */
+#if 0
+    if (SvTYPE(newvalue) > SVt_PVMG) {    /* hook for later array logic   */
+       if (DBIS->debug >= 2) 
+	  PerlIO_printf(DBILOGFP, "bind %s perl type = %d -- croaking!\n",
+			name, SvTYPE(newvalue));
 	croak("Can't bind non-scalar value (currently)");
+    }
+
+#endif
 
     if (DBIS->debug >= 2)
 	PerlIO_printf(DBILOGFP, "bind %s <== '%.200s' (attribs: %s), type %d\n",
@@ -2180,6 +2341,7 @@ SV *valuesv;
     }
 
       if (bSetSQLConnectionOption) {
+	 /* TBD: 3.0 update */
 	 rc = SQLSetConnectOption(imp_dbh->hdbc, pars->fOption, vParam);
 	 if (!SQL_ok(rc)) {
 	    dbd_error(dbh, rc, "db_STORE/SQLSetConnectOption");
@@ -2260,7 +2422,7 @@ SV *keysv;
 	 * readonly, tracefile etc. isn't working yet. only AutoCommit supported.
 	 */
 
-	  rc = SQLGetConnectOption(imp_dbh->hdbc, pars->fOption, &vParam);
+	  rc = SQLGetConnectOption(imp_dbh->hdbc, pars->fOption, &vParam);/* TBD: 3.0 update */
 	  dbd_error(dbh, rc, "db_FETCH/SQLGetConnectOption");
 	  if (!SQL_ok(rc)) {
 	     if (DBIS->debug >= 1)
@@ -2378,8 +2540,24 @@ SV *keysv;
 	case 2: 			/* NAME */
 	    av = newAV();
 	    retsv = newRV(sv_2mortal((SV*)av));
-	    while(--i >= 0)
+	    if (DBIS->debug > 8) {
+	       int j;
+	       PerlIO_printf(DBILOGFP, " dbd_st_FETCH_attrib NAMES %d\n", i);
+
+	       for (j = 0; j < i; j++) {
+		  PerlIO_printf(DBILOGFP, "\t%s\n", imp_sth->fbh[j].ColName);
+		  PerlIO_flush(DBILOGFP);
+	       }
+	       PerlIO_flush(DBILOGFP);
+	    }
+	    while(--i >= 0) {
+	       if (DBIS->debug > 8) {
+		  PerlIO_printf(DBILOGFP, "    Colname %d => %s\n",
+				i, imp_sth->fbh[i].ColName);
+		  PerlIO_flush(DBILOGFP);
+	       }
 		av_store(av, i, newSVpv(imp_sth->fbh[i].ColName, 0));
+	    }
 	    break;
 	case 3:			/* NULLABLE */
 	    av = newAV();
@@ -2565,7 +2743,7 @@ int		 Unique;
     imp_sth->hdbc = imp_dbh->hdbc;
 
     imp_sth->done_desc = 0;
-    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (rc != SQL_SUCCESS) {
 	dbd_error(sth, rc, "odbc_get_statistics/SQLAllocStmt");
 	return 0;
@@ -2600,7 +2778,7 @@ char * TableName;
     imp_sth->hdbc = imp_dbh->hdbc;
 
     imp_sth->done_desc = 0;
-    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (rc != SQL_SUCCESS) {
 	dbd_error(sth, rc, "odbc_get_primary_keys/SQLAllocStmt");
 	return 0;
@@ -2639,7 +2817,7 @@ int    Nullable;
     imp_sth->hdbc = imp_dbh->hdbc;
 
     imp_sth->done_desc = 0;
-    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (rc != SQL_SUCCESS) {
 	dbd_error(sth, rc, "odbc_get_special_columns/SQLAllocStmt");
 	return 0;
@@ -2677,7 +2855,7 @@ char * FK_TableName;
     imp_sth->hdbc = imp_dbh->hdbc;
 
     imp_sth->done_desc = 0;
-    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (rc != SQL_SUCCESS) {
 	dbd_error(sth, rc, "odbc_get_foreign_keys/SQLAllocStmt");
 	return 0;
@@ -2740,7 +2918,7 @@ int ftype;
     imp_sth->hdbc = imp_dbh->hdbc;
 
     imp_sth->done_desc = 0;
-    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (rc != SQL_SUCCESS) {
 	dbd_error(sth, rc, "odbc_get_type_info/SQLGetTypeInfo");
 	return 0;
@@ -2755,7 +2933,7 @@ int ftype;
 
     dbd_error(sth, rc, "odbc_get_type_info/SQLGetTypeInfo");
     if (!SQL_ok(rc)) {
-	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);/* TBD: 3.0 update */
 	imp_sth->hstmt = SQL_NULL_HSTMT;
 	return 0;
     }
@@ -2884,7 +3062,7 @@ char *column;
     imp_sth->hdbc = imp_dbh->hdbc;
 
     imp_sth->done_desc = 0;
-    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (rc != SQL_SUCCESS) {
 	dbd_error(sth, rc, "odbc_db_columns/SQLAllocStmt");
 	return 0;
@@ -2914,7 +3092,7 @@ char *column;
     dbd_error(sth, rc, "odbc_columns/SQLColumns");
 
     if (!SQL_ok(rc)) {
-	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);/* TBD: 3.0 update */
 	imp_sth->hstmt = SQL_NULL_HSTMT;
 	return 0;
     }
@@ -2937,6 +3115,7 @@ int output;
 	SWORD ErrorMsgLen;
 	SDWORD NativeError;
 
+	/* TBD: 3.0 update */
 	rc=SQLError(henv, hdbc, hstmt,
 		    sqlstate, &NativeError,
 		    ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen);
