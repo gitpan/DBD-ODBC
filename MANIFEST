@@ -1,3 +1,4 @@
+Changes
 MANIFEST
 MANIFEST.SKIP
 Makefile.PL
@@ -29,6 +30,4 @@ mytest/testconn.pl
 mytest/testkeys.pl
 mytest/testver.pl
 mytest/testmulti.pl
-iodbcsrc/libiodbc-2.50.3.tar.gz
-iodbcsrc/readme.txt
-
+mytest/longbin.pl

@@ -131,6 +131,7 @@ struct phs_st {  	/* scalar placeholder EXPERIMENTAL	*/
 
 #define dbd_init		odbc_init
 #define dbd_db_login		odbc_db_login
+#define dbd_db_login6		odbc_db_login6
 #define dbd_db_do		odbc_db_do
 #define dbd_db_commit		odbc_db_commit
 #define dbd_db_rollback		odbc_db_rollback

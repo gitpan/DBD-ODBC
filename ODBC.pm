@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.38';
+$DBD::ODBC::VERSION = '0.39';
 
 {
     package DBD::ODBC;
@@ -59,7 +59,7 @@ $DBD::ODBC::VERSION = '0.38';
 
     sub connect {
 	my $drh = shift;
-	my($dbname, $user, $auth)= @_;
+	my($dbname, $user, $auth, $attr)= @_;
 	$user = '' unless defined $user;
 	$auth = '' unless defined $auth;
 
@@ -73,7 +73,7 @@ $DBD::ODBC::VERSION = '0.38';
 	# Call ODBC logon func in ODBC.xs file
 	# and populate internal handle data.
 
-	DBD::ODBC::db::_login($this, $dbname, $user, $auth) or return undef;
+	DBD::ODBC::db::_login($this, $dbname, $user, $auth, $attr) or return undef;
 
 	$this;
     }
@@ -391,7 +391,39 @@ See L<DBI> for more information.
  Also note that some tests may be skipped, such as
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
-   
+
+=item B<DBD::ODBC 0.39>
+
+ Removing iodbcsrc directory as newer/better versions
+ can be found on the web at www.iodbc.org and
+ www.unixodbc.org.  On Linux, I currently build
+ with unixODBC verson 2.2.0.
+ 
+ Added patch for handling setting the ODBC environment
+ during the connect, thanks to Steffen Goeldner
+ 
+ The attached patch makes it possible to choose the
+ ODBC version. E.g.:
+ 
+   my $dbh = DBI->connect( ..., { odbc_version => 3 } )
+ 
+ directs the driver to exhibit ODBC 3.x behavior.
+
+ Fix to SQLColAttributes thanks to Nicolas DeRico
+
+ Changes to the connect sequence.  If SQLDriverConnect
+ is supported and fails, SQLConnect will be called
+ I<unless> (this is the new part) the length of the
+ DSN is > SQL_MAX_DSN_LENGTH or the DSN begins with
+ DSN=
+
+ New test in mytest which demonstrates long binary
+ types.  If you are having trouble inserting images
+ into your database, please check here.
+=item B<DBD::ODBC 0.38>
+
+ Fixed do function (again) thanks to work by Martin Evans.
+ 
 =item B<DBD::ODBC 0.37>
 
  Patches for get_info where return type is string.  Patches

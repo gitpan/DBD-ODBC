@@ -166,11 +166,19 @@ Allocates henv and hdbc.
 ------------------------------------------------------------*/
 int
    dbd_db_login(dbh, imp_dbh, dbname, uid, pwd)
+   SV *dbh; imp_dbh_t *imp_dbh; char *dbname; char *uid; char *pwd;
+{
+    return dbd_db_login6(dbh, imp_dbh, dbname, uid, pwd, Nullsv);
+}
+
+int
+   dbd_db_login6(dbh, imp_dbh, dbname, uid, pwd, attr)
    SV *dbh;
 imp_dbh_t *imp_dbh;
 char *dbname;
 char *uid;
 char *pwd;
+SV   *attr;
 {
     D_imp_drh_from_dbh;
     int ret;
@@ -195,6 +203,22 @@ char *pwd;
 	if (!SQL_ok(rc))
 	    return 0;
     }
+    {
+	SV **odbc_version_sv;
+	UV   odbc_version = 0;
+	DBD_ATTRIB_GET_IV(attr, "odbc_version",12, odbc_version_sv, odbc_version);
+	if (odbc_version) {
+	    rc = SQLSetEnvAttr(imp_drh->henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)odbc_version, SQL_IS_INTEGER);
+	    if (!SQL_ok(rc)) {
+		dbd_error(dbh, rc, "db_login/SQLSetEnvAttr");
+		if (imp_drh->connects == 0) {
+		    SQLFreeEnv(imp_drh->henv);
+		    imp_drh->henv = SQL_NULL_HENV;
+		}
+		return 0;
+	    }
+	}
+    }
     imp_dbh->henv = imp_drh->henv;	/* needed for dbd_error */
 
     rc = SQLAllocConnect(imp_drh->henv, &imp_dbh->hdbc);
@@ -218,7 +242,7 @@ char *pwd;
     rc = SQLDriverConnect(imp_dbh->hdbc,
 			  0, /* no hwnd */
 			  dbname,
-			  strlen(dbname),
+			  (SQLSMALLINT)strlen(dbname),
 			  szConnStrOut,
 			  sizeof(szConnStrOut),
 			  &cbConnStrOut,
@@ -240,8 +264,37 @@ char *pwd;
 	if (DBIS->debug > 3) {
 #ifdef DBD_ODBC_NO_SQLDRIVERCONNECT
 	    PerlIO_printf(DBILOGFP, "SQLDriverConnect unsupported.\n");
-#else		
+#else
 	    PerlIO_printf(DBILOGFP, "SQLDriverConnect failed:\n");
+	    /*
+	     * Added code for DBD::ODBC 0.39 to help return a better
+	     * error code in the case where the user is using a
+	     * DSN-less connection and the dbname doesn't look like a
+	     * true DSN.
+	     */
+	    /* wanted to use strncmpi, but couldn't find one on all
+	     * platforms.  Sigh. */
+	    if (strlen(dbname) > SQL_MAX_DSN_LENGTH ||
+		((strlen(dbname) > 4) &&
+		 toupper(dbname[0]) == 'D' &&
+		 toupper(dbname[1]) == 'S' &&
+		 toupper(dbname[2]) == 'N' &&
+		 dbname[3] == '=')) {
+
+	       /* must be DSN= or some "direct" connection attributes,
+	        * probably best to error here and give the user a real
+	        * error code because the SQLConnect call could hide the
+	        * real problem.
+	        */
+	       dbd_error(dbh, rc, "db_login/SQLConnect");
+	       SQLFreeConnect(imp_dbh->hdbc);
+	       if (imp_drh->connects == 0) {
+		  SQLFreeEnv(imp_drh->henv);
+		  imp_drh->henv = SQL_NULL_HENV;
+	       }
+	       return 0;
+
+	    }
 	    AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0, 1);
 #endif /* DriverConnect supported */
 	}
@@ -250,9 +303,9 @@ char *pwd;
 	    PerlIO_printf(DBILOGFP, "SQLConnect '%s', '%s', '%s'\n", dbname, uid, pwd);
 
 	rc = SQLConnect(imp_dbh->hdbc,
-			dbname, strlen(dbname),
-			uid, strlen(uid),
-			pwd, strlen(pwd));
+			dbname, (SQLSMALLINT)strlen(dbname),
+			uid, (SQLSMALLINT)strlen(uid),
+			pwd, (SQLSMALLINT)strlen(pwd));
     }
 
     if (!SQL_ok(rc)) {
@@ -979,6 +1032,7 @@ imp_sth_t *imp_sth;
 	    dbd_error(h, rc, "describe/SQLColAttributes/SQL_COLUMN_LENGTH");
 	    break;
 	}
+
 #else
 	/* XXX we should at least allow an attribute to set this */
 	fbh->ColLength = 2001;	/* XXX! */
@@ -1013,9 +1067,10 @@ imp_sth_t *imp_sth;
 		break;
 #endif
 	}
-	if (fbh->ftype != SQL_C_CHAR) {
-	    t_dbsize += t_dbsize % sizeof(int);     /* alignment */
-	}
+
+	if (fbh->ftype != SQL_C_CHAR) { 
+	   t_dbsize += t_dbsize % sizeof(int);     /* alignment */
+	} 
 	t_dbsize += fbh->ColDisplaySize;
 
 	if (DBIS->debug >= 2)
@@ -1332,7 +1387,7 @@ imp_sth_t *imp_sth;
 	      rc = SQLGetFunctions(imp_dbh->hdbc, SQL_API_SQLMORERESULTS, 
 				   &supported);
 	      if (DBIS->debug >= 3)
-		 PerlIO_printf(DBILOGFP, "       SQLGetFunctions - supported: %d\n", 
+		 PerlIO_printf(DBILOGFP, "       SQLGetFunctions - SQL_MoreResults supported: %d\n", 
 			       supported);
 	      if (SQL_ok(rc)) {
 		 imp_dbh->odbc_sqlmoreresults_supported = supported ? 1 : 0;
@@ -1354,6 +1409,9 @@ imp_sth_t *imp_sth;
 	      if (SQL_ok(rc)){
 		 /* More results detected.  Clear out the old result */
 		 /* stuff and re-describe the fields.                */
+		 if (DBIS->debug > 0) {
+		    PerlIO_printf(DBILOGFP, "MORE Results!\n");
+		 }
 		 Safefree(imp_sth->fbh);
 		 Safefree(imp_sth->ColNames);
 		 Safefree(imp_sth->RowBuffer);
@@ -2415,17 +2473,25 @@ int ftype;
     RETCODE rc;
     SV *retsv = NULL;
     int i;
-    char rgbInfoValue[256];
+    int size = 256;
+    char *rgbInfoValue;
     SWORD cbInfoValue = -2;
 
+    New(0, rgbInfoValue, size, char);
+    
     /* See fancy logic below */
     for (i = 0; i < 6; i++)
 	rgbInfoValue[i] = 0xFF;
 
     rc = SQLGetInfo(imp_dbh->hdbc, ftype,
-		    rgbInfoValue, sizeof(rgbInfoValue)-1, &cbInfoValue);
+		    rgbInfoValue, size-1, &cbInfoValue);
+    if (cbInfoValue > size-1) {
+       Renew(rgbInfoValue, cbInfoValue+1, char);
+       rc = SQLGetInfo(imp_dbh->hdbc, ftype, rgbInfoValue, cbInfoValue, &cbInfoValue);
+    }
     if (!SQL_ok(rc)) {
 	dbd_error(dbh, rc, "odbc_get_info/SQLGetInfo");
+	Safefree(rgbInfoValue);
 	/* patched 2/12/02, thanks to Steffen Goldner */
 	return &sv_undef;
 	/* return Nullsv; */
@@ -2449,6 +2515,7 @@ int ftype;
 	PerlIO_printf(DBILOGFP, "SQLGetInfo: ftype %d, cbInfoValue %d: %s\n",
 		      ftype, cbInfoValue, neatsvpv(retsv,0));
 
+    Safefree(rgbInfoValue);
     return sv_2mortal(retsv);
 }
 
@@ -2760,7 +2827,7 @@ int desctype;
 	retsv = newSViv(fDesc);
     else if (cbInfoValue != 2 && cbInfoValue != 4)
 	retsv = newSVpv(rgbInfoValue, 0);
-    else if (rgbInfoValue[cbInfoValue+1] == '\0')
+    else if (rgbInfoValue[cbInfoValue] == '\0') /* fix for DBD::ODBC 0.39 thanks to Nicolas DeRico */
 	retsv = newSVpv(rgbInfoValue, 0);
     else {
 	if (cbInfoValue == 2)

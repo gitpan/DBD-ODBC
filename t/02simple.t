@@ -54,7 +54,7 @@ print "not " if ($rc);
 print "ok 8\n";
 
 print " Test 9: test ColAttributes\n";
-$sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY COL_A");
+my $sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY COL_A");
 
 if ($sth) {
 	$sth->execute();
@@ -136,10 +136,10 @@ print "ok 15\n";
 
 print "ok 16\n";
 
-#print " Test 17: test get_info\n";
+print " Test 17: test get_info\n";
 my $dbname;
 $dbname = $dbh->get_info(17); # SQL_DBMS_NAME
-#print " connected to $dbname\n";
+print " connected to $dbname\n";
 print "\nnot " unless (defined($dbname) && $dbname ne '');
 print "ok 17\n";
 
