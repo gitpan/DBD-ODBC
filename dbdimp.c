@@ -29,6 +29,7 @@ static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output);
 #define ODBC_DEFAULT_BIND_TYPE_VALUE	SQL_VARCHAR
 
 void dbd_error _((SV *h, RETCODE err_rc, char *what));
+void dbd_error2 _((SV *h, RETCODE err_rc, char *what, HENV henv, HDBC hdbc, HSTMT hstmt));
 
 DBISTATE_DECLARE;
 
@@ -110,7 +111,7 @@ int dbd_db_execdirect( SV *dbh,
    SQLINTEGER rows;
    SQLHSTMT stmt;
 
-   ret = SQLAllocHandle( SQL_HANDLE_STMT, imp_dbh->hdbc, &stmt );
+   ret = SQLAllocStmt( imp_dbh->hdbc, &stmt );
    if (!SQL_ok(ret)) {
       dbd_error( dbh, ret, "Statement allocation error" );
       return(-2);
@@ -122,7 +123,7 @@ int dbd_db_execdirect( SV *dbh,
 
    ret = SQLExecDirect(stmt, (SQLCHAR *)statement, SQL_NTS);
    if (!SQL_ok(ret)) {
-      dbd_error( dbh, ret, "Execute immediate failed" );
+      dbd_error2( dbh, ret, "Execute immediate failed", imp_dbh->henv, imp_dbh->hdbc, stmt );
       if (ret < 0) 
 	 rows = -2;
       else {
@@ -140,7 +141,7 @@ int dbd_db_execdirect( SV *dbh,
    /* ret = SQLFreeHandle( SQL_HANDLE_STMT, stmt ); */
    ret = SQLFreeStmt(stmt, SQL_DROP);
    if (!SQL_ok(ret)) {
-      dbd_error( dbh, ret, "Statement destruction error" );
+      dbd_error2( dbh, ret, "Statement destruction error", imp_dbh->henv, imp_dbh->hdbc, stmt );
    }
 
    return (int)rows;
@@ -391,6 +392,97 @@ imp_dbh_t *imp_dbh;
     return 1;
 }
 
+void
+   dbd_error2(h, err_rc, what, henv, hdbc, hstmt)
+SV *h;
+RETCODE err_rc;
+char *what;
+HENV henv;
+HDBC hdbc;
+HSTMT hstmt;
+{
+   D_imp_xxh(h);
+   dTHR;
+   SV *errstr;
+
+   errstr = DBIc_ERRSTR(imp_xxh);
+   sv_setpvn(errstr, "", 0);
+   sv_setiv(DBIc_ERR(imp_xxh), (IV)err_rc);
+    /* sqlstate isn't set for SQL_NO_DATA returns  */
+   sv_setpvn(DBIc_STATE(imp_xxh), "00000", 5);
+
+   while(henv != SQL_NULL_HENV) {
+      UCHAR sqlstate[SQL_SQLSTATE_SIZE+1];
+	/* ErrorMsg must not be greater than SQL_MAX_MESSAGE_LENGTH (says spec) */
+      UCHAR ErrorMsg[SQL_MAX_MESSAGE_LENGTH];
+      SWORD ErrorMsgLen;
+      SDWORD NativeError;
+      RETCODE rc = 0;
+
+      if (DBIS->debug >= 3)
+	 PerlIO_printf(DBILOGFP, "dbd_error: err_rc=%d rc=%d s/d/e: %d/%d/%d\n", 
+		       err_rc, rc, hstmt,hdbc,henv);
+
+      while( (rc=SQLError(henv, hdbc, hstmt,
+			  sqlstate, &NativeError,
+			  ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen
+			 )) == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) {
+	 sv_setpvn(DBIc_STATE(imp_xxh), sqlstate, 5);
+	 if (SvCUR(errstr) > 0) {
+	    sv_catpv(errstr, "\n");
+		/* JLU: attempt to get a reasonable error	*/
+		/* from first SQLError result on lowest handle	*/
+	    sv_setpv(DBIc_ERR(imp_xxh), sqlstate);
+	 }
+	 sv_catpvn(errstr, ErrorMsg, ErrorMsgLen);
+	 sv_catpv(errstr, " (SQL-");
+	 sv_catpv(errstr, sqlstate);
+	 sv_catpv(errstr, ")");
+
+	    /* maybe bad way to add hint about invalid transaction
+	     * state upon disconnect...
+	     */
+	 if (what && !strcmp(sqlstate, "25000") && !strcmp(what, "db_disconnect/SQLDisconnect")) {
+	    sv_catpv(errstr, " You need to commit before disconnecting! ");
+	 }
+	 if (DBIS->debug >= 3)
+	    PerlIO_printf(DBILOGFP, 
+			  "dbd_error: SQL-%s (native %d): %s\n",
+			  sqlstate, NativeError, SvPVX(errstr));
+      }
+      if (rc != SQL_NO_DATA_FOUND) {	/* should never happen */
+	 if (DBIS->debug)
+	    PerlIO_printf(DBILOGFP, 
+			  "dbd_error: SQLError returned %d unexpectedly.\n", rc);
+	 if (!SvTRUE(errstr)) { /* set some values to indicate the problem */
+	    sv_setpvn(DBIc_STATE(imp_xxh), "IM008", 5); /* "dialog failed" */
+	    sv_catpv(errstr, "(Unable to fetch information about the error)");
+	 }
+      }
+
+	/* climb up the tree each time round the loop		*/
+      if      (hstmt != SQL_NULL_HSTMT) hstmt = SQL_NULL_HSTMT;
+      else if (hdbc  != SQL_NULL_HDBC)  hdbc  = SQL_NULL_HDBC;
+      else henv = SQL_NULL_HENV;	/* done the top		*/
+   }
+
+   if (err_rc != SQL_SUCCESS) {
+      if (what) {
+	 char buf[10];
+	 sprintf(buf, " err=%d", err_rc);
+	 sv_catpv(errstr, "(DBD: ");
+	 sv_catpv(errstr, what);
+	 sv_catpv(errstr, buf);
+	 sv_catpv(errstr, ")");
+      }
+
+      DBIh_EVENT2(h, ERROR_event, DBIc_ERR(imp_xxh), errstr);
+
+      if (DBIS->debug >= 2)
+	 PerlIO_printf(DBILOGFP, "%s error %d recorded: %s\n",
+		       what, err_rc, SvPV(errstr,na));
+   }
+}
 
 /*------------------------------------------------------------
 replacement for odbc_error.
@@ -407,10 +499,7 @@ char *what;
 
     struct imp_dbh_st *imp_dbh = NULL;
     struct imp_sth_st *imp_sth = NULL;
-    HENV henv = SQL_NULL_HENV;
-    HDBC hdbc = SQL_NULL_HDBC;
     HSTMT hstmt = SQL_NULL_HSTMT;
-    SV *errstr;
 
     if (err_rc == SQL_SUCCESS && DBIS->debug<3)	/* nothing to do */
 	return;
@@ -427,86 +516,7 @@ char *what;
 	default:
 	    croak("panic: dbd_error on bad handle type");
     }
-    hdbc = imp_dbh->hdbc;
-    henv = imp_dbh->henv;
-
-    errstr = DBIc_ERRSTR(imp_xxh);
-    sv_setpvn(errstr, "", 0);
-    sv_setiv(DBIc_ERR(imp_xxh), (IV)err_rc);
-    /* sqlstate isn't set for SQL_NO_DATA returns  */
-    sv_setpvn(DBIc_STATE(imp_xxh), "00000", 5);
-
-    while(henv != SQL_NULL_HENV) {
-	UCHAR sqlstate[SQL_SQLSTATE_SIZE+1];
-	/* ErrorMsg must not be greater than SQL_MAX_MESSAGE_LENGTH (says spec) */
-	UCHAR ErrorMsg[SQL_MAX_MESSAGE_LENGTH];
-	SWORD ErrorMsgLen;
-	SDWORD NativeError;
-	RETCODE rc = 0;
-
-	if (DBIS->debug >= 3)
-	    PerlIO_printf(DBILOGFP, "dbd_error: err_rc=%d rc=%d s/d/e: %d/%d/%d\n", 
-			  err_rc, rc, hstmt,hdbc,henv);
-
-	while( (rc=SQLError(henv, hdbc, hstmt,
-			    sqlstate, &NativeError,
-			    ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen
-			   )) == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) {
-	    sv_setpvn(DBIc_STATE(imp_xxh), sqlstate, 5);
-	    if (SvCUR(errstr) > 0) {
-		sv_catpv(errstr, "\n");
-		/* JLU: attempt to get a reasonable error	*/
-		/* from first SQLError result on lowest handle	*/
-		sv_setpv(DBIc_ERR(imp_xxh), sqlstate);
-	    }
-	    sv_catpvn(errstr, ErrorMsg, ErrorMsgLen);
-	    sv_catpv(errstr, " (SQL-");
-	    sv_catpv(errstr, sqlstate);
-	    sv_catpv(errstr, ")");
-
-	    /* maybe bad way to add hint about invalid transaction
-	     * state upon disconnect...
-	     */
-	    if (what && !strcmp(sqlstate, "25000") && !strcmp(what, "db_disconnect/SQLDisconnect")) {
-		sv_catpv(errstr, " You need to commit before disconnecting! ");
-	    }
-	    if (DBIS->debug >= 3)
-		PerlIO_printf(DBILOGFP, 
-			      "dbd_error: SQL-%s (native %d): %s\n",
-			      sqlstate, NativeError, SvPVX(errstr));
-	}
-	if (rc != SQL_NO_DATA_FOUND) {	/* should never happen */
-	    if (DBIS->debug)
-		PerlIO_printf(DBILOGFP, 
-			      "dbd_error: SQLError returned %d unexpectedly.\n", rc);
-	    if (!SvTRUE(errstr)) { /* set some values to indicate the problem */
-		sv_setpvn(DBIc_STATE(imp_xxh), "IM008", 5); /* "dialog failed" */
-		sv_catpv(errstr, "(Unable to fetch information about the error)");
-	    }
-	}
-
-	/* climb up the tree each time round the loop		*/
-	if      (hstmt != SQL_NULL_HSTMT) hstmt = SQL_NULL_HSTMT;
-	else if (hdbc  != SQL_NULL_HDBC)  hdbc  = SQL_NULL_HDBC;
-	else henv = SQL_NULL_HENV;	/* done the top		*/
-    }
-
-    if (err_rc != SQL_SUCCESS) {
-	if (what) {
-	    char buf[10];
-	    sprintf(buf, " err=%d", err_rc);
-	    sv_catpv(errstr, "(DBD: ");
-	    sv_catpv(errstr, what);
-	    sv_catpv(errstr, buf);
-	    sv_catpv(errstr, ")");
-	}
-
-	DBIh_EVENT2(h, ERROR_event, DBIc_ERR(imp_xxh), errstr);
-
-	if (DBIS->debug >= 2)
-	    PerlIO_printf(DBILOGFP, "%s error %d recorded: %s\n",
-			  what, err_rc, SvPV(errstr,na));
-    }
+    dbd_error2(h, err_rc, what, imp_dbh->henv, imp_dbh->hdbc, hstmt);
 }
 
 

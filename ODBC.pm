@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.36';
+$DBD::ODBC::VERSION = '0.37';
 
 {
     package DBD::ODBC;
@@ -387,6 +387,17 @@ See L<DBI> for more information.
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
    
+=item B<DBD::ODBC 0.37>
+
+ Further fixed build for ODBC 2.x drivers.  The new SQLExecDirect
+ code had SQLAllocHandle which is a 3.x function, not a 2.x function.
+ Sigh.  I should have caught that the first time.  Signed, the Mad-and-
+ not-thorough-enough-patcher.
+
+ Additionally, a random core dump occurred in the tests, based upon the
+ new SQLExecDirect code.  This has been fixed.
+ 
+ 
 =item B<DBD::ODBC 0.36>
 
  Fixed build for ODBC 2.x drivers.  The new SQLExecDirect code
