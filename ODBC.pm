@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.31';
+$DBD::ODBC::VERSION = '0.32';
 
 {
     package DBD::ODBC;
@@ -21,7 +21,7 @@ $DBD::ODBC::VERSION = '0.31';
 
     my $Revision = substr(q$Revision: 1.12 $, 10);
 
-    require_version DBI 0.86;
+    require_version DBI 1.201;
 
     bootstrap DBD::ODBC $VERSION;
 

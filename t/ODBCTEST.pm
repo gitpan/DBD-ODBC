@@ -29,7 +29,7 @@ require 5.004;
 		      'A' => [SQL_SMALLINT,SQL_BIGINT, SQL_TINYINT, SQL_NUMERIC, SQL_DECIMAL, SQL_FLOAT, SQL_REAL],
 		      'B' => [SQL_VARCHAR, SQL_CHAR],
 		      'C' => [SQL_LONGVARCHAR],
-		      'D' => [SQL_DATE, SQL_TIMESTAMP],
+		      'D' => [SQL_DATE, SQL_TIMESTAMP, SQL_TYPE_DATE],
 		     );
 
     sub get_type_for_column {

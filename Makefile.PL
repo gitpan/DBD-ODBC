@@ -11,7 +11,7 @@ use ExtUtils::MakeMaker 5.16, qw(&WriteMakefile $Verbose);
 use File::Basename;
 use Getopt::Long;
 
-use DBI 0.93;		# must be installed first
+use DBI 1.201;		# must be installed first
 use DBI::DBD;
 use strict;
 
@@ -291,6 +291,7 @@ else {
 	print SQLH "#define HDBC SQLHDBC\n";
 	print SQLH "#define HSTMT SQLHSTMT\n";
 	print SQLH "#define DBD_ODBC_NO_SQLDRIVERCONNECT\n";
+	print SQLH qq{#define DBD_ODBC_NO_DATASOURCES\n}; # unless ($^O eq 'MSWin32');
 
 	$opts{INC} .= " -I$odbchome/incl";
 	$opts{LDFROM} = "\$(OBJECT) $odbchome/lib/libsqlod.a";
