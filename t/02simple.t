@@ -79,8 +79,9 @@ if ($sth) {
 		# $i is colno (1 based) 2 is for SQL_COLUMN_TYPE, 1 is for SQL_COLUMN_NAME
 		$coltype = $sth->func($i, 2, ColAttributes);
 		$colname = $sth->func($i, 1, ColAttributes);
-		print "$i: $colname = $coltype\n";
+		print "$i: $colname = $coltype ", $coltype+1-1;
  		++$is_ok if grep { $coltype == $_ } @{$ODBCTEST::TestFieldInfo{$colname}};
+		print " yes\n" if grep { $coltype == $_ } @{$ODBCTEST::TestFieldInfo{$colname}};
 	}
 	Test($is_ok == $colcount);
 	# print "not " unless $is_ok == $colcount;
@@ -102,13 +103,22 @@ $sth = $dbh->prepare("SELECT XXNOTCOLUMN FROM $ODBCTEST::table_name");
 $sth->execute() if $sth;
 Test(length($DBI::err) > 0);
 
-print " Test 11: test date values\n";
-$sth = $dbh->prepare("SELECT COL_D FROM $ODBCTEST::table_name WHERE COL_D > {d '1998-05-13'}");
+print " Test 11: test date or timestamp values\n";
+my @row = ODBCTEST::get_type_for_column($dbh, 'COL_D');
+
+my $dateval;
+if (ODBCTEST::isDateType($row[1])) {
+   $dateval = "{d '1998-05-13'}";
+} else {
+   $dateval = "{ts '1998-05-13 12:13:01'}";
+}
+
+$sth = $dbh->prepare("SELECT COL_D FROM $ODBCTEST::table_name WHERE COL_D > $dateval");
 $sth->execute();
 my $count = 0;
 while (@row = $sth->fetchrow) {
 	$count++ if ($row[0]);
-	# print "$row[0]\n";
+	print "$row[0]\n";
 }
 Test($count == 1);
 

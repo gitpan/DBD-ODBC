@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.43';
+$DBD::ODBC::VERSION = '0.45_4';
 
 {
     package DBD::ODBC;
@@ -434,6 +434,27 @@ See L<DBI> for more information.
  Also note that some tests may be skipped, such as
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
+
+=item B<DBD::ODBC 0.45_4>
+
+More fixes for DB2 tests and timestamp handling.
+ 
+=item B<DBD::ODBC 0.45_3>
+
+Changes to internal timestamp type handling and test structure to ensure tests
+work for all platforms.  DB2 was giving me fits due to bad assumptions.  Thanks
+to Martin Evans (again) for help in identifying the problems and helping research
+solutions.  This includes the scale/precision values to correctly store full timestamps.
+ 
+=item B<DBD::ODBC 0.45_2>
+
+Moving API usage to ODBC 3.0 specifications.  With lots of help from Martin Evans (again!).
+Thanks Martin!!!!!
+ 
+=item B<DBD::ODBC 0.44>
+
+Fix for do() and execute to handle DB2 correctly.  Patch/discovery thanks to Martin Evans.
+Partly moving towards defaulting to ODBC 3.x standards.
 
 =item B<DBD::ODBC 0.43>
 

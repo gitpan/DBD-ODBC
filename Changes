@@ -21,6 +21,24 @@ DBI::Changes - Log of significant changes to the DBI
 
  See DBD::ODBC POD for more detail.
 
+=head2 DBD::ODBC 0.45 
+Includes all the updates in the 0.45 developer releases (0.45_1, etc)
+More fixes for DB2 tests.
+
+Changes to internal timestamp type handling and test structure to ensure tests
+work for all platforms.  DB2 was giving me fits due to bad assumptions.  Thanks
+to Martin Evans (again) for help in identifying the problems and helping research
+solutions.  This includes the scale/precision values to correctly store full timestamps.
+
+Moving API usage to ODBC 3.0 specifications.  With lots of help from Martin Evans (again!).
+Thanks Martin!!!!!
+
+=head2 DBD::ODBC 0.44
+
+.44 was never officially released.
+Fix for do() and execute to handle DB2 correctly.  Patch/discovery thanks to Martin Evans.
+Partly moving towards defaulting to ODBC 3.x standards.
+
 =head2 DBD::ODBC 0.43
 
 Fix for FoxPro (and potentially other) Drivers!!!!!
