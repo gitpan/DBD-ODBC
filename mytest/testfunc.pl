@@ -73,15 +73,16 @@ foreach $SQLInfo (sort keys %TypeTests) {
 	 push(@coldescs, $sname);
 	 # print "Desc Col: ", join(', ', &nullif($sth->func($i, DescribeCol))), "\n";
       }	
-      print join(', ', @coldescs), "\n";
+      # print join(', ', @coldescs), "\n";
       while (@row = $sth->fetchrow()) {
-	 # print "$row[0]\n\t",
+	 
+	 print "$row[0]\n\t",
 	 # &nullif($row[1]), ", " ,
-	 # &nullif($row[2]), ", " ,
-	 # &nullif($row[3]), ", " ,
-	 # &nullif($row[4]), ", " ,
-	 # &nullif($row[5]), "\n";
-	 print join(', ', @row), "\n";
+	 #&nullif($row[2]), ", " ,
+	 #&nullif($row[3]), ", " ,
+	 #&nullif($row[4]), ", " ,
+	 #&nullif($row[5]), "\n";
+	 # print join(', ', @row), "\n";
       }
       $sth->finish();
    } else {

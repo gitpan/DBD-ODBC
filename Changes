@@ -22,10 +22,22 @@ DBI::Changes - Log of significant changes to the DBI
  See DBD::ODBC POD for more detail.
 
 =head2 DBD::ODBC 0.45 
+Includes all the updates in the 0.45 developer releases (0.45_1 thru 0.45_7)
+
+Adding support for array binding, but not finished.
+
+Fixed bug where SqlServer Stored procedures which perform INSERT would not correctly
+return a result set.  Thanks to Joe Tebelskis for finding it and Martin Evans for
+supplying a fix.
+
+Fixed bug where binding the empty string would cuase a problem.  Fixed and added
+test in t/07bind.t.
+
+Added support for new DBI ParamValues feature.
+
 Includes patches from David L. Good to add odbc_err_handler and odbc_async_exec
 Thanks David!
 
-Includes all the updates in the 0.45 developer releases (0.45_1, etc)
 More fixes for DB2 tests.
 
 Changes to internal timestamp type handling and test structure to ensure tests

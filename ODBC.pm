@@ -1,7 +1,7 @@
 # $Id: ODBC.pm,v 1.12 1998/08/14 19:29:50 timbo Exp $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
-# portions Copyright (c) 1997,1998  Jeff Urlwin
+# portions Copyright (c) 1997,1998,1999,2000,2001,2002  Jeff Urlwin
 # portions Copyright (c) 1997  Thomas K. Wenrich
 #
 # You may distribute under the terms of either the GNU General Public
@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.45_5';
+$DBD::ODBC::VERSION = '0.45_7';
 
 {
     package DBD::ODBC;
@@ -435,6 +435,21 @@ See L<DBI> for more information.
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
 
+=item B<DBD::ODBC 0.45_7>
+
+Adding support for array binding, but not finished.
+
+Fixed bug where SqlServer Stored procedures which perform INSERT would not correctly
+return a result set.  Thanks to Joe Tebelskis for finding it and Martin Evans for
+supplying a fix.
+
+Fixed bug where binding the empty string would cuase a problem.  Fixed and added
+test in t/07bind.t.
+ 
+=item B<DBD::ODBC 0.45_6>
+
+Added support for new DBI ParamValues feature.
+ 
 =item B<DBD::ODBC 0.45_5>
 
 Added odbc_err_handler and odbc_async_exec thanks to patches by David L. Good.

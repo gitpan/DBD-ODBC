@@ -38,6 +38,7 @@ struct imp_dbh_st {
     SQLUINTEGER odbc_async_type; /* flag to store the type of asynchronous
                                   * execution the driver supports */
     SV *odbc_err_handler; /* contains the error handler coderef */
+    int  RowCacheSize;			/* default row cache size in rows for statements */
 };
 
 /* Define sth implementor data structure */

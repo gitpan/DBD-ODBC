@@ -7,17 +7,19 @@ my $dbh=DBI->connect() or die "Can't connect";
 
 $dbh->{RaiseError} = 1;
 $dbh->{LongReadLen} = 800;
+
 eval {
    $dbh->do("drop table foo");
 };
+
 my $dbname = $dbh->get_info(17); # sql_dbms_name
 my $txttype = "varchar(4000)";
 $txttype = "TEXT" if ($dbname =~ /ACCESS/) ;
-$dbh->do("Create table foo (id integer primary key, txt $txttype)");
+$dbh->do("Create table foo (id integer not null primary key, txt $txttype)");
 
 
 my $sth = $dbh->prepare("INSERT INTO FOO (ID, TXT) values (?, ?)");
-my $sth2 = $dbh->prepare("select txt from foo where id = ?");
+my $sth2 = $dbh->prepare("select id, txt from foo where id = ?");
 
 my @txtinserted;
 
@@ -137,17 +139,12 @@ while ($i < 10) {
    $i++;
 }
 $i = 0;
-# see if this resolves the execute issue??
-$tmp = 'dummy';
-$sth->bind_param(2, $tmp, SQL_LONGVARCHAR);
-$tmp = 1;
-# $sth->bind_param(1, $tmp, SQL_INTEGER);
 
 while ($i <= $#lengths) {
    $tmp = substr($longstr, $i, $lengths[$i]);
    die "substr error? $tmp, $lengths[$i]\n" unless length($tmp) == $lengths[$i];
    push(@txtinserted, $tmp);
-   if (0) {
+   if (1) {
       $sth->bind_param(1, $i, SQL_INTEGER);
       $sth->bind_param(2, $tmp, SQL_LONGVARCHAR);
       $sth->execute;
@@ -169,8 +166,9 @@ while ($i <= $#lengths) {
    $sth2->execute($i);
    my @row = $sth2->fetchrow_array();
    $sth2->finish;
-   if ($txtinserted[$i] ne $row[0]) {
-      print "Mismatch @ $i, ", length($txtinserted[$i]), " != ", length($row[0]), ": \n", $txtinserted[$i], "\n$row[0]\n";
+   print "Checking row $row[0]\n";
+   if ($txtinserted[$i] ne $row[1]) {
+      print "Mismatch @ $i, ", length($txtinserted[$i]), " != ", length($row[1]), ": \n", $txtinserted[$i], "\n$row[0]\n";
    }
    # print "$i: $txtinserted[$i]\n";
    

@@ -44,7 +44,7 @@ my @data = (
 	[ 3, 'bletch', 'bletch varchar', "1998-05-15", "1998-05-15 00:01:00" ],
 	[ 4, 'bletch4', 'bletch varchar', "1998-05-15", "1998-05-15 00:01:00.1" ],
 	[ 5, 'bletch5', 'bletch varchar', "1998-05-15", "1998-05-15 00:01:00.23" ],
-	[ 6, 'bletch6', 'bletch varchar', "1998-05-15", "1998-05-15 00:01:00.233" ],
+	[ 6, '', '', "1998-05-15", "1998-05-15 00:01:00.233" ],
 );
 my $longstr = "This is a test of a string that is longer than 80 characters.  It will be checked for truncation and compared with itself.";
 my $longstr2 = $longstr . "  " . $longstr;
@@ -94,13 +94,21 @@ Test($rc);
 # clean up!
 $rc = ODBCTEST::tab_delete($dbh);
 
-Test(1);
-Test(1);
+# test param values!
+my $sth = $dbh->prepare("insert into $ODBCTEST::table_name (COL_A, COL_B) values (?, ?)");
+$sth->bind_param(1, 1, SQL_INTEGER);
+$sth->bind_param(2, "test", SQL_VARCHAR);
+my $ref = $sth->{ParamValues};
+my $key;
+foreach $key (keys %$ref) {
+   print "param $key: $ref->{$key}\n";
+}
+Test($ref->{1} == 1 && $ref->{2} eq "test");
 
 # clean up!
 $rc = ODBCTEST::tab_delete($dbh);
 
-BEGIN {$tests = 11;}
+BEGIN {$tests = 10;}
 exit(0);
 
 sub tab_select {
@@ -109,6 +117,8 @@ sub tab_select {
     my @data = @{$dref};
     my @row;
 
+    my $dbname;
+    $dbname = $dbh->get_info(17); # SQL_DBMS_NAME
     my $sth = $dbh->prepare("SELECT COL_A,COL_B,COL_C,COL_D FROM $ODBCTEST::table_name WHERE COL_A = ?")
 		or return undef;
     my $bind_val;
@@ -117,10 +127,15 @@ sub tab_select {
 	$sth->bind_param(1, $bind_val, SQL_INTEGER);
 	$sth->execute;
 	while (@row = $sth->fetchrow()) {
-	    print "$row[0]|$row[1]|$row[2]|\n";
+	    # print "$row[0]|$row[1]|$row[2]|\n";
 	    if ($row[0] != $bind_val) {
 		print "Bind value failed! bind value = $bind_val, returned value = $row[0]\n";
 		return undef;
+	    }
+	    # Oracle typically treats empty blanks as NULL in varchar, so that's what we should
+	    # expect!
+	    if (!defined($row[2] && $dbname =~ /Oracle/)) {
+	       $row[2] = "";
 	    }
 	    if ($row[2] ne $_->[2]) {
 		print "Column C value failed! bind value = $bind_val, returned values = $row[0]|$row[1]|$row[2]|$row[3]\n";

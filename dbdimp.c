@@ -21,15 +21,22 @@ static const char *cSqlColumns = "SQLColumns(%s,%s,%s,%s)";
 static const char *cSqlGetTypeInfo = "SQLGetTypeInfo(%d)";
 static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output);
 
+char *cvt_av2buf(SV *sth, AV *av, int c_type, int len, int count, long **indics);
+AV *dbd_st_fetch(SV *	sth, imp_sth_t *imp_sth);
+ 
+#define av_sz(av) (av_len(av) + 1)
+
 /* for sanity/ease of use with potentially null strings */
 #define XXSAFECHAR(p) ((p) ? (p) : "(null)")
 
-/* unique value for db attrib that won't conflict with SQL types */
+/* unique value for db attrib that won't conflict with SQL types, just
+ * increment by one if you are adding! */
 #define ODBC_IGNORE_NAMED_PLACEHOLDERS 0x8332
 #define ODBC_DEFAULT_BIND_TYPE         0x8333
-/* not sure how new values are chosen, just increment by one [dgood 7/02] */
 #define ODBC_ASYNC_EXEC                0x8334
 #define ODBC_ERR_HANDLER               0x8335
+#define ODBC_ROWCACHESIZE              0x8336
+#define ODBC_ROWSINCACHE               0x8337
 
 /* ODBC_DEFAULT_BIND_TYPE_VALUE is now set to 0, which means that
  * DBD::ODBC will call SQLDescribeParam to find out what type of
@@ -42,6 +49,7 @@ static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output);
 
 void dbd_error _((SV *h, RETCODE err_rc, char *what));
 void dbd_error2 _((SV *h, RETCODE err_rc, char *what, HENV henv, HDBC hdbc, HSTMT hstmt));
+SV *dbd_param_err(SQLHANDLE h, int recno);
 
 DBISTATE_DECLARE;
 
@@ -417,7 +425,30 @@ SV   *attr;
     imp_dbh->odbc_default_bind_type = ODBC_DEFAULT_BIND_TYPE_VALUE;
     imp_dbh->odbc_sqldescribeparam_supported = -1; /* flag to see if SQLDescribeParam is supported */
     imp_dbh->odbc_sqlmoreresults_supported = -1; /* flag to see if SQLDescribeParam is supported */
+    imp_dbh->RowCacheSize = 1;	/* default value for now */
 
+    /* check now for SQLMoreResults being supported */
+    if (imp_dbh->odbc_sqlmoreresults_supported == -1) { /* flag to see if SQLMoreResults is supported */
+       UWORD supported;
+       rc = SQLGetFunctions(imp_dbh->hdbc, SQL_API_SQLMORERESULTS, 
+			    &supported);
+       if (DBIS->debug >= 3)
+	  PerlIO_printf(DBILOGFP, "       SQLGetFunctions - SQL_MoreResults supported: %d\n", 
+			supported);
+       if (SQL_ok(rc)) {
+	  imp_dbh->odbc_sqlmoreresults_supported = supported ? 1 : 0;
+       } else {
+		 /* sql not OK for calling SQLGetFunctions ... falls
+		  * here.
+		  */
+	  imp_dbh->odbc_sqlmoreresults_supported = 0;
+	  if (DBIS->debug > 0) {
+	     PerlIO_printf(DBILOGFP, "SQLGetFunctions failed:\n");
+	  }
+	  AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
+			(DBIS->debug > 0));
+       }
+    }
     
     DBIc_set(imp_dbh,DBIcf_AutoCommit, 1);
 
@@ -585,7 +616,7 @@ HSTMT hstmt;
              PUSHMARK(sp);
 
              if (DBIS->debug >= 3)
-                 fprintf(DBILOGFP, "dbd_error: calling odbc_err_handler\n"); 
+                 PerlIO_printf(DBILOGFP, "dbd_error: calling odbc_err_handler\n"); 
 
              /* 
               * Here are the args to the error handler routine:
@@ -715,6 +746,34 @@ char *what;
     dbd_error2(h, err_rc, what, imp_dbh->henv, imp_dbh->hdbc, hstmt);
 }
 
+
+void
+   dbd_caution(h, what)
+   SV *h;
+   char *what;
+{
+   D_imp_xxh(h);
+   dTHR;
+   
+   SV *errstr;
+   errstr = DBIc_ERRSTR(imp_xxh);
+   sv_setpvn(errstr, "", 0);
+   sv_setiv(DBIc_ERR(imp_xxh), (IV)-1);
+   /* sqlstate isn't set for SQL_NO_DATA returns  */
+   sv_setpvn(DBIc_STATE(imp_xxh), "00000", 5);
+   
+   if (what) {
+      sv_catpv(errstr, "(DBD: ");
+      sv_catpv(errstr, what);
+      sv_catpv(errstr, " err=-1)");
+   }
+   
+   DBIh_EVENT2(h, ERROR_event, DBIc_ERR(imp_xxh), errstr);
+   
+   if (DBIS->debug >= 2)
+      PerlIO_printf(DBILOGFP, "%s error %d recorded: %s\n",
+	      what, -1, SvPV(errstr,na));
+}	
 
 /*-------------------------------------------------------------------------
 dbd_preparse: 
@@ -977,6 +1036,7 @@ SV *attribs;
     imp_sth->hdbc = imp_dbh->hdbc;
     imp_sth->odbc_ignore_named_placeholders = imp_dbh->odbc_ignore_named_placeholders;
     imp_sth->odbc_default_bind_type = imp_dbh->odbc_default_bind_type;
+
     rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "st_prepare/SQLAllocStmt");
@@ -1136,7 +1196,8 @@ imp_sth_t *imp_sth;
     int t_dbsize = 0;		/* size of native type */
     int t_dsize = 0;		/* display size */
     SWORD num_fields;
-
+    struct imp_dbh_st *imp_dbh = NULL;
+    
     if (imp_sth->done_desc)
 	return 1;	/* success, already done it */
 
@@ -1146,12 +1207,28 @@ imp_sth_t *imp_sth;
 
     rc = SQLNumResultCols(imp_sth->hstmt, &num_fields);
     if (!SQL_ok(rc)) {
-	dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
-	return 0;
+       dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
+       return 0;
     }
 
+    /*
+     * A little extra check to see if SQLMoreResults is supported
+     * before trying to call it.  This is to work around some strange
+     * behavior with SQLServer's driver and stored procedures which
+     * insert data.
+     * */
+    imp_dbh = (struct imp_dbh_st *)(DBIc_PARENT_COM(imp_sth));
+    while (num_fields == 0 && imp_dbh->odbc_sqlmoreresults_supported == 1) {
+       rc = SQLMoreResults(imp_sth->hstmt);
+       if (!SQL_ok(rc)) break;
+       rc = SQLNumResultCols(imp_sth->hstmt, &num_fields);
+       if (!SQL_ok(rc)) {
+	  dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
+	  return 0;
+       }
+    }
+    
     imp_sth->done_desc = 1;	/* assume ok from here on */
-
     DBIc_NUM_FIELDS(imp_sth) = num_fields;
 
     if (DBIS->debug >= 2)
@@ -1507,10 +1584,10 @@ imp_sth_t *imp_sth;
      * Call dbd_error regardless of the value of rc so we can
      * get any status messages that are desired.
      */
-    dbd_error(sth, rc, "st_execute/SQLExecute"); 
+    dbd_error(sth, rc, "st_execute/SQLExecute");
     if (!SQL_ok(rc) && rc != SQL_NO_DATA) {
 	// dbd_error(sth, rc, "st_execute/SQLExecute");
-	return -2;
+       return -2;
     }
 
     if (rc != SQL_NO_DATA) {
@@ -1527,7 +1604,7 @@ imp_sth_t *imp_sth;
 
        if (debug >= 7)
 	  PerlIO_printf(DBILOGFP,
-			"    dbd_st_execute got row count\n");
+			"    dbd_st_execute got row count %ld\n", imp_sth->RowCount);
     } else {
        /* SQL_NO_DATA returned, must have no rows :) */
        imp_sth->RowCount = 0;
@@ -1664,27 +1741,6 @@ imp_sth_t *imp_sth;
     if (!SQL_ok(rc)) {
 	if (SQL_NO_DATA_FOUND == rc) {
 
-	   /* See if we can check for multiple results */
-	   if (imp_dbh->odbc_sqlmoreresults_supported == -1) { /* flag to see if SQLMoreResults is supported */
-	      rc = SQLGetFunctions(imp_dbh->hdbc, SQL_API_SQLMORERESULTS, 
-				   &supported);
-	      if (DBIS->debug >= 3)
-		 PerlIO_printf(DBILOGFP, "       SQLGetFunctions - SQL_MoreResults supported: %d\n", 
-			       supported);
-	      if (SQL_ok(rc)) {
-		 imp_dbh->odbc_sqlmoreresults_supported = supported ? 1 : 0;
-	      } else {
-		 /* sql not OK for calling SQLGetFunctions ... falls
-		  * here.
-		  */
-		 imp_dbh->odbc_sqlmoreresults_supported = 0;
-		 if (DBIS->debug > 0) {
-		    PerlIO_printf(DBILOGFP, "SQLGetFunctions failed:\n");
-		 }
-		 AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
-			       (DBIS->debug > 0));
-	      }
-	   }
 	   if (imp_dbh->odbc_sqlmoreresults_supported == 1) {
 	      /* Check for multiple results */
 	      if (DBIS->debug > 5) {
@@ -2177,6 +2233,9 @@ int maxlen;
     else {
 	rgbValue = phs->sv_buf;
 	phs->cbValue = (UDWORD) value_len;
+	/* not undef, may be a blank string or something */
+	if (phs->cbValue == 0)
+	   cbColDef = 1;
     }
     if (DBIS->debug >=2)
 	PerlIO_printf(DBILOGFP,
@@ -2200,11 +2259,13 @@ int maxlen;
 	 */
 	rgbValue = (UCHAR*) phs;
     }
+
     if (DBIS->debug >=5)
 	PerlIO_printf(DBILOGFP,
 		      "    SQLBindParameter: idx = %d: fParamType=%d, name=%s, fCtype=%d, SQL_Type = %d, cbColDef=%d, scale=%d, rgbValue = %x, cbValueMax=%d, cbValue = %d",
 		      phs->idx, fParamType, phs->name, fCType, phs->sql_type,
 		      cbColDef, ibScale, rgbValue, cbValueMax, phs->cbValue);
+
     rc = SQLBindParameter(imp_sth->hstmt,
 			  phs->idx, fParamType, fCType, phs->sql_type,
 			  cbColDef, ibScale,
@@ -2627,6 +2688,7 @@ SV *valuesv;
 
 static db_params S_db_fetchOptions[] =  {
     { "AutoCommit", SQL_AUTOCOMMIT, SQL_AUTOCOMMIT_ON, SQL_AUTOCOMMIT_OFF },
+    { "RowCacheSize", ODBC_ROWCACHESIZE },
 #if 0 /* seems not supported by SOLID */
     { "sol_readonly", 
     SQL_ACCESS_MODE, SQL_MODE_READ_ONLY, SQL_MODE_READ_WRITE },
@@ -2707,6 +2769,9 @@ SV *keysv;
           }
 	  break;
 
+       case ODBC_ROWCACHESIZE:
+	  retsv = newSViv(imp_dbh->RowCacheSize);
+	  break;
        default:
 	/*
 	 * readonly, tracefile etc. isn't working yet. only AutoCommit supported.
@@ -2767,6 +2832,7 @@ static T_st_params S_st_fetch_params[] =
     s_A("LongReadLen"),		/* 11 */
     s_A("odbc_ignore_named_placeholders"),	/* 12 */
     s_A("odbc_default_bind_type"),	/* 13 */
+    s_A("ParamValues"),		/* 14 */
     s_A(""),			/* END */
 };
 
@@ -2910,6 +2976,27 @@ SV *keysv;
 	    break;
 	case 13:
 	   retsv = newSViv(imp_sth->odbc_default_bind_type);
+	   break;
+	case 14:
+	{
+	   /* not sure if there's a memory leak here. */
+	   HV *paramvalues = newHV();
+	   if (imp_sth->all_params_hv) {
+	      HV *hv = imp_sth->all_params_hv;
+	      SV *sv;
+	      char *key;
+	      I32 retlen;
+	      hv_iterinit(hv);
+	      while( (sv = hv_iternextsv(hv, &key, &retlen)) != NULL ) {
+		 if (sv != &sv_undef) {
+		    phs_t *phs = (phs_t*)(void*)SvPVX(sv);
+		    hv_store(paramvalues, phs->name, strlen(phs->name), newSVsv(phs->sv), 0);
+		 }
+	      }
+	   }
+	   /* ensure HV is freed when the ref is freed */
+	   retsv = newRV_noinc((SV *)paramvalues);
+	}
 	   break;
 	default:
 	    return Nullsv;
