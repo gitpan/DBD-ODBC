@@ -133,8 +133,17 @@ if ($dbh->{odbc_ignore_named_placeholders}) {
    print "Attrib not true (", $dbh->{odbc_ignore_named_placeholders}, ")\nnot " unless $dbh->{odbc_ignore_named_placeholders};
 }
 print "ok 15\n";
+
 print "ok 16\n";
-BEGIN {$tests = 16;}
+
+#print " Test 17: test get_info\n";
+my $dbname;
+$dbname = $dbh->get_info(17); # SQL_DBMS_NAME
+#print " connected to $dbname\n";
+print "\nnot " unless (defined($dbname) && $dbname ne '');
+print "ok 17\n";
+
+BEGIN {$tests = 17;}
 exit(0);
 
 sub tab_select

@@ -13,7 +13,9 @@
 
 static const char *S_SqlTypeToString (SWORD sqltype);
 static const char *S_SqlCTypeToString (SWORD sqltype);
-static const char *cSqlTables = "SQLTables(%s)";
+static const char *cSqlTables = "SQLTables(%s,%s,%s,%s)";
+static const char *cSqlPrimaryKeys = "SQLPrimaryKeys(%s,%s,%s)";
+static const char *cSqlForeignKeys = "SQLForeignKeys(%s,%s,%s)";
 static const char *cSqlColumns = "SQLColumns(%s,%s,%s,%s)";
 static const char *cSqlGetTypeInfo = "SQLGetTypeInfo(%d)";
 static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output);
@@ -247,8 +249,10 @@ char *pwd;
 
     /* default ignoring named parameters to false */
     imp_dbh->odbc_ignore_named_placeholders = 0;
-    /* default behaviour for bind_types */
     imp_dbh->odbc_default_bind_type = ODBC_DEFAULT_BIND_TYPE_VALUE;
+    imp_dbh->odbc_sqldescribeparam_supported = -1; /* flag to see if SQLDescribeParam is supported */
+    imp_dbh->odbc_sqlmoreresults_supported = -1; /* flag to see if SQLDescribeParam is supported */
+
     
     DBIc_set(imp_dbh,DBIcf_AutoCommit, 1);
 
@@ -592,10 +596,12 @@ char *statement;
 
 
 int
-   dbd_st_tables(dbh, sth, qualifier, table_type)
-   SV *dbh;
+dbd_st_tables(dbh, sth, catalog, schema, table, table_type)
+SV *dbh;
 SV *sth;
-char *qualifier;
+char *catalog;
+char *schema;
+char *table;
 char *table_type;
 {
     D_imp_dbh(dbh);
@@ -617,13 +623,18 @@ char *table_type;
 
     /* just for sanity, later.  Any internals that may rely on this (including */
     /* debugging) will have valid data */
-    imp_sth->statement = (char *)safemalloc(strlen(cSqlTables)+strlen(qualifier)+1);
-    sprintf(imp_sth->statement, cSqlTables, qualifier);
+    imp_sth->statement = (char *)safemalloc(strlen(cSqlTables)+
+					    strlen(XXSAFECHAR(catalog)) +
+					    strlen(XXSAFECHAR(schema)) +
+					    strlen(XXSAFECHAR(table)) +
+					    strlen(XXSAFECHAR(table_type))+1);
+    sprintf(imp_sth->statement, cSqlTables, XXSAFECHAR(catalog),
+	    XXSAFECHAR(schema), XXSAFECHAR(table), XXSAFECHAR(table_type));
 
     rc = SQLTables(imp_sth->hstmt,
-		   0, SQL_NTS,			/* qualifier */
-		   0, SQL_NTS,			/* schema/user */
-		   0, SQL_NTS,			/* table name */
+		   (catalog && *catalog) ? catalog : 0, SQL_NTS,
+		   (schema && *schema) ? schema : 0, SQL_NTS,
+		   (table && *table) ? table : 0, SQL_NTS,
 		   table_type && *table_type ? table_type : 0, SQL_NTS		/* type (view, table, etc) */
 		  );
 
@@ -641,6 +652,59 @@ char *table_type;
     return build_results(sth);
 }
 
+int
+dbd_st_primary_keys(dbh, sth, catalog, schema, table)
+SV *dbh;
+SV *sth;
+char *catalog;
+char *schema;
+char *table;
+{
+   dTHR;
+   D_imp_dbh(dbh);
+   D_imp_sth(sth);
+   RETCODE rc;
+
+   imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
+   imp_sth->hdbc = imp_dbh->hdbc;
+    
+   imp_sth->done_desc = 0;
+   rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+   if (rc != SQL_SUCCESS) {
+      dbd_error(sth, rc, "odbc_db_primary_key_info/SQLAllocStmt");
+      return 0;
+   }
+    
+   /* just for sanity, later.  Any internals that may rely on this (including */
+   /* debugging) will have valid data */
+   imp_sth->statement = (char *)safemalloc(strlen(cSqlPrimaryKeys)+
+					   strlen(XXSAFECHAR(catalog))+
+					   strlen(XXSAFECHAR(schema))+
+					   strlen(XXSAFECHAR(table))+1);
+    
+   sprintf(imp_sth->statement,
+	   cSqlPrimaryKeys, XXSAFECHAR(catalog), XXSAFECHAR(schema),
+	   XXSAFECHAR(table));
+   
+   rc = SQLPrimaryKeys(imp_sth->hstmt,
+		       (catalog && *catalog) ? catalog : 0, SQL_NTS,
+		       (schema && *schema) ? schema : 0, SQL_NTS,
+		       (table && *table) ? table : 0, SQL_NTS);
+   
+   if (DBIS->debug >= 2)
+      PerlIO_printf(DBILOGFP, "SQLPrimaryKeys call: cat = %s, schema = %s, table = %s\n",
+		    XXSAFECHAR(catalog), XXSAFECHAR(schema), XXSAFECHAR(table));
+
+   dbd_error(sth, rc, "st_primary_key_info/SQLPrimaryKeys");
+    
+   if (!SQL_ok(rc)) {
+      SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+      imp_sth->hstmt = SQL_NULL_HSTMT;
+      return 0;
+   }
+
+   return build_results(sth);
+}
 
 int
    dbd_st_prepare(sth, imp_sth, statement, attribs)
@@ -1207,79 +1271,87 @@ imp_sth_t *imp_sth;
     if (!SQL_ok(rc)) {
 	if (SQL_NO_DATA_FOUND == rc) {
 
-	    /* See if we can check for multiple results */
-	    rc = SQLGetFunctions(imp_dbh->hdbc, SQL_API_SQLMORERESULTS, 
-				 &supported);
-	    if (DBIS->debug >= 3)
-		PerlIO_printf(DBILOGFP, "       SQLGetFunctions - supported: %d\n", 
-			      supported);
-	    if (SQL_ok(rc)) {
-		if (supported) {
-		    /* Check for multiple results */
-		    rc = SQLMoreResults(imp_sth->hstmt);
-		    if (SQL_ok(rc)){
-			/* More results detected.  Clear out the old result */
-			/* stuff and re-describe the fields.                */
-			Safefree(imp_sth->fbh);
-			Safefree(imp_sth->ColNames);
-			Safefree(imp_sth->RowBuffer);
-
-			/* dgood - Yikes!  I don't want to go down to this level, */
-			/*         but if I don't, it won't figure out that the   */
-			/*         number of columns have changed...              */
-			if (DBIc_FIELDS_AV(imp_sth)) {
-			    sv_free((SV*)DBIc_FIELDS_AV(imp_sth));
-			    DBIc_FIELDS_AV(imp_sth) = Nullav;
-			}
-
-			imp_sth->fbh       = NULL;
-			imp_sth->ColNames  = NULL;
-			imp_sth->RowBuffer = NULL;
-			imp_sth->done_desc = 0;
-			if (!dbd_describe(sth, imp_sth))
-			    return Nullav; /* dbd_describe already called dbd_error() */
-
-			/* set moreResults so we'll know we can keep fetching */
-			imp_sth->moreResults = 1;
-			return Nullav;
-		    }
-		    else if (rc == SQL_NO_DATA_FOUND){
-			/* No more results */
-			imp_sth->moreResults = 0;
-
-			/* XXX need to 'finish' here */
-			dbd_st_finish(sth, imp_sth);
-			return Nullav;
-		    }
-		    else {
-			dbd_error(sth, rc, "st_fetch/SQLMoreResults");
-		    }
-		}
-		else {
-		    /*
-		     * SQLMoreResults not supported, just finish.
-		     * per bug found by Jarkko Hyöty [hyoty@medialab.sonera.fi]
-		     * No more results
-		     * */
-		    imp_sth->moreResults = 0;
-		    /* XXX need to 'finish' here */
-		    dbd_st_finish(sth, imp_sth);
-		    return Nullav;
-		}
-	    }
-	    else {
-		/* sql not OK for calling SQLGetFunctions ... falls
-		 * here.
-		 */
-		dbd_error(sth, rc, "st_fetch/SQLGetFunctions");
-	    }
+	   /* See if we can check for multiple results */
+	   if (imp_dbh->odbc_sqlmoreresults_supported == -1) { /* flag to see if SQLDescribeParam is supported */
+	      rc = SQLGetFunctions(imp_dbh->hdbc, SQL_API_SQLMORERESULTS, 
+				   &supported);
+	      if (DBIS->debug >= 3)
+		 PerlIO_printf(DBILOGFP, "       SQLGetFunctions - supported: %d\n", 
+			       supported);
+	      if (SQL_ok(rc)) {
+		 imp_dbh->odbc_sqlmoreresults_supported = supported ? 1 : 0;
+	      } else {
+		 /* sql not OK for calling SQLGetFunctions ... falls
+		  * here.
+		  */
+		 imp_dbh->odbc_sqlmoreresults_supported = 0;
+		 if (DBIS->debug > 0) {
+		    PerlIO_printf(DBILOGFP, "SQLGetFunctions failed:\n");
+		 }
+		 AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
+			       (DBIS->debug > 0));
+	      }
+	   }
+	   if (imp_dbh->odbc_sqlmoreresults_supported == 1) {
+	      /* Check for multiple results */
+	      rc = SQLMoreResults(imp_sth->hstmt);
+	      if (SQL_ok(rc)){
+		 /* More results detected.  Clear out the old result */
+		 /* stuff and re-describe the fields.                */
+		 Safefree(imp_sth->fbh);
+		 Safefree(imp_sth->ColNames);
+		 Safefree(imp_sth->RowBuffer);
+		 
+		 /* dgood - Yikes!  I don't want to go down to this level, */
+		 /*         but if I don't, it won't figure out that the   */
+		 /*         number of columns have changed...              */
+		 if (DBIc_FIELDS_AV(imp_sth)) {
+		    sv_free((SV*)DBIc_FIELDS_AV(imp_sth));
+		    DBIc_FIELDS_AV(imp_sth) = Nullav;
+		 }
+		 
+		 imp_sth->fbh       = NULL;
+		 imp_sth->ColNames  = NULL;
+		 imp_sth->RowBuffer = NULL;
+		 imp_sth->done_desc = 0;
+		 if (!dbd_describe(sth, imp_sth))
+		    return Nullav; /* dbd_describe already called dbd_error() */
+		 
+		 /* set moreResults so we'll know we can keep fetching */
+		 imp_sth->moreResults = 1;
+		 return Nullav;
+	      }
+	      else if (rc == SQL_NO_DATA_FOUND){
+		 /* No more results */
+		 imp_sth->moreResults = 0;
+		 
+		 /* XXX need to 'finish' here */
+		 dbd_st_finish(sth, imp_sth);
+		 return Nullav;
+	      }
+	      else {
+		 dbd_error(sth, rc, "st_fetch/SQLMoreResults");
+	      }
+	   }
+	   else {
+	      /*
+	       * SQLMoreResults not supported, just finish.
+	       * per bug found by Jarkko Hyöty [hyoty@medialab.sonera.fi]
+	       * No more results
+	       * */
+	      imp_sth->moreResults = 0;
+	      /* XXX need to 'finish' here */
+	      dbd_st_finish(sth, imp_sth);
+	      return Nullav;
+	   }
 	} else {
-	    dbd_error(sth, rc, "st_fetch/SQLFetch");
-	    /* XXX need to 'finish' here */
-	    dbd_st_finish(sth, imp_sth);
-	    return Nullav;
+	   dbd_error(sth, rc, "st_fetch/SQLFetch");
+	   /* XXX need to 'finish' here */
+	   dbd_st_finish(sth, imp_sth);
+	   return Nullav;
 	}
     }
+
 
     if (imp_sth->RowCount == -1)
 	imp_sth->RowCount = 0;
@@ -1451,6 +1523,7 @@ phs_t *phs;
 int maxlen;
 {
     dTHR;
+    D_imp_dbh_from_sth;
     RETCODE rc;
     /* args of SQLBindParameter() call */
     SWORD fParamType;
@@ -1525,12 +1598,24 @@ int maxlen;
 	SWORD fNullable;
 	SWORD ibScale;
 	UDWORD dp_cbColDef;
-	UWORD supported;
+	UWORD supported = 0;
 	
-	rc = SQLGetFunctions(imp_sth->hdbc, SQL_API_SQLDESCRIBEPARAM,
-			     &supported);
-
-	if (supported) {
+	   /* XXX call only once per connection / DBH */
+	if (imp_dbh->odbc_sqldescribeparam_supported == -1) { /* flag to see if SQLDescribeParam is supported */
+	   rc = SQLGetFunctions(imp_sth->hdbc, SQL_API_SQLDESCRIBEPARAM,
+				&supported);
+	   if (SQL_ok(rc)) {
+	      imp_dbh->odbc_sqldescribeparam_supported = supported ? 1 : 0;
+	   } else {
+	      imp_dbh->odbc_sqldescribeparam_supported = supported ? 1 : 0;
+	      if (DBIS->debug > 0) {
+		 PerlIO_printf(DBILOGFP, "SQLGetFunctions failed:\n");
+	      }
+	      AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
+			    (DBIS->debug > 0));
+	   }
+	}
+	if (imp_dbh->odbc_sqldescribeparam_supported == 1) {
 	   rc = SQLDescribeParam(imp_sth->hstmt,
 				 phs->idx, &fSqlType, &dp_cbColDef, &ibScale, &fNullable
 				);

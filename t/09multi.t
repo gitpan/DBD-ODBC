@@ -1,6 +1,7 @@
 #!/usr/bin/perl -I./t -w
 $| = 1;
 
+use strict;
 use DBI;
 use ODBCTEST;
 
@@ -119,7 +120,7 @@ sub RunMultiTest {
       }
       print join(", ", @{$sth->{NAME}}), "\n";
       while ( my $ref = $sth->fetchrow_arrayref ) {
-	 print join(":", @$ref), "\n";
+	 # print join(":", @$ref), "\n";
       }
       $result_sets++;
    } while ( $sth->{odbc_more_results}  ) ;

@@ -18,146 +18,198 @@
 
 require 5.004;
 {
-    package ODBCTEST;
+   package ODBCTEST;
 
-    use DBI qw(:sql_types);
+   use DBI qw(:sql_types);
 
-    $VERSION = '0.01';
-    $table_name = "PERL_DBD_TEST";
+   $VERSION = '0.01';
+   $table_name = "PERL_DBD_TEST";
 
-    $longstr = "THIS IS A STRING LONGER THAN 80 CHARS.  THIS SHOULD BE CHECKED FOR TRUNCATION AND COMPARED WITH ITSELF.";
-    $longstr2 = $longstr . "  " . $longstr . "  " . $longstr . "  " . $longstr;
+   $longstr = "THIS IS A STRING LONGER THAN 80 CHARS.  THIS SHOULD BE CHECKED FOR TRUNCATION AND COMPARED WITH ITSELF.";
+   $longstr2 = $longstr . "  " . $longstr . "  " . $longstr . "  " . $longstr;
 
     # really dumb work around:
     # MS SQL Server 2000 (MDAC 2.5 and ODBC driver 2000.080.0194.00) have a bug if
     # the column is named C, CA, or CAS and there is a call to SQLDescribeParam...
     # there is an error, referring to a syntax error near keyword 'by'
     # I figured it's just best to rename the columns.
-    %TestFieldInfo = (
-		      'COL_A' => [SQL_SMALLINT,SQL_BIGINT, SQL_TINYINT, SQL_NUMERIC, SQL_DECIMAL, SQL_FLOAT, SQL_REAL],
-		      'COL_B' => [SQL_VARCHAR, SQL_CHAR],
-		      'COL_C' => [SQL_LONGVARCHAR],
-		      'COL_D' => [SQL_DATE, SQL_TIMESTAMP, SQL_TYPE_DATE],
-		     );
+    # changed SQL_BIGINT below to -5, as DBI has removed that constant.
+    # ODBC's value is -5.
+   %TestFieldInfo = (
+		     'COL_A' => [SQL_SMALLINT,-5, SQL_TINYINT, SQL_NUMERIC, SQL_DECIMAL, SQL_FLOAT, SQL_REAL],
+		     'COL_B' => [SQL_VARCHAR, SQL_CHAR],
+		     'COL_C' => [SQL_LONGVARCHAR],
+		     'COL_D' => [SQL_DATE, SQL_TIMESTAMP, SQL_TYPE_DATE],
+		    );
 
-    sub get_type_for_column {
-	my $dbh = shift;
-	my $column = shift;
+   sub get_type_for_column {
+      my $dbh = shift;
+      my $column = shift;
 
-	my $type;
-	my @row;
-	my $sth;
-	foreach $type (@{ $TestFieldInfo{$column} }) {
-	    $sth = $dbh->func($type, GetTypeInfo);
+      my $type;
+      my @row;
+      my $sth;
+      foreach $type (@{ $TestFieldInfo{$column} }) {
+	 $sth = $dbh->func($type, GetTypeInfo);
 	    # may not correct behavior, but get the first compat type
-	    if ($sth) {
-		@row = $sth->fetchrow();
-		$sth->finish();
-		last if @row;
-	    } else {
+	 if ($sth) {
+	    @row = $sth->fetchrow();
+	    $sth->finish();
+	    last if @row;
+	 } else {
 		    # warn "Unable to get type for type $type\n";
-	    }
-	}
-	die "Unable to find a suitable test type for field $column"
-		unless @row;
+	 }
+      }
+      die "Unable to find a suitable test type for field $column"
+	    unless @row;
 	# warn join(", ",@row);
-	return @row;
-    }
-    sub tab_create {
-	my $dbh = shift;
-	$dbh->{PrintError} = 0;
-	eval {
-	    $dbh->do("DROP TABLE $table_name");
-	};
-	$dbh->{PrintError} = 1;
+      return @row;
+   }
+   sub tab_create {
+      my $dbh = shift;
+      $dbh->{PrintError} = 0;
+      eval {
+	 $dbh->do("DROP TABLE $table_name");
+      };
+      $dbh->{PrintError} = 1;
 
 	# trying to use ODBC to tell us what type of data to use,
 	# instead of the above.
-	my $fields = undef;
-	my $f;
-	foreach $f (sort keys %TestFieldInfo) {
+      my $fields = undef;
+      my $f;
+      foreach $f (sort keys %TestFieldInfo) {
 	    # print "$f: $TestFieldInfo{$f}\n";
-	    $fields .= ", " unless !$fields;
-	    $fields .= "$f ";
+	 $fields .= ", " unless !$fields;
+	 $fields .= "$f ";
 	    # print "-- $fields\n";
-	    my @row = get_type_for_column($dbh, $f);
-	    $fields .= $row[0];
-	    if ($row[5]) {
-		$fields .= "($row[2])"	 if ($row[5] =~ /LENGTH/i);
-		$fields .= "($row[2],0)" if ($row[5] =~ /PRECISION,SCALE/i);
-	    }
+	 my @row = get_type_for_column($dbh, $f);
+	 $fields .= $row[0];
+	 if ($row[5]) {
+	    $fields .= "($row[2])"	 if ($row[5] =~ /LENGTH/i);
+	    $fields .= "($row[2],0)" if ($row[5] =~ /PRECISION,SCALE/i);
+	 }
 	    # print "-- $fields\n";
-	}
-	print "Using fields: $fields\n";
-	$dbh->do("CREATE TABLE $table_name ($fields)");
-    }
+      }
+      print "Using fields: $fields\n";
+      $dbh->do("CREATE TABLE $table_name ($fields)");
+   }
 
 
-    sub tab_delete {
-	my $dbh = shift;
-	$dbh->do("DELETE FROM $table_name");
-    }
+   sub tab_delete {
+      my $dbh = shift;
+      $dbh->do("DELETE FROM $table_name");
+   }
 
-    sub tab_exists {
-	my $dbh = shift;
-	my (@rows, @row, $rc);
+   sub tab_exists {
+      my $dbh = shift;
+      my (@rows, @row, $rc);
 
-	$rc = -1;
+      $rc = -1;
 
-	unless ($sth = $dbh->table_info()) {
-	    print "Can't list tables: $DBI::errstr\n";
-	    return -1;
-	}
+      unless ($sth = $dbh->table_info()) {
+	 print "Can't list tables: $DBI::errstr\n";
+	 return -1;
+      }
 	# TABLE_QUALIFIER,TABLE_OWNER,TABLE_NAME,TABLE_TYPE,REMARKS
-	while ($row = $sth->fetchrow_hashref()) {
+      while ($row = $sth->fetchrow_hashref()) {
 	    # XXX not fully true.  The "owner" could be different.  Need to check!
 	    # In Oracle, testing $user against $row[1] works, but does NOT in SQL Server.
 	    # SQL server returns the device and something else I haven't quite taken the time
 	    # to figure it out, since I'm not a SQL server expert.  Anyone out there?
 	    # (mine returns "dbo" for the owner on ALL my tables.  This is obviously something
 	    # significant for SQL Server...one of these days I'll dig...
-	    if (($table_name eq uc($row->{TABLE_NAME}))) {
+	 if (($table_name eq uc($row->{TABLE_NAME}))) {
 		# and (uc($user) eq uc($row[1]))) 
 		# qeDBF driver returns null for TABLE_OWNER
-		my $owner = $row->{TABLE_OWNER} || '(unknown owner)';
-		print "$owner.$row->{TABLE_NAME}\n";
-		$rc = 1;
-		last;
-	    }
-	}
-	$sth->finish();
-	$rc;
-    }
+	    my $owner = $row->{TABLE_OWNER} || '(unknown owner)';
+	    print "$owner.$row->{TABLE_NAME}\n";
+	    $rc = 1;
+	    last;
+	 }
+      }
+      $sth->finish();
+      $rc;
+   }
 
    #
    # show various ways of inserting data without binding parameters.
    # Note, these are not necessarily GOOD ways to
    # show this...
    #
-    sub tab_insert {
-       my $dbh = shift;
+   sub tab_insert {
+      my $dbh = shift;
 
        # qeDBF needs a space after the table name!
-       my $stmt = "INSERT INTO $table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
-		  . join(", ", 3, $dbh->quote("bletch"), $dbh->quote("bletch varchar"), 
+      my $stmt = "INSERT INTO $table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
+		 . join(", ", 3, $dbh->quote("bletch"), $dbh->quote("bletch varchar"), 
 			"{d '1998-05-10'}"). ")";
-       my $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
-       $sth->execute || die "execute: $stmt: $DBI::errstr";
-       $sth->finish;
+      my $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
+      $sth->execute || die "execute: $stmt: $DBI::errstr";
+      $sth->finish;
 
-       $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
-       $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
-       $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
-	       . join(", ", 4, $dbh->quote("80char"), $dbh->quote($longstr), "{d '1998-05-13'}"). ")";
-       $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
-       $sth->execute || die "execute: $stmt: $DBI::errstr";
-       $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
-	       . join(", ", 5, $dbh->quote("gt250char"), $dbh->quote($longstr2), "{d '1998-05-14'}"). ")";
-       $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
-       $sth->execute || die "execute: $stmt: $DBI::errstr";
-       $sth->finish;
-    }
+      $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
+      $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
+      $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
+	      . join(", ", 4, $dbh->quote("80char"), $dbh->quote($longstr), "{d '1998-05-13'}"). ")";
+      $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
+      $sth->execute || die "execute: $stmt: $DBI::errstr";
+      $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
+	      . join(", ", 5, $dbh->quote("gt250char"), $dbh->quote($longstr2), "{d '1998-05-14'}"). ")";
+      $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
+      $sth->execute || die "execute: $stmt: $DBI::errstr";
+      $sth->finish;
+   }
 
-    1;
+   sub tab_insert_bind {
+      my $dbh = shift;
+      my $dref = shift;
+      my $handle_column_type = shift;
+      my @data = @{$dref};
+
+      my $sth = $dbh->prepare("INSERT INTO $table_name (COL_A, COL_B, COL_C, COL_D) VALUES (?, ?, ?, ?)");
+      unless ($sth) {
+	 warn $DBI::errstr;
+	 return 0;
+      }
+      $sth->{PrintError} = 1;
+      foreach (@data) {
+	 my @row;
+	 if ($handle_column_type) {
+	    @row = ODBCTEST::get_type_for_column($dbh, 'COL_A');
+	    print "Binding the value: $_->[0] type = $row[1]\n";
+	    $sth->bind_param(1, $_->[0], { TYPE => $row[1] });
+	 } else {
+	    $sth->bind_param(1, $_->[0]);
+	 }
+	 if ($handle_column_type) {
+	    @row = ODBCTEST::get_type_for_column($dbh, 'COL_B');
+	    $sth->bind_param(2, $_->[1], { TYPE => $row[1] });
+	 } else {
+	    $sth->bind_param(2, $_->[1]);
+	 }
+	 if ($handle_column_type) {
+	    @row = ODBCTEST::get_type_for_column($dbh, 'COL_C');
+	    $sth->bind_param(3, $_->[2], { TYPE => $row[1] });
+	 } else {
+	    $sth->bind_param(3, $_->[2]);
+	 }
+	 
+	 print "SQL_DATE = ", SQL_DATE, " SQL_TIMESTAMP = ", SQL_TIMESTAMP, "\n";
+	 @row = ODBCTEST::get_type_for_column($dbh, 'COL_D');
+	 print "TYPE FOUND = $row[1]\n";
+	 # print "Binding the date value: \"$_->[$row[1] == SQL_DATE ? 3 : 4]\"\n";
+	 if ($handle_column_type) {
+	    $sth->bind_param(4, $_->[$row[1] == SQL_DATE ? 3 : 4], { TYPE => $row[1] });
+	 } else {
+	    no warnings;
+	    # sigh, couldn't figure out how to get rid of the warning nicely,
+	    # so I turned it off!!!
+	    $sth->bind_param(4, $_->[$row[1] == SQL_DATE ? 3 : 4]);
+	 }
+	 return 0 unless $sth->execute;
+      }
+      1;
+   }
+   1;
 }
 

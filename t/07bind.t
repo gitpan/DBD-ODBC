@@ -35,7 +35,7 @@ my @data_long = (
 	[ 6, 'bletch2', $longstr3, "{d '2000-05-15'}", "{ts '2000-05-15 00:01:00'}" ],
 );
 my $tab_insert_ok = 1;
-$rc = tab_insert($dbh, \@data, 1);
+$rc = ODBCTEST::tab_insert_bind($dbh, \@data, 1);
 unless ($rc) {
 	warn "Test 4 is known to fail often. It is not a major concern.  It *may* be an indication of being unable to bind datetime values correctly.\n";
 	$tab_insert_ok = 0;
@@ -50,7 +50,7 @@ print "not " unless($rc);
 print "ok 5\n";
 
 print " Test 6: insert long test data\n";
-$rc = tab_insert($dbh, \@data_long, 1);
+$rc = ODBCTEST::tab_insert_bind($dbh, \@data_long, 1);
 unless ($rc) {
 	if ($tab_insert_ok) {
 	    warn "Since test #4 succeeded, this could be indicative of a problem with long inserting, with binding parameters.\n";
@@ -76,27 +76,10 @@ $rc = tab_select($dbh, \@data_long);
 print "not " unless($rc);
 print "ok 9\n";
 
-print " Test 10: insert various test data, without having this test tell the driver the type\n";
-print "          that is being bound to a column.  This tests the use of SQLDescribeParam to obtain \n";
-print "          the column type on the insert.  This is experimental and will most likely fail.\n";
-
-# turn off default binding of varchar to test this!
-$dbh->{odbc_default_bind_type} = 0;
-$rc = tab_insert($dbh, \@data_long, 0);
-unless ($rc) {
-	if ($tab_insert_ok) {
-	    warn "Since test #4 succeeded, this could be indicative of a problem with long inserting, with binding parameters where the column type is detected by DBD::ODBC.  This is not a big issue as this is experimental, anyway\n";
-	} else {
-	    warn "Since test #4 failed, this could be indicative of a problem with date time binding, as per #4 above.\n";
-	}
-	print "not ";
-}
-print "ok 10\n";
-
 # clean up!
 $rc = ODBCTEST::tab_delete($dbh);
 
-BEGIN {$tests = 10;}
+BEGIN {$tests = 9;}
 exit(0);
 
 sub tab_select {
@@ -126,57 +109,6 @@ sub tab_select {
     }
     return 1;
 }	
-
-sub tab_insert {
-    my $dbh = shift;
-    my $dref = shift;
-    my $handle_column_type = shift;
-    my @data = @{$dref};
-
-    my $sth = $dbh->prepare(<<"/");
-INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D)
-VALUES (?, ?, ?, ?)
-/
-    unless ($sth) {
-	warn $DBI::errstr;
-	return 0;
-    }
-    $sth->{PrintError} = 1;
-    foreach (@data) {
-	my @row;
-	if ($handle_column_type) {
-	   @row = ODBCTEST::get_type_for_column($dbh, 'COL_A');
-	   print "Binding the value: $_->[0] type = $row[1]\n";
-	   $sth->bind_param(1, $_->[0], { TYPE => $row[1] });
-	} else {
-	   $sth->bind_param(1, $_->[0]);
-	}
-	if ($handle_column_type) {
-	   @row = ODBCTEST::get_type_for_column($dbh, 'COL_B');
-	   $sth->bind_param(2, $_->[1], { TYPE => $row[1] });
-	} else {
-	   $sth->bind_param(2, $_->[1]);
-	}
-	if ($handle_column_type) {
-	   @row = ODBCTEST::get_type_for_column($dbh, 'COL_C');
-	   $sth->bind_param(3, $_->[2], { TYPE => $row[1] });
-	} else {
-	   $sth->bind_param(3, $_->[2]);
-	}
-
-	print "SQL_DATE = ", SQL_DATE, " SQL_TIMESTAMP = ", SQL_TIMESTAMP, "\n";
-	@row = ODBCTEST::get_type_for_column($dbh, 'COL_D');
-	print "TYPE FOUND = $row[1]\n";
-	print "Binding the date value: \"$_->[$row[1] == SQL_DATE ? 3 : 4]\"\n";
-	if ($handle_column_type) {
-	   $sth->bind_param(4, $_->[$row[1] == SQL_DATE ? 3 : 4], { TYPE => $row[1] });
-	} else {
-	   $sth->bind_param(4, $_->[$row[1] == SQL_DATE ? 3 : 4]);
-	}
-	return 0 unless $sth->execute;
-    }
-    1;
-}
 
 sub tab_update_long {
     my $dbh = shift;

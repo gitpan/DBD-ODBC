@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.33_3';
+$DBD::ODBC::VERSION = '0.34';
 
 {
     package DBD::ODBC;
@@ -117,17 +117,58 @@ $DBD::ODBC::VERSION = '0.33_3';
 
 
     sub table_info {
-	my($dbh) = @_;		# XXX add qualification
+ 	my($dbh, $catalog, $schema, $table, $type) = @_;
+
+	if ($#_ == 1) {
+	   my $attrs = $_[1];
+	   $catalog = $attrs->{TABLE_CAT};
+	   $schema = $attrs->{TABLE_SCHEM};
+	   $table = $attrs->{TABLE_NAME};
+	   $type = $attrs->{TABLE_TYPE};
+ 	}
+
+	$catalog = "" if (!$catalog);
+	$schema = "" if (!$schema);
+	$table = "" if (!$table);
+	$type = "" if (!$type);
 
 	# create a "blank" statement handle
 	my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLTables" });
 
-	# XXX use qualification(s) (qual, schema, etc?) here...
-	DBD::ODBC::st::_tables($dbh,$sth, "")
-		or return undef;
+	DBD::ODBC::st::_tables($dbh,$sth, $catalog, $schema, $table, $type)
+	      or return undef;
 	$sth;
     }
 
+    sub primary_key_info {
+       my ($dbh, $catalog, $schema, $table ) = @_;
+ 
+       # create a "blank" statement handle
+       my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLPrimaryKeys" });
+ 
+       $catalog = "" if (!$catalog);
+       $schema = "" if (!$schema);
+       $table = "" if (!$table);
+       DBD::ODBC::st::_primary_keys($dbh,$sth, $catalog, $schema, $table )
+	     or return undef;
+       $sth;
+    }
+
+    sub foreign_key_info {
+       my ($dbh, $pkcatalog, $pkschema, $pktable, $fkcatalog, $fkschema, $fktable ) = @_;
+ 
+       # create a "blank" statement handle
+       my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLForeignKeys" });
+ 
+       $pkcatalog = "" if (!$pkcatalog);
+       $pkschema = "" if (!$pkschema);
+       $pktable = "" if (!$pktable);
+       $fkcatalog = "" if (!$fkcatalog);
+       $fkschema = "" if (!$fkschema);
+       $fktable = "" if (!$fktable);
+       _GetForeignKeys($dbh, $sth, $pkcatalog, $pkschema, $pktable, $fkcatalog, $fkschema, $fktable) or return undef;
+       $sth;
+    }
 
     sub ping {
 	my $dbh = shift;
@@ -165,6 +206,13 @@ $DBD::ODBC::VERSION = '0.33_3';
 	return 0;
     }
 
+    # New support for the next DBI which will have a get_info command.
+    # leaving support for ->func(xxx, GetInfo) (above) for a period of time
+    # to support older applications which used this.
+    sub get_info {
+	my ($dbh, $item) = @_;
+	return _GetInfo($dbh, $item);
+    }
 
     # Call the ODBC function SQLGetInfo
     # Args are:
@@ -287,7 +335,36 @@ See L<DBI> for more information.
 =head2 Recent Updates
 
 =over 4
+=item B<An Important note about the tests!>
 
+ Please note that some tests may fail or report they are
+ unsupported on this platform.  Notably Oracle's ODBC driver
+ will fail the "advanced" binding tests in t/08bind2.t.
+ These tests run perfectly under SQL Server 2000. This is
+ normal and expected.  Until Oracle fixes their drivers to
+ do the right thing from an ODBC perspective, it's going to
+ be tough to fix the issue.
+   
+ Also note that some tests may be skipped, such as
+ t/09multi.t, if your driver doesn't seem to support
+ returning multiple result sets.
+   
+=item B<DBD::ODBC 0.34>
+ 
+ Further revamped tests to attempt to determine if SQLDescribeParam
+ will work to handle the binding types.  The t/08bind.t attempts
+ to determine if SQLDescribeParam is supported.  note that Oracle's
+ ODBC driver under NT doesn't work correctly when binding dates
+ using the ODBC date formatting {d } or {ts }.  So, test #3 will
+ fail in t/08bind.t
+
+ New support for primary_key_info thanks to patches by Martin Evans.
+ New support for catalog, schema, table and table_type in table_info
+ thanks to Martin Evans.  Thanks Martin for your work and your
+ continuing testing, suggestions and general support!
+
+ Support for upcoming dbi get_info.
+ 
 =item B<DBD::ODBC 0.33_3>
 
  Revamped tests to include tests for multiple result sets.
@@ -303,14 +380,18 @@ See L<DBI> for more information.
    "FIX: "Incorrect Syntax near the Keyword 'by' "
    Error Message with Column Names of "C", "CA" or "CAS" (Q273813)
 
- DBD::ODBC now does not name any of the columns A, B, C, or D they are now
- COL_A, COL_B, COL_C, COL_D.
+ DBD::ODBC now does not name any of the columns A, B, C, or D
+ they are now COL_A, COL_B, COL_C, COL_D.
 
- *** NOTE: *** I AM STRONGLY CONSIDERING MAKING THE NEW BINDING the default
-   for future versions.  I do not believe it will break much existing code
-   as anyone binding to non VARCHAR (without the ODBC driver doing a
-   good conversion from the VARCHAR) will have a problem.
-   Please comment soon...
+ *** NOTE: *** I AM STRONGLY CONSIDERING MAKING THE NEW
+ BINDING the default for future versions.  I do not believe
+ it will break much existing code (if any) as anyone binding
+ to non VARCHAR (without the ODBC driver doing a good conversion
+ from the VARCHAR) will have a problem.  It may be subtle, however,
+ since much code will work, but say, binding dates may not with
+ some drivers.
+   
+ Please comment soon...
    
 =item B<DBD::ODBC 0.33_1>
 

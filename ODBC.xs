@@ -24,13 +24,27 @@ _Cancel(sth)
 	ST(0) = odbc_cancel(sth);		
 
 void
-_tables(dbh, sth, qualifier)
+_tables(dbh, sth, catalog, schema, table, type)
 	SV *	dbh
 	SV *	sth
-	char *	qualifier
+	char *	catalog
+	char *	schema
+	char *  table
+	char *	type
 	CODE:
 	/* list all tables and views (0 as last parameter) */
-	ST(0) = dbd_st_tables(dbh, sth, qualifier, 0) ? &sv_yes : &sv_no;
+	ST(0) = dbd_st_tables(dbh, sth, catalog, schema, table, type) ? &sv_yes : &sv_no;
+
+void
+_primary_keys(dbh, sth, catalog, schema, table)
+    SV * 	dbh
+    SV *	sth
+    char *	catalog
+    char *	schema
+    char *	table
+    CODE:
+    ST(0) = dbd_st_primary_keys(dbh, sth, catalog, schema, table) ? &sv_yes : &sv_no;
+
 
 void
 DescribeCol(sth, colno)

@@ -32,6 +32,8 @@ struct imp_dbh_st {
     char odbc_ver[20];  /* ODBC compat. version for driver */
     int  odbc_ignore_named_placeholders;	/* flag to ignore named parameters */
     int  odbc_default_bind_type;	/* flag to set default binding type (experimental) */
+    int  odbc_sqldescribeparam_supported; /* flag to see if SQLDescribeParam is supported */
+    int  odbc_sqlmoreresults_supported; /* flag to see if SQLDescribeParam is supported */
 };
 
 /* Define sth implementor data structure */
