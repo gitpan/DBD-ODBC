@@ -18,6 +18,21 @@ DBI::Changes - Log of significant changes to the DBI
 
  See DBD::ODBC POD for more detail.
 
+=head2 DBD::ODBC 0.40
+
+Most significant change is the change in the default binding
+type which forces DBD::ODBC to attempt to determine the bind
+type if one is not passed.  I decided to make this the default
+behavior to make things as simple as possible.
+
+Fixed connection code put in 0.39 to work correctly.
+
+Two minor patches for building, one for Cygwin one
+if both iODBC and unixODBC libraries are installed.
+Probably need better command line on this, but if 
+someone has the problem, please let me know (and 
+hopefully send a patch with it).
+
 =head2 DBD::ODBC 0.39
  
  See mytest/longbin.pl for demonstration of inserting and retrieving

@@ -26,7 +26,15 @@ static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output);
 /* unique value for db attrib that won't conflict with SQL types */
 #define ODBC_IGNORE_NAMED_PLACEHOLDERS 0x8332
 #define ODBC_DEFAULT_BIND_TYPE		0x8333
-#define ODBC_DEFAULT_BIND_TYPE_VALUE	SQL_VARCHAR
+
+/* ODBC_DEFAULT_BIND_TYPE_VALUE is now set to 0, which means that
+ * DBD::ODBC will call SQLDescribeParam to find out what type of
+ * binding should be set.  If, for some reason, SQLDescribeParam
+ * fails, then the bind type will be set to SQL_VARCHAR as a backup.
+ * Hopefully -- we won't have to do that...
+ * */
+#define ODBC_DEFAULT_BIND_TYPE_VALUE	0
+#define ODBC_BACKUP_BIND_TYPE_VALUE	SQL_VARCHAR
 
 void dbd_error _((SV *h, RETCODE err_rc, char *what));
 void dbd_error2 _((SV *h, RETCODE err_rc, char *what, HENV henv, HDBC hdbc, HSTMT hstmt));
@@ -266,38 +274,43 @@ SV   *attr;
 	    PerlIO_printf(DBILOGFP, "SQLDriverConnect unsupported.\n");
 #else
 	    PerlIO_printf(DBILOGFP, "SQLDriverConnect failed:\n");
-	    /*
-	     * Added code for DBD::ODBC 0.39 to help return a better
-	     * error code in the case where the user is using a
-	     * DSN-less connection and the dbname doesn't look like a
-	     * true DSN.
-	     */
-	    /* wanted to use strncmpi, but couldn't find one on all
-	     * platforms.  Sigh. */
-	    if (strlen(dbname) > SQL_MAX_DSN_LENGTH ||
-		((strlen(dbname) > 4) &&
-		 toupper(dbname[0]) == 'D' &&
-		 toupper(dbname[1]) == 'S' &&
-		 toupper(dbname[2]) == 'N' &&
-		 dbname[3] == '=')) {
-
-	       /* must be DSN= or some "direct" connection attributes,
-	        * probably best to error here and give the user a real
-	        * error code because the SQLConnect call could hide the
-	        * real problem.
-	        */
-	       dbd_error(dbh, rc, "db_login/SQLConnect");
-	       SQLFreeConnect(imp_dbh->hdbc);
-	       if (imp_drh->connects == 0) {
-		  SQLFreeEnv(imp_drh->henv);
-		  imp_drh->henv = SQL_NULL_HENV;
-	       }
-	       return 0;
-
-	    }
-	    AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0, 1);
-#endif /* DriverConnect supported */
+#endif
 	}
+
+#ifndef DBD_ODBC_NO_SQLDRIVERCONNECT
+	/*
+	 * Added code for DBD::ODBC 0.39 to help return a better
+	 * error code in the case where the user is using a
+	 * DSN-less connection and the dbname doesn't look like a
+	 * true DSN.
+	 */
+	/* wanted to use strncmpi, but couldn't find one on all
+	 * platforms.  Sigh. */
+	if (strlen(dbname) > SQL_MAX_DSN_LENGTH ||
+	    ((strlen(dbname) > 4) &&
+	     toupper(dbname[0]) == 'D' &&
+	     toupper(dbname[1]) == 'S' &&
+	     toupper(dbname[2]) == 'N' &&
+	     dbname[3] == '=')) {
+	   
+	   /* must be DSN= or some "direct" connection attributes,
+	    * probably best to error here and give the user a real
+	    * error code because the SQLConnect call could hide the
+	    * real problem.
+	    */
+	   dbd_error(dbh, rc, "db_login/SQLConnect");
+	   SQLFreeConnect(imp_dbh->hdbc);
+	   if (imp_drh->connects == 0) {
+	      SQLFreeEnv(imp_drh->henv);
+	      imp_drh->henv = SQL_NULL_HENV;
+	   }
+	   return 0;
+	}
+
+	/* ok, the DSN is short, so let's try to use it to connect
+	 * and quietly take all error messages */
+	AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0, 0);
+#endif /* DriverConnect supported */
 
 	if (DBIS->debug >= 2)
 	    PerlIO_printf(DBILOGFP, "SQLConnect '%s', '%s', '%s'\n", dbname, uid, pwd);
@@ -1756,7 +1769,7 @@ int maxlen;
 	   }
 	} else {
 	   /* SQLDescribeParam is unsupported */
-	   phs->sql_type = ODBC_DEFAULT_BIND_TYPE_VALUE;
+	   phs->sql_type = ODBC_BACKUP_BIND_TYPE_VALUE;
 
 	}
     }

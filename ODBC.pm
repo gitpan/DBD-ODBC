@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.39';
+$DBD::ODBC::VERSION = '0.40';
 
 {
     package DBD::ODBC;
@@ -391,6 +391,23 @@ See L<DBI> for more information.
  Also note that some tests may be skipped, such as
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
+
+=item B<DBD::ODBC 0.40>
+
+Two minor patches for building.  One for Cygwin support
+and another to handle the case where both iODBC and
+unixODBC libraries are installed.  The preference is
+now given to unixODBC...  
+
+Fixed problem in connect code introduced in 0.39 where
+new code would only be executed if tracing was on and
+> 3...
+
+NEW: Changed default bind type to 0, to let DBD::ODBC
+try to detect the correct bind type.  This is a
+potentially significant change.  Please let me know
+if there is a problem.  The best way is to post a message
+to the dbi-users@perl.org mailing list.
 
 =item B<DBD::ODBC 0.39>
 
