@@ -1,0 +1,15 @@
+Revision history for Perl extension DBD::ODBC.
+
+0.14   June 16, 1997
+
+  - Major overhaul. Cross-integration with DBI 0.86. Unix support.
+
+0.02   June 3, 1997
+  - Added support for $dbh->tables() call
+  - separated tests to distinguish between statements with binding vs "normal" statements
+  	(shows if ODBC driver has SQLDescribeParam())
+  - Added info to readme.
+
+0.01   May 28 1997
+  - original version; derived from DBD::Solid 0.06
+
