@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.20';
+$DBD::ODBC::VERSION = '0.21';
 
 {
     package DBD::ODBC;
@@ -131,10 +131,22 @@ $DBD::ODBC::VERSION = '0.20';
 
     sub ping {
 	my $dbh = shift;
+	my $state = undef;
 	# should never 'work' but if it does, that's okay!
-	my $sql = "select col_does_not_exist from table_does_not_exist";
-	return 1 if $dbh->prepare($sql);
-	my $state = $dbh->state;
+	# JLU incorporated patches from Jon Smirl 5/4/99
+	{
+	    local $dbh->{RaiseError} = 0 if $dbh->{RaiseError};
+	    # JLU added local PrintError handling for completeness.
+	    # it shouldn't print, I think.
+	    local $dbh->{PrintError} = 0 if $dbh->{PrintError};
+	    my $sql = "select col_does_not_exist from table_does_not_exist";
+	    my $ok = $dbh->prepare($sql);
+	    my $state = $dbh->state;
+	    $DBD::ODBC::err = 0;
+	    $DBD::ODBC::errstr = "";
+	    $DBD::ODBC::sqlstate = "00000";
+	    return 1 if $ok;
+	}
 	return 1 if $state eq 'S0002';	# Base table not found
 	return 1 if $state eq 'S0022';	# Column not found
 	# We assume that any other error means the database
@@ -153,6 +165,42 @@ $DBD::ODBC::VERSION = '0.20';
     sub GetInfo {
 	my ($dbh, $item) = @_;
 	_GetInfo($dbh, $item);
+    }
+
+    # Call the ODBC function SQLStatistics
+    # Args are:
+    # See the ODBC documentation for more information about this call.
+    #
+    sub GetStatistics {
+			my ($dbh, $Catalog, $Schema, $Table, $Unique) = @_;
+			# create a "blank" statement handle
+			my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLStatistics" });
+			_GetStatistics($dbh, $sth, $Catalog, $Schema, $Table, $Unique) or return undef;
+			$sth;
+    }
+
+    # Call the ODBC function SQLForeignKeys
+    # Args are:
+    # See the ODBC documentation for more information about this call.
+    #
+    sub GetForeignKeys {
+			my ($dbh, $PK_Catalog, $PK_Schema, $PK_Table, $FK_Catalog, $FK_Schema, $FK_Table) = @_;
+			# create a "blank" statement handle
+			my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLForeignKeys" });
+			_GetForeignKeys($dbh, $sth, $PK_Catalog, $PK_Schema, $PK_Table, $FK_Catalog, $FK_Schema, $FK_Table) or return undef;
+			$sth;
+    }
+
+    # Call the ODBC function SQLPrimaryKeys
+    # Args are:
+    # See the ODBC documentation for more information about this call.
+    #
+    sub GetPrimaryKeys {
+			my ($dbh, $Catalog, $Schema, $Table) = @_;
+			# create a "blank" statement handle
+			my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLPrimaryKeys" });
+			_GetPrimaryKeys($dbh, $sth, $Catalog, $Schema, $Table) or return undef;
+			$sth;
     }
 
     sub GetTypeInfo {
@@ -209,23 +257,62 @@ See L<DBI> for more information.
 
 =head2 Recent Updates
 
-=item DBD::ODBC 0.20
+=item B<DBD::ODBC 0.21>
+
+=over 8
+
+Thanks to all who provided patches!
+
+Added ability to connect to an ODBC source without prior creation of DSN.  See mytest/contest.pl for example with MS Access.
+(Also note that you will need documentation for your ODBC driver -- which, sadly, can be difficult to find).
+
+Fixed case sensitivity in tests.
+
+Hopefully fixed test #4 in t/09bind.t.  Updated it to insert the date column and updated it to find the right
+type of the column.  However, it doesn't seem to work on my Linux test machine, using the OpenLink drivers 
+with MS-SQL Server (6.5).  It complains about binding the date time.  The same test works under Win32 with 
+SQL Server 6.5, Oracle 8.0.3 and MS Access 97 ODBC drivers.  Hmmph.
+
+Fixed some binary type issues (patches from Jon Smirl)
+
+Added SQLStatistics, SQLForeignKeys, SQLPrimaryKeys (patches from Jon Smirl)
+Thanks (again), Jon, for providing the build_results function to help reduce duplicate code!
+
+Worked on LongTruncOk for Openlink drivers.
+
+Note: those trying to bind variables need to remember that you should use the following syntax:
+
+	use DBI;
+	...
+	$sth->bind_param(1, $str, DBI::SQL_LONGVARCHAR);
+
+Added support for unixodbc (per Nick Gorham)
+Added support for OpenLinks udbc (per Patrick van Kleef)
+Added Support for esodbc (per Martin Evans)
+Added Support for Easysoft (per Bob Kline)
+
+Changed table_info to produce a list of views, too.
+Fixed bug in SQLColumns call.
+Fixed blob handling via patches from Jochen Wiedmann.
+Added data_sources capability via snarfing code from DBD::Adabas (Jochen Wiedmann)
+
+=item B<DBD::ODBC 0.20>
 
 SQLColAttributes fixes for SQL Server and MySQL. Fixed tables method
 by renaming to new table_info method. Added new tyoe_info_all method.
 Improved Makefile.PL support for Adabase.
 
-=item DBD::ODBC 0.19
+=item B<DBD::ODBC 0.19>
 
 Added iODBC source code to distribution.Fall-back to using iODBC header
 files in some cases.
 
-=item DBD::ODBC 0.18
+=item B<DBD::ODBC 0.18>
 
 Enhancements to build process. Better handling of errors in
 error handling code.
 
-=item DBD::ODBC 0.17
+=item B<DBD::ODBC 0.17>
 
 This release is mostly due to the good work of Jeff Urlwin.
 My eternal thanks to you Jeff.
@@ -292,7 +379,6 @@ supports/formalizes the meta-data to implement.  Most of these
 functions are to obtain more information from the driver and the data
 source.
 
-=over 4
 
 =item GetInfo
 
@@ -337,29 +423,41 @@ docs for help with this).
 
 =item SQLColumns
 
-Support for this function has been added in version 0.17, however, it
-couldn't be tested properly using the ODBC drivers I have.  Neither
-(Oracle or Access) supported this.  I can tell you that it fails
-properly, though <G>
+Support for this function has been added in version 0.17.  It looks to be
+fixed in version 0.20.
 
+=item Connect without DSN
+The ability to connect without a full DSN is introduced in version 0.21.
+
+Example (using MS Access):
+	my $DSN = 'driver=Microsoft Access Driver (*.mdb);dbq=\\\\cheese\\g$\\perltest.mdb';
+	my $dbh = DBI->connect("dbi:ODBC:$DSN", '','') 
+		or die "$DBI::errstr\n";
+
+=item SQLStatistics
+
+=item SQLForeignKeys
+
+=item SQLPrimaryKeys
+
+=item SQLDataSources
+
+All handled, currently (as of 0.21)
+	
 =item Others/todo?
 
 Level 1
 
     SQLColumns	
     SQLSpecialColumns
-    SQLStatistics
     SQLTables (use tables()) call
 
 Level 2
 
     SQLColumnPrivileges
-    SQLForeignKeys
-    SQLPrimaryKeys
     SQLProcedureColumns
     SQLProcedures
     SQLTablePrivileges
-    SQLDataSources
     SQLDrivers
     SQLNativeSql
 
@@ -428,10 +526,101 @@ to ODBC developers (but I don't want to loose them).
 
 	http://dataramp.com/
 
-	http://www.openlink.co.uk
+	http://www.openlink.co.uk 
+		or
+	http://www.openlinksw.com 
 
 	http://www.syware.com
 
 	http://www.microsoft.com/odbc
+
+=head2 Frequently Asked Questions
+Answers to common DBI and DBD::ODBC questions:
+
+=item How do I read more than N characters from a Memo | BLOB | LONG field?
+
+See LongReadLen in the DBI docs.  
+
+Example:
+	$dbh->{LongReadLen} = 20000;
+	$sth = $dbh->prepare("select long_col from big_table");
+	$sth->execute;
+	etc
+
+=item What is DBD::ODBC?  Why can't I connect?  Do I need an ODBC driver?  What is the ODBC driver manager?
+
+These, general questions lead to needing definitions.
+
+1) ODBC Driver - the driver that the ODBC manager uses to connect
+and interact with the RDBMS.  You DEFINITELY need this to 
+connect to any database.  For Win32, they are plentiful and installed
+with many applications.  For Linux/Unix, some hunting is required, but
+you may find something useful at:
+
+	http://www.openlinksw.com
+	http://www.intersolv.com
+
+2) ODBC Driver Manager - the piece of software which interacts with the drivers
+for the application.  It "hides" some of the differences between the
+drivers (i.e. if a function call is not supported by a driver, it 'hides'
+that and informs the application that the call is not supported.
+DBD::ODBC needs this to talk to drivers.  Under Win32, it is built in
+to the OS.  Under Unix/Linux, in most cases, you will want to use freeODBC,
+unixODBC or iODBC.  iODBC is bundled with DBD::ODBC.
+
+3) DBD::ODBC.  DBD::ODBC uses the driver manager to talk to the ODBC driver(s) on
+your system.  You need both a driver manager and driver installed and tested
+before working with DBD::ODBC.  You need to have a DSN (see below) configured
+*and* TESTED before being able to test DBD::ODBC.
+
+4) DSN -- Data Source Name.  It's a way of referring to a particular database by any
+name you wish.  The name itself can be configured to hide the gory details of
+which type of driver you need and the connection information you need to provide.
+For example, for some databases, you need to provide a TCP address and port.
+You can configure the DSN to have use information when you refer to the DSN.
+
+=item Where do I get an ODBC driver manager for Unix/Linux?
+
+DBD::ODBC comes with one (iODBC).  In the DBD::ODBC source release is a directory named iodbcsrc.  
+There are others.  UnixODBC, FreeODBC and some of the drivers will come with one of these managers.
+For example Openlink's drivers (see below) come with the iODBC driver manager.
+
+=item How do I access a MS SQL Server database from Linux?
+
+Try using drivers from http://www.openlinksw.com
+The multi-tier drivers have been tested with Linux and Redhat 5.1.
+
+=item How do I access an MS-Access database from Linux?
+
+I believe you can use the multi-tier drivers from http://www.openlinksw.com, however, I have
+not tested this.  Also, I believe there is a commercial solution from http://www.easysoft.com.  I
+have not tested this.
+
+If someone does have more information, please, please send it to me and I will put it in this
+FAQ.
+
+=item Almost all of my tests for DBD::ODBC fail.  They complain about not being able to connect
+or the DSN is not found.  
+
+Please, please test your configuration of ODBC and driver before trying to test DBD::ODBC.  Most
+of the time, this stems from the fact that the DSN (or ODBC) is not configured properly.  iODBC
+comes with a odbctest program.  Please use it to verify connectivity.
+
+=item For Unix -> Windows DB see Tom Lowery's write-up.
+
+http://tlowery.hypermart.net/perl_dbi_dbd_faq.html#HowDoIAccessMSWindowsDB
+
+=item I'm attempting to bind a Long Var char (or other specific type) and the binding is not working.
+The code I'm using is below:
+
+	$sth->bind_param(1, $str, $DBI::SQL_LONGVARCHAR);
+                                 ^^^
+The problem is that DBI::SQL_LONGVARCHAR is not the same as $DBI::SQL_LONGVARCHAR and that
+$DBI::SQL_LONGVARCHAR is an error!
+
+It should be:
+
+	$sth->bind_param(1, $str, DBI::SQL_LONGVARCHAR);
+
 
 =cut

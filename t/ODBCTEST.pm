@@ -32,6 +32,25 @@ require 5.004;
 	'D' => [SQL_DATE, SQL_TIMESTAMP],
     );
 
+    sub get_type_for_column {
+	my $dbh = shift;
+	my $column = shift;
+
+	my $type;
+	my @row;
+	my $sth;
+	foreach $type (@{ $TestFieldInfo{$column} }) {
+	    $sth = $dbh->func($type, GetTypeInfo);
+	    # may not correct behavior, but get the first compat type
+	    @row = $sth->fetchrow();
+	    $sth->finish();
+	    last if @row;
+	}
+	die "Unable to find a suitable test type for field $column"
+	    unless @row;
+	# warn join(", ",@row);
+	return @row;
+    }
     sub tab_create {
 	my $dbh = shift;
 	$dbh->{PrintError} = 0;
@@ -49,23 +68,13 @@ require 5.004;
 	    $fields .= ", " unless !$fields;
 	    $fields .= "$f ";
 	    # print "-- $fields\n";
-	    my $type;
-	    foreach $type (@{ $TestFieldInfo{$f} }) {
-		$sth = $dbh->func($type, GetTypeInfo);
-		# probably not right, but get the first compat type
-		@row = $sth->fetchrow();
-		last if @row;
-	    }
-	    die "Unable to find a suitable test type for field $f"
-		unless @row;
-	    # warn join(", ",@row);
+	    my @row = get_type_for_column($dbh, $f);
 	    $fields .= $row[0];
 	    if ($row[5]) {
 		$fields .= "($row[2])"	 if ($row[5] =~ /LENGTH/i);
 		$fields .= "($row[2],0)" if ($row[5] =~ /PRECISION,SCALE/i);
 	    }
 	    # print "-- $fields\n";
-	    $sth->finish();
 	}
 	print "Using fields: $fields\n";
 	$dbh->do("CREATE TABLE $table_name ($fields)");

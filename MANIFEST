@@ -3,6 +3,7 @@ MANIFEST.SKIP
 Makefile.PL
 README
 README.adabas
+README.cygwin
 ODBC.h
 ODBC.pm
 ODBC.xs
@@ -18,6 +19,7 @@ t/09bind.t
 t/ODBCTEST.pm
 mytest/listtabs.pl
 mytest/testfunc.pl
-iodbcsrc/odbc_src.tar.gz
-iodbcsrc/isql.h
-iodbcsrc/isqlext.h
+mytest/contest.pl
+mytest/testdatasources.pl
+iodbcsrc/libiodbc-2.50.3.tar.gz
+

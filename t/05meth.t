@@ -18,7 +18,7 @@ print "ok 2\n";
 my $r1 = $DBI::rows;
 $dbh->{AutoCommit} = 0;
 my $sth;
-$sth = $dbh->prepare("DELETE FROM perl_dbd_test");
+$sth = $dbh->prepare("DELETE FROM PERL_DBD_TEST");
 $sth->execute();
 print "not " unless($sth->rows >= 0 
 		    && $DBI::rows == $sth->rows);
@@ -26,7 +26,7 @@ $sth->finish();
 $dbh->rollback();
 print "ok 3\n";
 
-$sth = $dbh->prepare('SELECT * FROM perl_dbd_test WHERE 1 = 0');
+$sth = $dbh->prepare('SELECT * FROM PERL_DBD_TEST WHERE 1 = 0');
 $sth->execute();
 @row = $sth->fetchrow();
 if ($sth->err)
@@ -40,7 +40,7 @@ $sth->finish();
 print "ok 4\n";
 
 my ($a, $b);
-$sth = $dbh->prepare('SELECT A,B FROM perl_dbd_test');
+$sth = $dbh->prepare('SELECT A,B FROM PERL_DBD_TEST');
 $sth->execute();
 while (@row = $sth->fetchrow())
     {

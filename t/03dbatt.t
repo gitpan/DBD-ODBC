@@ -69,7 +69,7 @@ sub commitTest {
 	  local($SIG{__WARN__}) = sub { };
       $dbh->rollback();
     }
-    $sth = $dbh->prepare("SELECT a FROM $ODBCTEST::table_name WHERE a = 100");
+    $sth = $dbh->prepare("SELECT A FROM $ODBCTEST::table_name WHERE A = 100");
     $sth->execute();
     if (@row = $sth->fetchrow()) {
         $rc = 1;

@@ -128,16 +128,19 @@ Tim and Jeff.
 ===============================================================================
 Other info:
 
-DBI 'home page': http://www.hermetica.com/technologia/DBI
+DBI 'home page': http://www.arcana.co.uk/technologia/perl/DBI/index.html
 
 perldoc DBI
-perldoc DBD::ODBC
-Jeff's 'home page' : http://www.access.digex.net/~jurlwin
+perldoc DBD::ODBC	(which will include the DBD::ODBC FAQ list)
+Jeff's 'home page' : http://users.iamdigex.net/jurlwin
 
 Win32 ODBC drivers:
 http://www.microsoft.com/support/products/backoffice/odbc/
 Follow "Microsoft ODBC Desktop Database Drivers 3.5 For 32-Bit Programs"
 and "ODBC Drivers for Win95 Applications".
 For Access use version "Access ODBC driver 3.40.2111 27/03/96" or later.
+
+Also, see the examples in the tests and the mytest directory.  They *do* show
+some of the things you can do with the special DBD::ODBC functions.
 
 End.

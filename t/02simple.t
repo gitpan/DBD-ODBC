@@ -115,7 +115,13 @@ print "ok 12\n";
 
 $rc = ODBCTEST::tab_delete($dbh);
 
-BEGIN {$tests = 12;}
+print " Test 13: test data_sources\n";
+my @data_sources = DBI->data_sources('ODBC');
+print "Data sources:\n\t", join("\n\t",@data_sources),"\n\n";
+print "not " if ($#data_sources == 0);
+print "ok 13\n";
+
+BEGIN {$tests = 13;}
 exit(0);
 
 sub tab_select
@@ -175,20 +181,20 @@ sub tab_insert {
     my $dbh = shift;
 
     # qeDBF needs a space after the table name!
-    my $stmt = "INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES ("
+    my $stmt = "INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES ("
 	    . join(", ", 3, $dbh->quote("bletch"), $dbh->quote("bletch varchar"), 
 			"{d '1998-05-10'}"). ")";
     my $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
     $sth->execute || die "execute: $stmt: $DBI::errstr";
     $sth->finish;
 
-    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
-    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
-    $stmt = "INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES ("
+    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
+    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
+    $stmt = "INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES ("
 	    . join(", ", 4, $dbh->quote("80char"), $dbh->quote($longstr), "{d '1998-05-13'}"). ")";
     $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
     $sth->execute || die "execute: $stmt: $DBI::errstr";
-    $stmt = "INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES ("
+    $stmt = "INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES ("
 	    . join(", ", 5, $dbh->quote("gt250char"), $dbh->quote($longstr2), "{d '1998-05-14'}"). ")";
     $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
     $sth->execute || die "execute: $stmt: $DBI::errstr";

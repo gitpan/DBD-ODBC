@@ -22,7 +22,8 @@ _tables(dbh, sth, qualifier)
 	SV *	sth
 	char *	qualifier
 	CODE:
-	ST(0) = dbd_st_tables(dbh, sth, qualifier, "TABLE") ? &sv_yes : &sv_no;
+	/* list all tables and views (0 as last parameter) */
+	ST(0) = dbd_st_tables(dbh, sth, qualifier, 0) ? &sv_yes : &sv_no;
 
 void
 DescribeCol(sth, colno)
@@ -80,6 +81,40 @@ _GetTypeInfo(dbh, sth, ftype)
 	CODE:
 	ST(0) = odbc_get_type_info(dbh, sth, ftype) ? &sv_yes : &sv_no;
 
+void 
+_GetStatistics(dbh, sth, CatalogName, SchemaName, TableName, Unique)
+	SV *	dbh
+	SV *	sth
+	char *	CatalogName
+	char *	SchemaName
+	char *	TableName
+	int		Unique
+	CODE:
+	ST(0) = odbc_get_statistics(dbh, sth, CatalogName, SchemaName, TableName, Unique) ? &sv_yes : &sv_no;
+
+void 
+_GetPrimaryKeys(dbh, sth, CatalogName, SchemaName, TableName)
+	SV *	dbh
+	SV *	sth
+	char *	CatalogName
+	char *	SchemaName
+	char *	TableName
+	CODE:
+	ST(0) = odbc_get_primary_keys(dbh, sth, CatalogName, SchemaName, TableName) ? &sv_yes : &sv_no;
+
+void 
+_GetForeignKeys(dbh, sth, PK_CatalogName, PK_SchemaName, PK_TableName, FK_CatalogName, FK_SchemaName, FK_TableName)
+	SV *	dbh
+	SV *	sth
+	char *	PK_CatalogName
+	char *	PK_SchemaName
+	char *	PK_TableName
+	char *	FK_CatalogName
+	char *	FK_SchemaName
+	char *	FK_TableName
+	CODE:
+	ST(0) = odbc_get_foreign_keys(dbh, sth, PK_CatalogName, PK_SchemaName, PK_TableName, FK_CatalogName, FK_SchemaName, FK_TableName) ? &sv_yes : &sv_no;
+
 #
 # Corresponds to ODBC 2.0.  3.0's SQL_API_ODBC3_ALL_FUNCTIONS will break this
 # scheme
@@ -104,4 +139,60 @@ GetFunctions(dbh, func)
 	}
 
 MODULE = DBD::ODBC    PACKAGE = DBD::ODBC::db
+
+MODULE = DBD::ODBC    PACKAGE = DBD::ODBC::dr
+
+void
+data_sources(drh, attr = NULL)
+    SV* drh;
+    SV* attr;
+  PROTOTYPE: $;$
+  PPCODE:
+    {
+	int numDataSources = 0;
+	UWORD fDirection = SQL_FETCH_FIRST;
+	RETCODE rc;
+        UCHAR dsn[SQL_MAX_DSN_LENGTH+1+9 /* strlen("DBI:ODBC:") */];
+        SWORD dsn_length;
+        UCHAR description[256];
+        SWORD description_length;
+	D_imp_drh(drh);
+	HENV henv;
+
+	if (!imp_drh->connects) {
+	    rc = SQLAllocEnv(&imp_drh->henv);
+	    if (!SQL_ok(rc)) {
+		imp_drh->henv = SQL_NULL_HENV;
+		dbd_error(drh, rc, "data_sources/SQLAllocEnv");
+		XSRETURN(0);
+	    }
+	}
+        strcpy(dsn, "DBI:ODBC:");
+	while (1) {
+            rc = SQLDataSources(imp_drh->henv, fDirection,
+                                dsn+9, /* strlen("DBI:ODBC:") */
+                                sizeof(dsn), &dsn_length,
+                                description, sizeof(description),
+                                &description_length);
+       	    if (!SQL_ok(rc)) {
+                if (rc != SQL_NO_DATA_FOUND) {
+		    /*
+		     *  Temporarily increment imp_drh->connects, so
+		     *  that dbd_error uses our henv.
+		     */
+		    imp_drh->connects++;
+		    dbd_error(drh, rc, "data_sources/SQLDataSources");
+		    imp_drh->connects--;
+                }
+                break;
+            }
+            ST(numDataSources++) = newSVpv(dsn, dsn_length+9 /* strlen("dbi:ODBC:") */ );
+	    fDirection = SQL_FETCH_NEXT;
+	}
+	if (!imp_drh->connects) {
+	    SQLFreeEnv(imp_drh->henv);
+	    imp_drh->henv = SQL_NULL_HENV;
+	}
+	XSRETURN(numDataSources);
+    }
 

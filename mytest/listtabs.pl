@@ -9,15 +9,21 @@ my $dbh = DBI->connect()
 # ------------------------------------------------------------
 
 my $rows = 0;
-if ($sth = $dbh->tables) {
-    my $cols = $sth->{NAME};
-    print join(', ', @$cols), "\n";
-    while (@row = $sth->fetchrow) {
-	$rows++;
-	print join(', ', @row), "\n";
-	my $sthcols = $dbh->func('',$row[1], $row[2],'', columns);
+my @tables;
+my $table;
+$| = 1;
+
+if (@tables = $dbh->tables) {
+    print join(', ', @tables), "\n";
+    foreach $table (@tables) {
+	my $schema = '';
+	if ($table =~ m/(.*)\.(.*)$/) {
+		$schema = $1;
+		$table = $2;
+	}
+	my $sthcols = $dbh->func('',$schema, $table,'', columns);
 	if ($sthcols) {
-	    while (@row = $sthcols->fetchrow()) {
+	    while (@row = $sthcols->fetchrow_array) {
 		print "\t", join(', ', @row), "\n";
 	    }
 	} else {
@@ -25,7 +31,6 @@ if ($sth = $dbh->tables) {
 	    print "SQLColumns: $DBI::errstr\n";
 	}
     }
-    $sth->finish();
 }
 
 $dbh->disconnect();

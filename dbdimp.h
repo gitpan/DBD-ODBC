@@ -123,6 +123,6 @@ struct phs_st {  	/* scalar placeholder EXPERIMENTAL	*/
 #define dbd_st_FETCH_attrib	odbc_st_FETCH_attrib
 #define dbd_describe		odbc_describe
 #define dbd_bind_ph		odbc_bind_ph
-
+#define dbd_error		odbc_error
 
 /* end */
