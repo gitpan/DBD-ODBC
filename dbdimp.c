@@ -1217,18 +1217,27 @@ imp_sth_t *imp_sth;
      * behavior with SQLServer's driver and stored procedures which
      * insert data.
      * */
+    imp_sth->done_desc = 1;	/* assume ok from here on */
     imp_dbh = (struct imp_dbh_st *)(DBIc_PARENT_COM(imp_sth));
     while (num_fields == 0 && imp_dbh->odbc_sqlmoreresults_supported == 1) {
        rc = SQLMoreResults(imp_sth->hstmt);
+       if (DBIS->debug >= 8) {
+	  PerlIO_printf(DBILOGFP, "Numfields == 0, SQLMoreResults == %d\n", rc);
+	  PerlIO_flush(DBILOGFP);
+       }
+       imp_sth->done_desc = 0;	/* reset describe flags, so that we re-describe */
        if (!SQL_ok(rc)) break;
        rc = SQLNumResultCols(imp_sth->hstmt, &num_fields);
+       if (DBIS->debug >= 8) {
+	  PerlIO_printf(DBILOGFP, "Numfields == 0, SQLNumResultCols == %d\n", rc);
+	  PerlIO_flush(DBILOGFP);
+       }
        if (!SQL_ok(rc)) {
 	  dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
 	  return 0;
        }
     }
     
-    imp_sth->done_desc = 1;	/* assume ok from here on */
     DBIc_NUM_FIELDS(imp_sth) = num_fields;
 
     if (DBIS->debug >= 2)

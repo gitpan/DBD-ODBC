@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.45_8';
+$DBD::ODBC::VERSION = '0.45_9';
 
 {
     package DBD::ODBC;
@@ -435,6 +435,11 @@ See L<DBI> for more information.
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
 
+=item B<DBD::ODBC 0.45_9>
+
+Fixed bug in procedure handling for SQLServer.  Was not re-describing the result sets
+if the SQLMoreResults in the execute needs to be called.
+ 
 =item B<DBD::ODBC 0.45_8>
 
 Fixed bug in tracing code when binding an undef parameter which did not
