@@ -187,15 +187,14 @@ char *pwd;
      * and level 2+ just to indicate that we are trying SQLConnect.
      */
     if (!SQL_ok(rc)) {
-#ifdef DBD_ODBC_NO_SQLDRIVERCONNECT
-	PerlIO_printf(DBILOGFP, "SQLDriverConnect unsupported.\n");
-#else		
 	if (DBIS->debug > 3) {
+#ifdef DBD_ODBC_NO_SQLDRIVERCONNECT
+	    PerlIO_printf(DBILOGFP, "SQLDriverConnect unsupported.\n");
+#else		
 	    PerlIO_printf(DBILOGFP, "SQLDriverConnect failed:\n");
 	    AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0, 1);
-	}
-
 #endif /* DriverConnect supported */
+	}
 
 	if (DBIS->debug >= 2)
 	    PerlIO_printf(DBILOGFP, "SQLConnect '%s', '%s', '%s'\n", dbname, uid, pwd);

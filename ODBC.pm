@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.30';
+$DBD::ODBC::VERSION = '0.31';
 
 {
     package DBD::ODBC;
@@ -139,9 +139,16 @@ $DBD::ODBC::VERSION = '0.30';
 	    # JLU added local PrintError handling for completeness.
 	    # it shouldn't print, I think.
 	    local $dbh->{PrintError} = 0 if $dbh->{PrintError};
-	    my $sql = "select col_does_not_exist from table_does_not_exist";
-	    my $ok = $dbh->prepare($sql);
-	    # fixed "my" $state = below.  Was causing problem with ping!
+	    my $sql = "select sysdate from dual1__NOT_FOUND__CANNOT";
+	    my $sth = $dbh->prepare($sql);
+	    # fixed "my" $state = below.  Was causing problem with
+	    # ping!  Also, fetching fields as some drivers (Oracle 8)
+	    # may not actually check the database for activity until
+	    # the query is "described".
+	    # Right now, Oracle8 is the only known version which
+	    # does not actually check the server during prepare.
+	    my $ok = $sth && $sth->execute();
+
 	    $state = $dbh->state;
 	    $DBD::ODBC::err = 0;
 	    $DBD::ODBC::errstr = "";
@@ -154,7 +161,7 @@ $DBD::ODBC::VERSION = '0.30';
 	return 1 if $state eq '37000';  # statement could not be prepared (19991011, JLU)
 	# We assume that any other error means the database
 	# is no longer connected.
-# Some special cases may need to be added to the code above.
+	# Some special cases may need to be added to the code above.
 	return 0;
     }
 
@@ -280,6 +287,15 @@ See L<DBI> for more information.
 =head2 Recent Updates
 
 =over 4
+
+=item B<DBD::ODBC 0.31>
+ Added SAP patches to build directly against SAP driver instead of
+ driver manager thanks to Flemming Frandsen (thanks!)
+
+ Added support to fix ping for Oracle8.  May break other databases, so please report
+ this as soon as possible.  The downside is that we need to actually execute the
+ dummy query.
+ 
 
 =item B<DBD::ODBC 0.30>
 

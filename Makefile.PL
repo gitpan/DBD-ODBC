@@ -83,6 +83,10 @@ else {
 	$odbchome = $tmp_odbchome if (-e "$tmp_odbchome/odbc.ini")
     }
 
+    if (!$odbchome && -f '/opt/sapdb/interfaces/odbc/lib/libsqlod.a') {
+	$odbchome = '/opt/sapdb/interfaces/odbc/';
+    }
+
     unless ($odbchome) {
 	print "\n";
 	print "The DBD::ODBC module needs to link with an ODBC 'Driver Manager'.\n";
@@ -128,6 +132,9 @@ else {
 
     $myodbc = 'intersolve'
 		if -f "$odbchome/include/qeodbc.h";
+
+    $myodbc = 'sapdb'
+	        if -f "$odbchome/lib/libsqlod.a";
 
     $myodbc = 'adabas'
 		if $ENV{DBROOT} && $odbchome eq $ENV{DBROOT} && -f "$odbchome/lib/odbclib.a";
@@ -275,6 +282,18 @@ else {
 	print SQLH qq{#include <odbcsys.h>\n};
 	print SQLH qq{#include <sql.h>\n#include <sqlext.h>\n};
 	$opts{LIBS} = "-L$odbchome/lib -R$odbchome/lib -lempodbc";
+    }
+    elsif ($myodbc eq 'sapdb') {
+	print SQLH "#include <WINDOWS.H>\n";
+	print SQLH "#include <sql.h>\n";
+	print SQLH "#include <sqlext.h>\n";
+	print SQLH "#define HENV SQLHENV\n";
+	print SQLH "#define HDBC SQLHDBC\n";
+	print SQLH "#define HSTMT SQLHSTMT\n";
+	print SQLH "#define DBD_ODBC_NO_SQLDRIVERCONNECT\n";
+
+	$opts{INC} .= " -I$odbchome/incl";
+	$opts{LDFROM} = "\$(OBJECT) $odbchome/lib/libsqlod.a";
     }
     elsif ($myodbc eq 'adabas') {
 	print SQLH "#define FAR \n#define EXPORT \n#define CALLBACK \n";
