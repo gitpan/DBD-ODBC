@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 123 2004-02-22 15:56:14Z jurl $
+# $Id: Makefile.PL 194 2004-03-06 17:54:06Z jurl $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -42,8 +42,14 @@ Getopt::Long::GetOptions("g!" => \$opt_g,
 	   "o=s" => \$opt_o) or die "Invalid arguments";
 
 print "Overriding ODBC Directory with command line option: $opt_o\n" if $opt_o ;
-print "Setting debug options!\n" if $opt_g ;
-$opts{OPTIMIZE} = '-g -O0' if $opt_g;
+if ($opt_g) {
+   print "Setting debug options!\n";
+   if ($^O eq 'MSWin32') {
+      $opts{OPTIMIZE} = '/Zi';
+   } else {
+      $opts{OPTIMIZE} = '-g -O0';
+   }
+}
 
 print "\nConfiguring DBD::ODBC ...\n
 >>>\tRemember to actually *READ* the README file!
@@ -418,6 +424,8 @@ print "Warning: not all required environment variables are set.\n"
 print "Warning: DBI_DSN ($ENV{DBI_DSN}) doesn't start with 'dbi:ODBC:'\n"
 	if ($ENV{DBI_DSN} && $ENV{DBI_DSN} !~ m/^dbi:ODBC:/);
 print "\n";
+warn "See README.RH9 if you have problems with a bad Makefile generated here\a\a\a\n"
+   if ($ENV{LANG} && $ENV{LANG} =~ /utf8/);
 
 $rv;
 

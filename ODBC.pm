@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 124 2004-02-22 15:57:00Z jurl $
+# $Id: ODBC.pm 195 2004-03-06 17:59:22Z jurl $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '1.07';
+$DBD::ODBC::VERSION = '1.08';
 
 {
     package DBD::ODBC;
@@ -20,7 +20,7 @@ $DBD::ODBC::VERSION = '1.07';
     
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 124 2004-02-22 15:57:00Z jurl $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 195 2004-03-06 17:59:22Z jurl $, 13,2);
 
     require_version DBI 1.21;
 
@@ -463,7 +463,9 @@ See L<DBI> for more information.
    svn checkout http://svn.perl.org/modules/dbd-odbc/trunk <your directory name here>
 
  Which will, after a short bit a of work, grab all the files into your
- local directory tree that you name.
+ local directory tree that you name.  For now, you can authenticate via the guest
+ user and guest password.  That will change to be unauthenticated in the future for
+ simple read-only checkout.
 				    
 =item B<Contributing>
 
@@ -484,6 +486,7 @@ See L<DBI> for more information.
  It's probably best to send to dbi-users@perl.org, as I monitor that group.
  
 =item B<Private DBD::ODBC Attributes>
+
 =item odbc_more_results (applies to statement handle only!)
 
 Use this attribute to determine if there are more result sets
@@ -599,7 +602,25 @@ SQL_ROWSET_SIZE attribute patch from Andrew Brown
 This, while available via get_info() is captured here.  I may get rid of this
 as I only used it for debugging purposes.  
  
-=item odbc_version
+=item odbc_cursortype (applies to connect only!)
+
+This allows multiple concurrent statements on SQL*Server.  In your connect, add
+{ odbc_cursortype => 2 }.  If you are using DBI > 1.41, you should also be able
+to use { odbc_cursortype => DBI::SQL_CURSOR_DYNAMIC } instead.  For example:
+
+ my $dbh = DBI->connect("dbi:ODBC:$DSN", $user, $pass, { RaiseError => 1, odbc_cursortype => 2});
+ my $sth = $dbh->prepare("one statement");
+ my $sth2 = $dbh->prepare("two statement");
+ $sth->execute;
+ my @row;
+ while (@row = $sth->fetchrow_array) {
+    $sth2->execute($row[0]);
+ }
+
+See t/20SqlServer.t for an example.
+
+		   
+=item odbc_version (applies to connect only!)
 
 This was added prior to the move to ODBC 3.x to allow the caller to "force" ODBC 3.0
 compatibility.  It's probably not as useful now, but it allowed get_info and get_type_info
