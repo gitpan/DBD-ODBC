@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL,v 1.11 1998/08/14 18:28:20 timbo Exp $
+# $Id: Makefile.PL 123 2004-02-22 15:56:14Z jurl $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -41,7 +41,8 @@ our $opt_o = '';
 Getopt::Long::GetOptions("g!" => \$opt_g,
 	   "o=s" => \$opt_o) or die "Invalid arguments";
 
-    print "Overriding ODBC Directory with command line option: $opt_o\n" if $opt_o ;
+print "Overriding ODBC Directory with command line option: $opt_o\n" if $opt_o ;
+print "Setting debug options!\n" if $opt_g ;
 $opts{OPTIMIZE} = '-g -O0' if $opt_g;
 
 print "\nConfiguring DBD::ODBC ...\n
@@ -142,6 +143,9 @@ else {
 
     my $dlext = $Config{dlext};
     my $arext = $Config{lib_ext};
+
+    # fix to avoid foo..ext on many systems.
+    $arext = s/^\.//;
 
     # per patches from Nick Gorham
     $myodbc = 'unixodbc'
@@ -400,7 +404,7 @@ print SQLH qq{\n};
 close(SQLH);
 
 print "\n";
-WriteMakefile(%opts);
+my $rv = WriteMakefile(%opts);
 
 local($^W)=0;
 print qq{
@@ -415,6 +419,8 @@ print "Warning: DBI_DSN ($ENV{DBI_DSN}) doesn't start with 'dbi:ODBC:'\n"
 	if ($ENV{DBI_DSN} && $ENV{DBI_DSN} !~ m/^dbi:ODBC:/);
 print "\n";
 
+$rv;
+
 sub MY::post_constants {
    my ($self) = shift;
 
@@ -424,7 +430,7 @@ inst_libdbdodbc = ' . File::Spec->catdir($self->{INST_LIB}, 'DBD/ODBC') . '
 changes_pm = ' . File::Spec->catfile($self->{INST_LIB}, 'DBD/ODBC', 'Changes.pm') . '
 
 config :: $(changes_pm)
-    @$(NOOP)
+	@$(NOOP)
 
 $(changes_pm): Changes
 	$(NOECHO) $(MKPATH) $(inst_libdbdodbc)

@@ -1,4 +1,6 @@
 #!/usr/bin/perl -I./t
+# $Id: 20SqlServer.t 101 2004-02-21 19:41:13Z jurl $
+
 $| = 1;
 
 
@@ -388,7 +390,7 @@ eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
 eval {$dbh->do("CREATE PROCEDURE PERL_DBD_PROC1 AS return 1;");}; 
 
 $sth1 = $dbh->prepare ("{ ? = call PERL_DBD_PROC1 }"); 
-my $output = undef; 
+$output = undef; 
 $iErrCount = 0; 
 $sth1->bind_param_inout(1, \$output, 50, DBI::SQL_INTEGER); 
 
@@ -408,10 +410,10 @@ Test($dbh->{odbc_async_exec});
 # of the error handler stuff I have.
 my $testpass = 0;
 sub err_handler {
-   my ($state, $msg) = @_;
+   my ($state, $msg, $nativeerr) = @_;
    # Strip out all of the driver ID stuff
    $msg =~ s/^(\[[\w\s]*\])+//;
-   print "===> state: $state msg: $msg\n";
+   print "===> state: $state msg: $msg nativeerr: $nativeerr\n";
    $testpass++;
    return 0;
 }

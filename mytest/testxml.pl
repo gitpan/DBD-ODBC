@@ -1,4 +1,6 @@
 #perl -w
+# $Id: testxml.pl 93 2004-02-19 19:28:16Z jurl $
+
 $| = 1;
 
 

@@ -1,4 +1,6 @@
 #!/usr/bin/perl -I./t
+# $Id: 30Oracle.t 94 2004-02-21 16:10:16Z jurl $
+
 $| = 1;
 
 

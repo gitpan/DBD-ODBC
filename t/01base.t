@@ -1,4 +1,5 @@
 #!/usr/bin/perl 
+# $Id: 01base.t 94 2004-02-21 16:10:16Z jurl $
 
 print "1..$tests\n";
 

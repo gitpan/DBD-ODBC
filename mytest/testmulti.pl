@@ -1,4 +1,6 @@
 use DBI;
+# $Id: testmulti.pl 93 2004-02-19 19:28:16Z jurl $
+
 #$ENV{'ODBCINI'}="/export/cmn/etc/odbc.ini" ;
 my($connectString) = "dbi:ODBC:DSN=TESTDB;Database=xxxxxdata;uid=usrxxxxx;pwd=xxxxx" ;
 # DBI->trace(9) ;

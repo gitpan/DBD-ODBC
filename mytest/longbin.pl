@@ -1,4 +1,6 @@
 #/usr/bin/perl -w
+# $Id: longbin.pl 93 2004-02-19 19:28:16Z jurl $
+
 use strict;
 use DBI qw (:sql_types);
 use Digest::MD5 qw(md5 md5_hex);

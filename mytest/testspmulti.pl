@@ -1,4 +1,6 @@
 #!perl.exe -w
+# $Id: testspmulti.pl 93 2004-02-19 19:28:16Z jurl $
+
 use strict;
 use DBI;
 

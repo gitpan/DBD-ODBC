@@ -1,4 +1,6 @@
 use DBI;
+# $Id: sqltmptabs.pl 93 2004-02-19 19:28:16Z jurl $
+
 
 my $dbh = DBI->connect($ENV{DBI_DSN}, $ENV{DBI_USER}, $ENV{DBI_PASS}, { RaiseError => 1});
 my $sth;

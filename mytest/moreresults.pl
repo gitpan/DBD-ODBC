@@ -1,4 +1,6 @@
 #!perl -w
+# $Id: moreresults.pl 93 2004-02-19 19:28:16Z jurl $
+
 #
 # Sorry -- this test is pretty specific to MSSQL Server and Sybase...
 #
