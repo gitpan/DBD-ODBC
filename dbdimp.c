@@ -662,8 +662,12 @@ static const char *
 	case SQL_REAL:	return "REAL";
 	case SQL_DOUBLE:	return "DOUBLE";
 	case SQL_VARCHAR:	return "VARCHAR";
+#ifdef SQL_WVARCHAR
 	case SQL_WVARCHAR:	return "UNICODE VARCHAR"; /* added for SQLServer 7 ntext type 2/24/2000 */
+#endif
+#ifdef SQL_WLONGVARCHAR
 	case SQL_WLONGVARCHAR: return "UNICODE LONG VARCHAR";
+#endif
 	case SQL_DATE:	return "DATE";
 	case SQL_TIME:	return "TIME";
 	case SQL_TIMESTAMP:	return "TIMESTAMP";
@@ -814,7 +818,9 @@ imp_sth_t *imp_sth;
 		fbh->ftype = SQL_C_BINARY;
 		fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth);
 		break;
+#ifdef SQL_WLONGVARCHAR
 	    case SQL_WLONGVARCHAR:	/* added for SQLServer 7 ntext type */
+#endif
 	    case SQL_LONGVARCHAR:
 		fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
 		break;
@@ -1291,7 +1297,9 @@ int maxlen;
 	    case SQL_VARBINARY:
 		fCType = SQL_C_BINARY;
 		break;
+#ifdef SQL_WLONGVARCHAR
 	    case SQL_WLONGVARCHAR:	/* added for SQLServer 7 ntext type */
+#endif
 	    case SQL_LONGVARCHAR:
 		break;
 	    case SQL_TIMESTAMP:
@@ -1308,7 +1316,10 @@ int maxlen;
      * for example select * from tabtest where name = ?
      * then executing with 'paul' and then 'thomas' would cause
      * SQLServer to prepare the query twice, but if we ran 'thomas'
-     * then 'paul', it would not
+     * then 'paul', it would not re-prepare the query.  The key seems
+     * to be allocating enough space for the largest parameter.
+     * TBD: the default for this should be a DBD::ODBC specific option
+     * or attribute.
      */
     if (phs->sql_type == SQL_VARCHAR) {
 	ibScale = 0;

@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.24';
+$DBD::ODBC::VERSION = '0.25';
 
 {
     package DBD::ODBC;
@@ -258,6 +258,18 @@ See L<DBI> for more information.
 
 =head2 Recent Updates
 
+=item B<DBD::ODBC 0.25>
+
+=over 8
+
+Added conditional compilation for SQL_WVARCHAR and SQL_WLONGVARCHAR.  If they
+are not defined by your driver manager, they will not be compiled in to the code.
+If you would like to support these types on some platforms, you may be able to
+ #define SQL_WVARCHAR (-9)
+ #define SQL_WLONGVARCHAR (-10)
+
+Added more long tests with binding in t\09bind.t.  Note use of bind_param!
+ 
 =item B<DBD::ODBC 0.24>
 
 Fixed Test #13 in 02simple.t.  Would fail, improperly, if there was only one data source defined.
@@ -284,8 +296,6 @@ If you are using ActiveState's perl, this can be installed by using PPM.
 
 
 =item B<DBD::ODBC 0.21>
-
-=over 8
 
 Thanks to all who provided patches!
 
