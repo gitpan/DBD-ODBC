@@ -54,7 +54,7 @@ int
     if (!dbd_describe(sth, imp_sth)) {
 	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
 	imp_sth->hstmt = SQL_NULL_HSTMT;
-	return 0; /* dbd_describe already called ora_error()	*/
+	return 0; /* dbd_describe already called dbd_error()	*/
     }
 
     if (dbd_describe(sth, imp_sth) <= 0)
@@ -309,7 +309,7 @@ imp_dbh_t *imp_dbh;
 
 
 /*------------------------------------------------------------
-replacement for ora_error.
+replacement for odbc_error.
 empties entire ODBC error queue.
 ------------------------------------------------------------*/
 void
@@ -975,11 +975,19 @@ imp_sth_t *imp_sth;
 	/* See Microsoft Knowledge Base article (#Q124899)		*/
 	/* describe and allocate storage for results (if any needed)	*/
 	if (!dbd_describe(sth, imp_sth))
-	    return -2; /* dbd_describe already called ora_error()	*/
+	    return -2; /* dbd_describe already called dbd_error()	*/
     }
 
-    if (DBIc_NUM_FIELDS(imp_sth) > 0)
+    if (DBIc_NUM_FIELDS(imp_sth) > 0) {
 	DBIc_ACTIVE_on(imp_sth);	/* only set for select (?)	*/
+    } else {
+	if (debug >= 2) {
+	    fprintf(DBILOGFP,
+		    "    dbd_st_execute got no rows: resetting ACTIVE, moreResults\n");
+	    imp_sth->moreResults = 0;
+	    DBIc_ACTIVE_off(imp_sth);
+	}
+    }
     imp_sth->eod = SQL_SUCCESS;
 
     // JLU: Jon Smirl had:
@@ -988,7 +996,13 @@ imp_sth_t *imp_sth;
     // The e-mail that accompanied the change indicated that Sybase would return
     // a negative value for an estimate.  Wouldn't you WANT that to stay negative?
     //
-    return imp_sth->RowCount;
+    // dgood: JLU had:
+    //      return imp_sth->RowCount;
+    // Because you return -2 on errors so if you don't abs() it, a perfectly 
+    // valid return value will get flagged as an error...
+    //
+    return (imp_sth->RowCount == -1 ? -1 : abs(imp_sth->RowCount));
+    // return imp_sth->RowCount;
 }
 
 
@@ -1002,6 +1016,8 @@ AV *
 imp_sth_t *imp_sth;
 {
     dTHR;
+    D_imp_dbh_from_sth;
+    UWORD supported;
     int debug = DBIS->debug;
     int i;
     AV *av;
@@ -1023,11 +1039,64 @@ imp_sth_t *imp_sth;
 	fprintf(DBILOGFP, "       SQLFetch rc %d\n", rc);
     imp_sth->eod = rc;
     if (!SQL_ok(rc)) {
-	if (rc != SQL_NO_DATA_FOUND)
+	if (SQL_NO_DATA_FOUND == rc) {
+
+	    /* See if we can check for multiple results */
+	    rc = SQLGetFunctions(imp_dbh->hdbc, SQL_API_SQLMORERESULTS, 
+				 &supported);
+	    if (DBIS->debug >= 3)
+		fprintf(DBILOGFP, "       SQLGetFunctions - supported: %d\n", 
+			supported);
+	    if (SQL_ok(rc) && supported){
+		/* Check for multiple results */
+		rc = SQLMoreResults(imp_sth->hstmt);
+		if (SQL_ok(rc)){
+		    /* More results detected.  Clear out the old result */
+		    /* stuff and re-describe the fields.                */
+		    Safefree(imp_sth->fbh);
+		    Safefree(imp_sth->ColNames);
+		    Safefree(imp_sth->RowBuffer);
+		    
+		    /* dgood - Yikes!  I don't want to go down to this level, */
+		    /*         but if I don't, it won't figure out that the   */
+		    /*         number of columns have changed...              */
+		    if (DBIc_FIELDS_AV(imp_sth)) {
+			sv_free((SV*)DBIc_FIELDS_AV(imp_sth));
+			DBIc_FIELDS_AV(imp_sth) = Nullav;
+		    }
+		    
+		    imp_sth->fbh       = NULL;
+		    imp_sth->ColNames  = NULL;
+		    imp_sth->RowBuffer = NULL;
+		    imp_sth->done_desc = 0;
+		    if (!dbd_describe(sth, imp_sth))
+			return Nullav; /* dbd_describe already called dbd_error() */
+
+		    /* set moreResults so we'll know we can keep fetching */
+		    imp_sth->moreResults = 1;
+		    return Nullav;
+		}
+		else if (rc == SQL_NO_DATA_FOUND){
+		    /* No more results */
+		    imp_sth->moreResults = 0;
+		    
+		    /* XXX need to 'finish' here */
+		    dbd_st_finish(sth, imp_sth);
+		    return Nullav;
+		}
+		else {
+		    dbd_error(sth, rc, "st_fetch/SQLMoreResults");
+		}
+	    }
+	    else {
+		dbd_error(sth, rc, "st_fetch/SQLGetFunctions");
+	    }
+	} else {
 	    dbd_error(sth, rc, "st_fetch/SQLFetch");
-	/* XXX need to 'finish' here */
-	dbd_st_finish(sth, imp_sth);
-	return Nullav;
+	    /* XXX need to 'finish' here */
+	    dbd_st_finish(sth, imp_sth);
+	    return Nullav;
+	}
     }
 
     if (imp_sth->RowCount == -1)
@@ -1037,6 +1106,9 @@ imp_sth_t *imp_sth;
     av = DBIS->get_fbav(imp_sth);
     num_fields = AvFILL(av)+1;
 
+    if (DBIS->debug >= 3)
+	fprintf(DBILOGFP, "fetch num_fields=%d\n", num_fields);
+    
     ChopBlanks = DBIc_has(imp_sth, DBIcf_ChopBlanks);
 
     for(i=0; i < num_fields; ++i) {
@@ -1700,6 +1772,7 @@ static T_st_params S_st_fetch_params[] =
     s_A("sol_type"),		/* 7 */
     s_A("sol_length"),		/* 8 */
     s_A("CursorName"),		/* 9 */
+    s_A("odbc_more_results"),	/* 10 */
     s_A(""),			/* END */
 };
 
@@ -1740,7 +1813,7 @@ SV *keysv;
 
     if (!imp_sth->done_desc && !dbd_describe(sth, imp_sth)) 
     {
-	/* dbd_describe has already called ora_error()          */
+	/* dbd_describe has already called dbd_error()          */
 	/* we can't return Nullsv here because the xs code will */
 	/* then just pass the attribute name to DBI for FETCH.  */
 	croak("Describe failed during %s->FETCH(%s)",
@@ -1811,7 +1884,13 @@ SV *keysv;
 	    }
 	    retsv = newSVpv(cursor_name, cursor_name_len);
 	    break;
-	case 10:
+	case 10:                /* odbc_more_results */
+	    retsv = newSViv(imp_sth->moreResults);
+	    break;
+	    /* Umm... This used to be #10.  I don't really see why it's here at  */
+	    /* all since there was no corresponding entry in S_st_fetch_params.  */
+	    /* I'll leave it here as #11 just in case...  [dgood 2/16/00]        */
+	case 11:
 	    retsv = newSViv(DBIc_LongReadLen(imp_sth));
 	    break;
 	default:
@@ -2073,6 +2152,28 @@ int ftype;
     }
 
     return build_results(sth);
+}
+
+
+SV *
+   odbc_cancel(sth)
+   SV *sth;
+{
+    dTHR;
+    D_imp_sth(sth);
+    RETCODE rc;
+
+    if ( !DBIc_ACTIVE(imp_sth) ) {
+	dbd_error(sth, SQL_ERROR, "no statement executing");
+	return Nullsv;
+    }
+
+    rc = SQLCancel(imp_sth);
+    if (!SQL_ok(rc)) {
+	dbd_error(sth, rc, "odbc_cancel/SQLCancel");
+	return Nullsv;
+    }
+    return newSViv(1);
 }
 
 

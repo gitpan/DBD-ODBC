@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.25';
+$DBD::ODBC::VERSION = '0.26';
 
 {
     package DBD::ODBC;
@@ -92,8 +92,8 @@ $DBD::ODBC::VERSION = '0.25';
 	    'Statement' => $statement,
 	    });
 
-	# Call ODBC OCI oparse func in ODBC.xs file.
-	# (This will actually also call oopen for you.)
+	# Call ODBC func in ODBC.xs file.
+	# (This will actually also call SQLPrepare for you.)
 	# and populate internal handle data.
 
 	DBD::ODBC::st::_prepare($sth, $statement, @attribs)
@@ -237,6 +237,12 @@ $DBD::ODBC::VERSION = '0.25';
 	# print "After ColAttributes\n";
 	$tmp;
     }
+
+    sub cancel {
+	my $sth = shift;
+	my $tmp = _Cancel($sth);
+	$tmp;
+    }
 }
 
 1;
@@ -258,9 +264,25 @@ See L<DBI> for more information.
 
 =head2 Recent Updates
 
-=item B<DBD::ODBC 0.25>
+=item B<DBD::ODBC 0.26>
 
+Put in patch for returning only positive rowcounts from dbd_st_execute.  The original patch
+was submitted by Jon Smirl and put back in by David Good.  Reasoning seems sound, so I put it
+back in.  However, any databases that return negative rowcounts for specific reasons,
+will no longer do so.
+
+Put in David Good's patch for multiple result sets.  Thanks David!  See mytest\moreresults.pl for
+an example of usage.
+
+Added readme.txt in iodbcsrc explaining an issue there with iODBC 2.50.3 and C<data_sources>.
+
+Put in rudimentary cancel support via SQLCancel.  Call $sth->cencel to utilize.  However, it is largely
+untested by me, as I do not have a good sample for this yet.  It may come in handy with threaded
+perl, someday or it may work in a signal handler.
+   
 =over 8
+
+=item B<DBD::ODBC 0.25>
 
 Added conditional compilation for SQL_WVARCHAR and SQL_WLONGVARCHAR.  If they
 are not defined by your driver manager, they will not be compiled in to the code.

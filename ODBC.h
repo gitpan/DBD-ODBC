@@ -19,6 +19,7 @@
 SV      *odbc_get_info _((SV *dbh, int ftype));
 int      odbc_get_type_info _((SV *dbh, SV *sth, int ftype));
 SV	*odbc_col_attributes _((SV *sth, int colno, int desctype));
+SV	*odbc_cancel _((SV *sth));
 int	 odbc_describe_col _((SV *sth, int colno,
 	    char *ColumnName, I16 BufferLength, I16 *NameLength,
 	    I16 *DataType, U32 *ColumnSize,

@@ -17,6 +17,13 @@ _ColAttributes(sth, colno, ftype)
 	ST(0) = odbc_col_attributes(sth, colno, ftype);
 
 void
+_Cancel(sth)
+    SV *	sth
+
+    CODE:
+	ST(0) = odbc_cancel(sth);		
+
+void
 _tables(dbh, sth, qualifier)
 	SV *	dbh
 	SV *	sth

@@ -20,6 +20,8 @@ t/ODBCTEST.pm
 mytest/listtabs.pl
 mytest/testfunc.pl
 mytest/contest.pl
+mytest/moreresults.pl
 mytest/testdatasources.pl
 iodbcsrc/libiodbc-2.50.3.tar.gz
+iodbcsrc/readme.txt
 

@@ -38,6 +38,7 @@ struct imp_sth_st {
     HDBC       hdbc;		/* copy for speed	*/
     HSTMT      hstmt;
 
+	int        moreResults;	/* are there more results to fetch?	*/
     int        done_desc;	/* have we described this sth yet ?	*/
 
     /* Input Details	*/
