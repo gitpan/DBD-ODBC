@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 195 2004-03-06 17:59:22Z jurl $
+# $Id: ODBC.pm 246 2004-03-26 14:17:35Z jurl $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '1.09';
+$DBD::ODBC::VERSION = '1.10';
 
 {
     package DBD::ODBC;
@@ -20,7 +20,7 @@ $DBD::ODBC::VERSION = '1.09';
     
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 195 2004-03-06 17:59:22Z jurl $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 246 2004-03-26 14:17:35Z jurl $, 13,2);
 
     require_version DBI 1.21;
 
@@ -422,6 +422,7 @@ See L<DBI> for more information.
 =head2 Notes:
 
 =over 4
+
 =item B<Change log/recent updates now in DBD::ODBC::Changes.pm>
 
  Please note that the change log has been moved to DBD::ODBC::Changes.pm
@@ -796,6 +797,8 @@ Example (using MSSQL Server):
       database=database_name;uid=user;pwd=password;';
       my $dbh  = DBI->connect("dbi:ODBC:$DSN") or die "$DBI::errstr\n";
 
+=back
+
 =head2 Random Links
 
 These are in need of sorting and annotating. Some are relevant only
@@ -830,8 +833,11 @@ to ODBC developers (but I don't want to loose them).
 
 
 =head2 Frequently Asked Questions
+
 Answers to common DBI and DBD::ODBC questions:
 
+=over 4
+ 
 =item How do I read more than N characters from a Memo | BLOB | LONG field?
 
 See LongReadLen in the DBI docs.  

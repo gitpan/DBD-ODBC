@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 194 2004-03-06 17:54:06Z jurl $
+# $Id: Makefile.PL 246 2004-03-26 14:17:35Z jurl $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -151,7 +151,7 @@ else {
     my $arext = $Config{lib_ext};
 
     # fix to avoid foo..ext on many systems.
-    $arext = s/^\.//;
+    $arext =~ s/^\.//;
 
     # per patches from Nick Gorham
     $myodbc = 'unixodbc'
