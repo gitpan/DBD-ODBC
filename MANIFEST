@@ -14,7 +14,8 @@ t/01base.t
 t/02simple.t
 t/03dbatt.t
 t/05meth.t
-t/09bind.t
+t/07bind.t
+t/09multi.t
 t/ODBCTEST.pm
 mytest/contest.pl
 mytest/listtabs.pl
@@ -23,7 +24,7 @@ mytest/testdatasources.pl
 mytest/testfunc.pl
 mytest/testigparams.pl
 mytest/testinout.pl
-mytest/testinout.pl
+mytest/testconn.pl
 mytest/testkeys.pl
 mytest/testver.pl
 iodbcsrc/libiodbc-2.50.3.tar.gz

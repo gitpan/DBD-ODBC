@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.33_2';
+$DBD::ODBC::VERSION = '0.33_3';
 
 {
     package DBD::ODBC;
@@ -288,6 +288,12 @@ See L<DBI> for more information.
 
 =over 4
 
+=item B<DBD::ODBC 0.33_3>
+
+ Revamped tests to include tests for multiple result sets.
+ The tests are ODBC driver platform specific and will be skipped
+ for drivers which do not support multiple result sets.
+ 
 =item B<DBD::ODBC 0.33_2>
 
  Finally tested new binding techniques with SQL Server 2000,

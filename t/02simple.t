@@ -6,9 +6,6 @@ use ODBCTEST;
 
 print "1..$tests\n";
 
-my ($longstr) = "THIS IS A STRING LONGER THAN 80 CHARS.  THIS SHOULD BE CHECKED FOR TRUNCATION AND COMPARED WITH ITSELF.";
-my ($longstr2) = $longstr . "  " . $longstr . "  " . $longstr . "  " . $longstr;
-
 print "ok 1\n";
 
 print " Test 2: connecting to the database\n";
@@ -33,7 +30,7 @@ print "not " unless($rc >= 0);
 print "ok 4\n";
 
 print " Test 5: insert test data\n";
-$rc = tab_insert($dbh);
+$rc = ODBCTEST::tab_insert($dbh);
 print "not " unless($rc);
 print "ok 5\n";
 
@@ -167,19 +164,19 @@ sub tab_select
     $sth->execute();
     while (@row = $sth->fetchrow()) {
 	if ($row[0] == 4) {
-	    if ($row[1] eq $longstr) {
-		print "retrieved ", length($longstr), " byte string OK\n";
+	    if ($row[1] eq $ODBCTEST::longstr) {
+		print "retrieved ", length($ODBCTEST::longstr), " byte string OK\n";
 	    } else {
 		print "Basic retrieval of longer rows not working!\nRetrieved value = $row[0]\n";
 		return 0;
 	    }
 	} elsif ($row[0] == 5) {
-	    if ($row[1] eq $longstr2) {
-		print "retrieved ", length($longstr2), " byte string OK\n";
+	    if ($row[1] eq $ODBCTEST::longstr2) {
+		print "retrieved ", length($ODBCTEST::longstr2), " byte string OK\n";
 	    } else {
 		print "Basic retrieval of row longer than 255 chars not working!",
 						"\nRetrieved ", length($row[1]), " bytes instead of ", 
-						length($longstr2), "\nRetrieved value = $row[1]\n";
+						length($ODBCTEST::longstr2), "\nRetrieved value = $row[1]\n";
 		return 0;
 	    }
 	}
@@ -188,34 +185,6 @@ sub tab_select
     return 1;
 }
 
-#
-# show various ways of inserting data without binding parameters.
-# Note, these are not necessarily GOOD ways to
-# show this...
-#
-sub tab_insert {
-    my $dbh = shift;
-
-    # qeDBF needs a space after the table name!
-    my $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
-	    . join(", ", 3, $dbh->quote("bletch"), $dbh->quote("bletch varchar"), 
-			"{d '1998-05-10'}"). ")";
-    my $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
-    $sth->execute || die "execute: $stmt: $DBI::errstr";
-    $sth->finish;
-
-    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
-    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
-    $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
-	    . join(", ", 4, $dbh->quote("80char"), $dbh->quote($longstr), "{d '1998-05-13'}"). ")";
-    $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
-    $sth->execute || die "execute: $stmt: $DBI::errstr";
-    $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
-	    . join(", ", 5, $dbh->quote("gt250char"), $dbh->quote($longstr2), "{d '1998-05-14'}"). ")";
-    $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
-    $sth->execute || die "execute: $stmt: $DBI::errstr";
-    $sth->finish;
-}
 
 sub select_long
 {

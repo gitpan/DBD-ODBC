@@ -25,6 +25,9 @@ require 5.004;
     $VERSION = '0.01';
     $table_name = "PERL_DBD_TEST";
 
+    $longstr = "THIS IS A STRING LONGER THAN 80 CHARS.  THIS SHOULD BE CHECKED FOR TRUNCATION AND COMPARED WITH ITSELF.";
+    $longstr2 = $longstr . "  " . $longstr . "  " . $longstr . "  " . $longstr;
+
     # really dumb work around:
     # MS SQL Server 2000 (MDAC 2.5 and ODBC driver 2000.080.0194.00) have a bug if
     # the column is named C, CA, or CAS and there is a call to SQLDescribeParam...
@@ -124,6 +127,35 @@ require 5.004;
 	}
 	$sth->finish();
 	$rc;
+    }
+
+   #
+   # show various ways of inserting data without binding parameters.
+   # Note, these are not necessarily GOOD ways to
+   # show this...
+   #
+    sub tab_insert {
+       my $dbh = shift;
+
+       # qeDBF needs a space after the table name!
+       my $stmt = "INSERT INTO $table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
+		  . join(", ", 3, $dbh->quote("bletch"), $dbh->quote("bletch varchar"), 
+			"{d '1998-05-10'}"). ")";
+       my $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
+       $sth->execute || die "execute: $stmt: $DBI::errstr";
+       $sth->finish;
+
+       $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
+       $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
+       $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
+	       . join(", ", 4, $dbh->quote("80char"), $dbh->quote($longstr), "{d '1998-05-13'}"). ")";
+       $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
+       $sth->execute || die "execute: $stmt: $DBI::errstr";
+       $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
+	       . join(", ", 5, $dbh->quote("gt250char"), $dbh->quote($longstr2), "{d '1998-05-14'}"). ")";
+       $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
+       $sth->execute || die "execute: $stmt: $DBI::errstr";
+       $sth->finish;
     }
 
     1;
