@@ -26,7 +26,10 @@ static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output);
 
 /* unique value for db attrib that won't conflict with SQL types */
 #define ODBC_IGNORE_NAMED_PLACEHOLDERS 0x8332
-#define ODBC_DEFAULT_BIND_TYPE		0x8333
+#define ODBC_DEFAULT_BIND_TYPE         0x8333
+/* not sure how new values are chosen, just increment by one [dgood 7/02] */
+#define ODBC_ASYNC_EXEC                0x8334
+#define ODBC_ERR_HANDLER               0x8335
 
 /* ODBC_DEFAULT_BIND_TYPE_VALUE is now set to 0, which means that
  * DBD::ODBC will call SQLDescribeParam to find out what type of
@@ -524,9 +527,27 @@ HSTMT hstmt;
    dTHR;
    SV *errstr;
 
+    /*
+     * It's a shame to have to add all this stuff with imp_dbh and 
+     * imp_sth, but imp_dbh is needed to get the odbc_err_handler
+     * and imp_sth is needed to get imp_dbh.
+     */
+    struct imp_dbh_st *imp_dbh = NULL;
+    struct imp_sth_st *imp_sth = NULL;
+
+    switch(DBIc_TYPE(imp_xxh)) {
+	case DBIt_ST:
+	    imp_sth = (struct imp_sth_st *)(imp_xxh);
+	    imp_dbh = (struct imp_dbh_st *)(DBIc_PARENT_COM(imp_sth));
+	    break;
+	case DBIt_DB:
+	    imp_dbh = (struct imp_dbh_st *)(imp_xxh);
+	    break;
+	default:
+	    croak("panic: dbd_error2 on bad handle type");
+    }
    errstr = DBIc_ERRSTR(imp_xxh);
    sv_setpvn(errstr, "", 0);
-   sv_setiv(DBIc_ERR(imp_xxh), (IV)err_rc);
     /* sqlstate isn't set for SQL_NO_DATA returns  */
    sv_setpvn(DBIc_STATE(imp_xxh), "00000", 5);
 
@@ -548,6 +569,50 @@ HSTMT hstmt;
 			  ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen
 			 )) == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) {
 	 sv_setpvn(DBIc_STATE(imp_xxh), sqlstate, 5);
+         /*
+          * If there's an error handler, run it and see what it returns...
+          * (lifted from DBD:Sybase 0.21)
+          */
+
+         if(imp_dbh->odbc_err_handler) {
+             dSP;
+             SV *sv, **svp;
+             HV *hv;
+             int retval, count;
+
+             ENTER;
+             SAVETMPS;
+             PUSHMARK(sp);
+
+             if (DBIS->debug >= 3)
+                 fprintf(DBILOGFP, "dbd_error: calling odbc_err_handler\n"); 
+
+             /* 
+              * Here are the args to the error handler routine:
+              *    1. sqlstate (string)
+              *    2. ErrorMsg (string)
+              *
+              * That's it for now...
+              */
+             XPUSHs(sv_2mortal(newSVpv(sqlstate, 0)));
+             XPUSHs(sv_2mortal(newSVpv(ErrorMsg, 0)));
+
+
+             PUTBACK;
+             if((count = perl_call_sv(imp_dbh->odbc_err_handler, G_SCALAR)) != 1)
+                 croak("An error handler can't return a LIST.");
+             SPAGAIN;
+             retval = POPi;
+
+             PUTBACK;
+             FREETMPS;
+             LEAVE;
+
+             /* If the called sub returns 0 then ignore this error */
+             if(retval == 0)
+                 continue;
+         }
+
 	 if (SvCUR(errstr) > 0) {
 	    sv_catpv(errstr, "\n");
 		/* JLU: attempt to get a reasonable error	*/
@@ -586,7 +651,11 @@ HSTMT hstmt;
       else henv = SQL_NULL_HENV;	/* done the top		*/
    }
 
-   if (err_rc != SQL_SUCCESS) {
+   if (!SQL_ok(err_rc)  && err_rc != SQL_STILL_EXECUTING && err_rc != SQL_NO_DATA) {
+      /* Set DBIc_ERR here so that a non-error err_rc is not flagged as
+       * an error.
+       */
+      sv_setiv(DBIc_ERR(imp_xxh), (IV)err_rc);
       if (what) {
 	 char buf[10];
 	 sprintf(buf, " err=%d", err_rc);
@@ -621,9 +690,6 @@ char *what;
     struct imp_sth_st *imp_sth = NULL;
     HSTMT hstmt = SQL_NULL_HSTMT;
 
-    if (err_rc == SQL_SUCCESS && DBIS->debug<3)	/* nothing to do */
-	return;
-
     switch(DBIc_TYPE(imp_xxh)) {
 	case DBIt_ST:
 	    imp_sth = (struct imp_sth_st *)(imp_xxh);
@@ -636,6 +702,16 @@ char *what;
 	default:
 	    croak("panic: dbd_error on bad handle type");
     }
+    /*
+     * If status is SQL_SUCCESS, there's no error, so we can just return.
+     * There may be status or other non-error messsages though.
+     * We want those messages if the debug level is set to at least 3.
+     * If an error handler is installed, let it decide what messages
+     * should or shouldn't be reported.
+     */
+    if (err_rc == SQL_SUCCESS && DBIS->debug < 3 && !imp_dbh->odbc_err_handler)
+	return; 
+
     dbd_error2(h, err_rc, what, imp_dbh->henv, imp_dbh->hdbc, hstmt);
 }
 
@@ -937,6 +1013,24 @@ SV *attribs;
     imp_sth->RowBuffer = NULL;
     imp_sth->RowCount = -1;
     imp_sth->eod = -1;
+
+    /* 
+     * If odbc_async_exec is set and odbc_async_type is SQL_AM_STATEMENT, 
+     * we need to set the SQL_ATTR_ASYNC_ENABLE attribute.
+     */
+    if (imp_dbh->odbc_async_exec && imp_dbh->odbc_async_type == SQL_AM_STATEMENT){
+	rc = SQLSetStmtAttr(imp_sth->hstmt,
+			    SQL_ATTR_ASYNC_ENABLE,
+			    (SQLPOINTER) SQL_ASYNC_ENABLE_ON,
+			    SQL_IS_UINTEGER
+			   );
+	if (!SQL_ok(rc)) {
+	    dbd_error(sth, rc, "st_prepare/SQLSetStmtAttr");
+	    SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	    imp_sth->hstmt = SQL_NULL_HSTMT;
+	    return 0;
+	}
+    }
 
     DBIc_IMPSET_on(imp_sth);
     return 1;
@@ -1365,6 +1459,21 @@ imp_sth_t *imp_sth;
 		      imp_sth->hstmt, rc);
 	PerlIO_flush(DBILOGFP);
     }
+    /*
+     * If asynchronous execution has been enabled, SQLExecute will
+     * return SQL_STILL_EXECUTING until it has finished.
+     * Grab whatever messages occur during execution...
+     */
+    while (rc == SQL_STILL_EXECUTING){
+	dbd_error(sth, rc, "st_execute/SQLExecute"); 
+
+	/* Wait a second so we don't loop too fast and bring the machine
+	 * to its knees
+	 */
+	sleep(1);
+	
+	rc = SQLExecute(imp_sth->hstmt);
+    }
     /* patches to handle blobs better, via Jochen Wiedmann */
     while (rc == SQL_NEED_DATA) {
 	phs_t* phs;
@@ -1394,19 +1503,25 @@ imp_sth_t *imp_sth;
 	rc = SQL_NEED_DATA;  /*  So the loop continues ...  */
     }
 
+    /* 
+     * Call dbd_error regardless of the value of rc so we can
+     * get any status messages that are desired.
+     */
+    dbd_error(sth, rc, "st_execute/SQLExecute"); 
     if (!SQL_ok(rc) && rc != SQL_NO_DATA) {
-	dbd_error(sth, rc, "st_execute/SQLExecute");
+	// dbd_error(sth, rc, "st_execute/SQLExecute");
 	return -2;
     }
 
-    if (rc != SQL_NO_DATA) { 
+    if (rc != SQL_NO_DATA) {
+       
+       RETCODE rc2;
        if (debug >= 7)
 	  PerlIO_printf(DBILOGFP,
 			"    dbd_st_execute getting row count\n");
-       
-       rc = SQLRowCount(imp_sth->hstmt, &imp_sth->RowCount);
-       if (!SQL_ok(rc)) {
-	  dbd_error(sth, rc, "st_execute/SQLRowCount");	/* XXX ? */
+       rc2 = SQLRowCount(imp_sth->hstmt, &imp_sth->RowCount);
+       if (!SQL_ok(rc2)) {
+	  dbd_error(sth, rc2, "st_execute/SQLRowCount");	/* XXX ? */
 	  imp_sth->RowCount = -1;
        }
 
@@ -1683,12 +1798,16 @@ imp_sth_t *imp_sth;
 	    if (!DBIc_has(imp_sth, DBIcf_LongTruncOk)
 		  /*  && rc == SQL_SUCCESS_WITH_INFO */) {
 
-		/* fix for OpenLink drivers which return success, but we've detected */
-		/* the problem locally, via the datalen */
-		if (!rc)
-		    rc = SQL_SUCCESS_WITH_INFO;
+		/* 
+		 * Since we've detected the problem locally via the datalen,
+		 * we don't need to worry about the value of rc.
+		 * 
+		 * This used to make sure rc was set to SQL_SUCCESS_WITH_INFO 
+		 * but since it's an error and not SUCCESS, call dbd_error() 
+		 * with SQL_ERROR explicitly instead.
+		 */
 
-		dbd_error(sth, rc, "st_fetch/SQLFetch (long truncated)");
+		dbd_error(sth, SQL_ERROR, "st_fetch/SQLFetch (long truncated)");
 		return Nullav;
 	    }
 	    sv_setpvn(sv, (char*)fbh->data, fbh->ColDisplaySize);
@@ -2304,6 +2423,8 @@ static db_params S_db_storeOptions[] =  {
     { "odbc_SQL_ROWSET_SIZE", SQL_ROWSET_SIZE },
     { "odbc_ignore_named_placeholders", ODBC_IGNORE_NAMED_PLACEHOLDERS },
     { "odbc_default_bind_type", ODBC_DEFAULT_BIND_TYPE },
+    { "odbc_async_exec", ODBC_ASYNC_EXEC },
+    { "odbc_err_handler", ODBC_ERR_HANDLER },
     { NULL },
 };
 
@@ -2335,7 +2456,7 @@ SV *valuesv;
     STRLEN kl;
     STRLEN plen;
     char *key = SvPV(keysv,kl);
-    SV *cachesv = NULL;
+    SV *cachesv = NULL; /* This never seems to be used?!? [dgood 7/02] */
     int on;
     UDWORD vParam;
     const db_params *pars;
@@ -2376,6 +2497,112 @@ SV *valuesv;
 	   imp_dbh->odbc_default_bind_type = SvIV(valuesv);
 
 	   break;
+
+        case ODBC_ASYNC_EXEC:
+	   bSetSQLConnectionOption = FALSE;
+	   /*
+	    * set asynchronous execution.  It can only be turned on if
+            * the driver supports it, but will fail silently.
+	    */
+	    on = SvTRUE(valuesv);
+	    if(on) {
+		/* Only bother setting the attribute if it's not already set! */
+		if (imp_dbh->odbc_async_exec == 1) 
+		    break;
+
+		/*
+		 * Determine which method of async execution this
+		 * driver allows -- per-connection or per-statement
+		 */
+		rc = SQLGetInfo(imp_dbh->hdbc, 
+				SQL_ASYNC_MODE, 
+				&imp_dbh->odbc_async_type,
+				sizeof(imp_dbh->odbc_async_type),
+				NULL
+			       );
+		/*
+		 * Normally, we'd do a if (!SQL_ok(rc)) ... here.
+		 * Unfortunately, if the driver doesn't support async
+		 * mode, it may return an error here.  There doesn't
+		 * seem to be any other way to check (other than doing
+		 * a special check for the SQLSTATE).  We'll just default
+		 * to doing nothing and not bother checking errors.
+		 */
+
+		if (imp_dbh->odbc_async_type == SQL_AM_CONNECTION){
+		    /*
+		     * Driver has per-connection async option.  Set it
+		     * now in the dbh.
+		     */
+		    if (DBIS->debug >= 2)
+			PerlIO_printf(DBILOGFP, 
+				"Supported AsyncType is SQL_AM_CONNECTION\n");
+		    rc = SQLSetConnectOption(imp_dbh->hdbc, 
+					     SQL_ATTR_ASYNC_ENABLE,
+					     SQL_ASYNC_ENABLE_ON
+					    );
+		    if (!SQL_ok(rc)) {
+			dbd_error(dbh, rc, "db_STORE/SQLSetConnectOption");
+			return FALSE;
+		    }
+		    imp_dbh->odbc_async_exec = 1;
+		}
+		else if (imp_dbh->odbc_async_type == SQL_AM_STATEMENT){
+		    /*
+		     * Driver has per-statement async option.  Just set
+		     * odbc_async_exec and the rest will be handled by 
+		     * dbd_st_prepare.
+		     */
+		    if (DBIS->debug >= 2)
+			PerlIO_printf(DBILOGFP, 
+				"Supported AsyncType is SQL_AM_STATEMENT\n");
+		    imp_dbh->odbc_async_exec = 1;
+		}
+		else {   /* (imp_dbh->odbc_async_type == SQL_AM_NONE) */
+		    /*
+		     * We're out of luck.
+		     */
+		    if (DBIS->debug >= 2)
+			PerlIO_printf(DBILOGFP, 
+				"Supported AsyncType is SQL_AM_NONE\n");
+		    imp_dbh->odbc_async_exec = 0;
+		    return FALSE;
+		}
+	    } else {
+		/* Only bother turning it off if it was previously set... */
+		if (imp_dbh->odbc_async_exec == 1) {
+
+		    /* We only need to do anything here if odbc_async_type is 
+		     * SQL_AM_CONNECTION since the per-statement async type
+		     * is turned on only when the statement handle is created.
+		     */
+		    if (imp_dbh->odbc_async_type == SQL_AM_CONNECTION){
+			rc = SQLSetConnectOption(imp_dbh->hdbc, 
+						 SQL_ATTR_ASYNC_ENABLE,
+						 SQL_ASYNC_ENABLE_OFF
+						);
+			if (!SQL_ok(rc)) {
+			    dbd_error(dbh, rc, "db_STORE/SQLSetConnectOption");
+			    return FALSE;
+			}
+		    }
+		}
+		imp_dbh->odbc_async_exec = 0;
+	    }
+	   break;
+
+        case ODBC_ERR_HANDLER:
+	   bSetSQLConnectionOption = FALSE;
+
+            /* This was taken from DBD::Sybase 0.21 */
+	    if(valuesv == &sv_undef) {
+		imp_dbh->odbc_err_handler = NULL;
+	    } else if(imp_dbh->odbc_err_handler == (SV*)NULL) {
+		imp_dbh->odbc_err_handler = newSVsv(valuesv);
+	    } else {
+		sv_setsv(imp_dbh->odbc_err_handler, valuesv);
+	    }
+	   break;
 	   
 	default:
 	    on = SvTRUE(valuesv);
@@ -2412,6 +2639,8 @@ static db_params S_db_fetchOptions[] =  {
     { "odbc_SQL_DRIVER_ODBC_VER", SQL_DRIVER_ODBC_VER },
     { "odbc_ignore_named_placeholders", ODBC_IGNORE_NAMED_PLACEHOLDERS },
     { "odbc_default_bind_type", ODBC_DEFAULT_BIND_TYPE },
+    { "odbc_async_exec", ODBC_ASYNC_EXEC },
+    { "odbc_err_handler", ODBC_ERR_HANDLER },
     { NULL }
 };
 
@@ -2454,9 +2683,28 @@ SV *keysv;
 	
        case ODBC_DEFAULT_BIND_TYPE:
 	/*
-	 * fetch current value of named placeholders.
+	 * fetch current value of default bind type.
 	 */
 	  retsv = newSViv(imp_dbh->odbc_default_bind_type);
+	  break;
+
+       case ODBC_ASYNC_EXEC:
+	/*
+	 * fetch current value of asynchronous execution (should be 
+         * either 0 or 1).
+	 */
+	  retsv = newSViv(imp_dbh->odbc_async_exec);
+	  break;
+
+       case ODBC_ERR_HANDLER:
+	/*
+	 * fetch current value of the error handler (a coderef).
+	 */
+          if(imp_dbh->odbc_err_handler) {
+            retsv = newSVsv(imp_dbh->odbc_err_handler);
+          } else {
+                retsv = &sv_undef;
+          }
 	  break;
 
        default:

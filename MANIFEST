@@ -27,6 +27,7 @@ mytest/moreresults.pl
 mytest/randombind.pl
 mytest/testconn.pl
 mytest/testdatasources.pl
+mytest/testerrhandler.pl
 mytest/testfunc.pl
 mytest/testgetinfo.pl
 mytest/testigparams.pl

@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.45_4';
+$DBD::ODBC::VERSION = '0.45_5';
 
 {
     package DBD::ODBC;
@@ -434,6 +434,39 @@ See L<DBI> for more information.
  Also note that some tests may be skipped, such as
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
+
+=item B<DBD::ODBC 0.45_5>
+
+Added odbc_err_handler and odbc_async_exec thanks to patches by David L. Good.
+See example in mytest/testerrhandler.pl
+
+Here's the notes about it:
+
+> I've implemented two separate functions.  The first is an "error
+> handler" similar to that in DBD::Sybase.  The error handler can be used
+> to intercept error and status messages from the server.  It is the only
+> way (at least currently) that you can retrieve non-error status messages
+> when execution is successful.
+>
+> To use the error handler, set the "odbc_err_handler" attribute on
+> your database handle to a reference to a subroutine that will act
+> as the error handler.  This subroutine will be passed two args, the
+> SQLSTATE and the error message.  If the subroutine returns 0, the
+> error message will be otherwise ignored.  If it returns non-zero,
+> the error message will be processed normally.
+>
+> The second function implemented is asynchronous execution.  It's only
+> useful for retrieving server messages with an error handler during an
+> execute() that takes a long time (such as a DBCC on a large database) ODBC
+> doesn't have the concept of a callback routine like Sybase's DBlib/CTlib
+> does, so asynchronous execution is needed to be able to get the server
+> messages before the SQL statement is done processing.
+>
+> To use asynchronous execution, set the "odbc_async_exec" attribute on
+> your database handle to 1.  Not all ODBC drivers support asynchronous
+> execution.  To see if yours does, set odbc_async_exec to 1 and then check
+> it's value.  If the value is 1, your ODBC driver can do asynchronous
+> execution.  If the value is 0, your ODBC driver cannot.
 
 =item B<DBD::ODBC 0.45_4>
 
