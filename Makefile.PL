@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -sw
 #
-# $Id: Makefile.PL,v 1.6 1997/07/25 11:50:07 timbo Exp $
+# $Id: Makefile.PL,v 1.8 1998/07/09 16:05:46 timbo Exp $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -8,24 +8,29 @@
 BEGIN { require 5.004 }	# 5.004 is required for Win32
 use Config;
 use ExtUtils::MakeMaker 5.16, qw(&WriteMakefile $Verbose);
-use DBI 0.89;		# must be installed first
+use DBI 0.93;		# must be installed first
 use DBI::DBD;
+use Getopt::Long;
 use strict;
 
 my %opts = 
 (
-    'NAME'	=> 'DBD::ODBC',
-    'VERSION_FROM' => 'ODBC.pm',
+    NAME	=> 'DBD::ODBC',
+    VERSION_FROM => 'ODBC.pm',
     clean	=> { FILES=> 'ODBC.xsi' },
     dist	=> {
-		#DIST_DEFAULT=> 'clean distcheck disttest ci tardist',
-		DIST_DEFAULT=> 'clean distcheck ci tardist',
-		PREOP    => '$(MAKE) -f Makefile.old distdir',
-		COMPRESS => 'gzip', SUFFIX => 'gz'
-	    },
-    'OBJECT'    => qw( $(O_FILES) ),
-#   'OPTIMIZE'  => '-g -O0',
+	#DIST_DEFAULT=> 'clean distcheck disttest ci tardist',
+	DIST_DEFAULT=> 'clean distcheck ci tardist',
+	PREOP    => '$(MAKE) -f Makefile.old distdir',
+	COMPRESS => 'gzip', SUFFIX => 'gz'
+    },
+    OBJECT	=> '$(O_FILES)',
 );
+
+$::opt_g = 0;
+GetOptions(qw(g!)) or die "Invalid arguments";
+
+$opts{OPTIMIZE} = '-g -O0' if $::opt_g;
 
 
 print "\nConfiguring DBD::ODBC ...\n
@@ -39,8 +44,8 @@ print SQLH "   Any changes made here will be lost. \n*/\n\n";
 print SQLH "#undef WORD /* from perly.y */\n";
 
 if ($^O eq 'MSWin32') {
-	my $extrainc = "";
-	$extrainc = ";$Config{incpath}\\mfc" if $Config{cc} eq 'bcc32';
+    my $extrainc = "";
+    $extrainc = ";$Config{incpath}\\mfc" if $Config{cc} eq 'bcc32';
     $opts{SKIP} = ['processPL'];
     $opts{DEFINE}  = "";
     $opts{INC}  = "-I\$(INSTALLSITEARCH)/auto/DBI" . $extrainc;
@@ -54,8 +59,9 @@ else {
     # Then try to work out which driver manager is being used. (not done yet)
 
     my $odbc= $ENV{ODBCHOME} || die "ODBCHOME env var not set\n";
-    $ENV{LD_LIBRARY_PATH} =~ /\Q$odbc/ || die "LD_LIBRARY_PATH doesn't include $odbc\n";
     warn "Using ODBC in $odbc\n";
+    $ENV{LD_LIBRARY_PATH} =~ /\Q$odbc/
+		|| warn "Warning: LD_LIBRARY_PATH doesn't include $odbc\n";
     $opts{INC}  = "-I. -I\$(INSTALLSITEARCH)/auto/DBI";
 
     # Feel free to come up with neat (or un-neat) hacks to get your's to build!
@@ -65,7 +71,16 @@ else {
     my $libs   = "odbc";
     $opts{LIBS} = " -L$lib_d1 -R$lib_d1 -L$lib_d2 -R$lib_d2 -l$libs";
 
-my $myodbc = 'iodbc';	# edit and hack to suit!
+    my $myodbc = 'iodbc';	# edit and hack to suit!
+
+    $myodbc = 'empress'
+		if <$odbc/lib/libempodbc.*>;
+    $myodbc = 'intersolve'
+		if -f "$odbc/include/qeodbc.h" && -f "$odbc/include/sql.h";
+    $myodbc = 'adabas'
+		if $ENV{DBROOT} && $odbc eq $ENV{DBROOT} && -f "$odbc/lib/odbclib.a";
+
+    warn "Umm, this looks like a $myodbc driver manager\n";
 
     if ($myodbc eq 'iodbc') {
 	# This is a hack using Intersolve's free Solaris ODBC manager
@@ -75,6 +90,7 @@ my $myodbc = 'iodbc';	# edit and hack to suit!
 	print SQLH qq{#define FAR \n#define EXPORT \n#define CALLBACK \n};
 	print SQLH qq{#include <isql.h>\n};
 	print SQLH qq{#include <isqlext.h>\n};
+	print SQLH qq{#include "fixup_t.h"\n};
     }
     elsif ($myodbc eq 'intersolve') {
   	$opts{INC} .= " -I$ENV{ODBCHOME}/include";
@@ -82,12 +98,35 @@ my $myodbc = 'iodbc';	# edit and hack to suit!
   	print SQLH qq{#include <qeodbc.h>\n};
 	print SQLH qq{#include <sql.h> \n#include <sqlext.h>\n};
     }
+    elsif ($myodbc eq 'empress') {
+	$opts{INC} .= " -I".$odbc."/include";
+	$opts{DEFINE}  = "";
+	print SQLH qq{#include <odbcsys.h>\n#include <sql.h> \n#include <sqlext.h>\n};
+	$opts{LIBS} = "-L$odbc/lib -R$odbc/lib -lempodbc";
+    }
+    elsif ($myodbc eq 'adabas') {
+	print SQLH "#define FAR \n#define EXPORT \n#define CALLBACK \n";
+	print SQLH "#include <WINDOWS.H>\n";
+	print SQLH "#include <sql.h>\n";
+	print SQLH "#include <sqlext.h>\n";
+	$opts{INC} .= " -I$odbc/incl";
+	$opts{LIBS} = "-L$odbc/lib -lsqlrte -lsqlptc";
+	$opts{LDFROM} = "\$(OBJECT) $odbc/lib/odbclib.a";
+    }
     else {
+	print "\n*** WARNING ***\a\n";
+	print "Unknown driver manager. Using default build process.\n";
+	print "This will almost certainly fail at some point.\n";
+	print "In which case you will need to edit/hack the Makefile.PL\n";
+	print "to suit your needs. (Specifically to locate your odbc\n";
+	print "library and header files.)\n\n";
 	$opts{DEFINE}  = "";
 	print SQLH qq{#include <sql.h> \n#include <sqlext.h>\n};
     }
 }
-print SQLH "\n";
+print SQLH qq{\n};
+print SQLH qq{#include "fixup_c.h"\n};
+print SQLH qq{\n};
 close(SQLH);
 
 WriteMakefile(%opts);
@@ -103,10 +142,11 @@ print "Warning: not all required environment variables are set.\n"
 	unless ($ENV{DBI_DSN} && $ENV{DBI_USER} && $ENV{DBI_PASS});
 print "Warning: DBI_DSN ($ENV{DBI_DSN}) doesn't start with 'dbi:ODBC:'\n"
 	if ($ENV{DBI_DSN} && $ENV{DBI_DSN} !~ m/^dbi:ODBC:/);
+print "\n";
 
 
 sub MY::postamble {
-    return dbd_postamble();
+    return dbd_postamble(@_);
 }
 
 __END__

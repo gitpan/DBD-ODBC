@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c,v 1.6 1997/07/25 11:50:07 timbo Exp $
+/* $Id: dbdimp.c,v 1.8 1998/07/09 15:57:33 timbo Exp $
  * 
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -14,6 +14,11 @@
 static const char *S_SqlTypeToString (SWORD sqltype);
 static const char *S_SqlCTypeToString (SWORD sqltype);
 static const char *cSqlTables = "SQLTables(%s)";
+static const char *cSqlColumns = "SQLColumns(%s,%s,%s,%s)";
+static const char *cSqlGetTypeInfo = "SQLGetTypeInfo(%d)";
+
+/* for sanity/ease of use with potentially null strings */
+#define XXSAFECHAR(p) ((p) ? (p) : "(null)")
 
 static void dbd_error _((SV *h, RETCODE badrc, char *what));
 
@@ -34,15 +39,13 @@ dbd_discon_all(drh, imp_drh)
 {
     /* The disconnect_all concept is flawed and needs more work */
     if (!dirty && !SvTRUE(perl_get_sv("DBI::PERL_ENDING",0))) {
-		sv_setiv(DBIc_ERR(imp_drh), (IV)1);
-		sv_setpv(DBIc_ERRSTR(imp_drh),
-			(char*)"disconnect_all not implemented");
-		DBIh_EVENT2(drh, ERROR_event,
-			DBIc_ERR(imp_drh), DBIc_ERRSTR(imp_drh));
-		return FALSE;
+	sv_setiv(DBIc_ERR(imp_drh), (IV)1);
+	sv_setpv(DBIc_ERRSTR(imp_drh),
+		(char*)"disconnect_all not implemented");
+	DBIh_EVENT2(drh, ERROR_event,
+		DBIc_ERR(imp_drh), DBIc_ERRSTR(imp_drh));
+	return FALSE;
     }  
-    if (perl_destruct_level)
-        perl_destruct_level = 0;
     return FALSE;
 }
 
@@ -58,6 +61,7 @@ dbd_db_destroy(dbh, imp_dbh)
 
     DBIc_IMPSET_off(imp_dbh);
 }
+
 
 /*------------------------------------------------------------
   connecting to a data source.
@@ -240,7 +244,7 @@ dbd_error(h, badrc, what)
     sv_setpvn(DBIc_STATE(imp_xxh), "00000", 5);
     
     while(henv != SQL_NULL_HENV) {
-	UCHAR sqlstate[10];
+	UCHAR sqlstate[SQL_SQLSTATE_SIZE*2];
 	UCHAR ErrorMsg[SQL_MAX_MESSAGE_LENGTH*2];
 	SWORD ErrorMsgLen;
 	SDWORD NativeError;
@@ -262,6 +266,9 @@ dbd_error(h, badrc, what)
 	    sv_catpv(errstr, " (SQL-");
 	    sv_catpv(errstr, sqlstate);
 	    sv_catpv(errstr, ")");
+
+	    /* JLU: attempt to get a reasonable err. */
+	    sv_setpv(DBIc_ERR(imp_xxh), sqlstate);
 	    if (dbis->debug >= 3)
 		fprintf(DBILOGFP, 
 		    "dbd_error: SQL-%s (native %d): %s\n",
@@ -283,7 +290,9 @@ dbd_error(h, badrc, what)
 	    sv_catpv(errstr, buf);
 	    sv_catpv(errstr, ")");
 	}
+
 	DBIh_EVENT2(h, ERROR_event, DBIc_ERR(imp_xxh), errstr);
+
 	if (dbis->debug >= 2)
 	    fprintf(DBILOGFP, "%s error %d recorded: %s\n",
 		    what, badrc, SvPV(errstr,na));
@@ -451,11 +460,10 @@ dbd_st_tables(dbh, sth, qualifier, table_type)
     imp_sth->RowCount = -1;
     imp_sth->eod = -1;
 
-    if (!dbd_describe(sth, imp_sth))
-    {
-	    SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
-	    imp_sth->hstmt = SQL_NULL_HSTMT;
-	    return 0; /* dbd_describe already called ora_error()	*/
+    if (!dbd_describe(sth, imp_sth)) {
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	imp_sth->hstmt = SQL_NULL_HSTMT;
+	return 0; /* dbd_describe already called ora_error()	*/
     }
 
     if (dbd_describe(sth, imp_sth) <= 0)
@@ -465,7 +473,7 @@ dbd_st_tables(dbh, sth, qualifier, table_type)
 
     imp_sth->RowCount = -1;
     rc = SQLRowCount(imp_sth->hstmt, &imp_sth->RowCount);
-    dbd_error(sth, rc, "st_execute/SQLRowCount");
+    dbd_error(sth, rc, "dbd_st_tables/SQLRowCount");
     if (rc != SQL_SUCCESS) {
 	return -1;
     }
@@ -618,24 +626,25 @@ dbd_describe(h, imp_sth)
 
     if (imp_sth->done_desc)
 	return 1;	/* success, already done it */
-    imp_sth->done_desc = 1;
 
     rc = SQLNumResultCols(imp_sth->hstmt, &num_fields);
     if (!SQL_ok(rc)) {
 	dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
 	return 0;
     }
-
-    if (dbis->debug >= 2)
-	fprintf(DBILOGFP, "    dbd_describe sql %d: num_fields=%d\n",
-		imp_sth->hstmt, num_fields);
+    imp_sth->done_desc = 1;	/* assume ok from here on */
 
     DBIc_NUM_FIELDS(imp_sth) = num_fields;
 
+    if (dbis->debug >= 2)
+	fprintf(DBILOGFP, "    dbd_describe sql %d: num_fields=%d\n",
+		imp_sth->hstmt, DBIc_NUM_FIELDS(imp_sth));
+
     if (num_fields == 0) {
 	if (dbis->debug >= 2)
-	    fprintf(DBILOGFP, "    dbd_describe skipped (no result cols) (sql f%d)\n",
-		    imp_sth->hstmt);
+	    fprintf(DBILOGFP,
+		"    dbd_describe skipped (no result cols) (sql f%d)\n",
+		imp_sth->hstmt);
 	return 1;
     }
 
@@ -662,7 +671,7 @@ dbd_describe(h, imp_sth)
 
 	ColName[fbh->ColNameLen] = 0;
 
-	t_cbufl  += fbh->ColNameLen;
+	t_cbufl += fbh->ColNameLen;
 
 #ifdef SQL_COLUMN_DISPLAY_SIZE
 	rc = SQLColAttributes(imp_sth->hstmt,i+1,SQL_COLUMN_DISPLAY_SIZE,
@@ -673,7 +682,8 @@ dbd_describe(h, imp_sth)
 	}
 	fbh->ColDisplaySize += 1; /* add terminator */
 #else
-	fbh->ColDisplaySize = 100; /* XXX! */
+	/* XXX we should at least allow an attribute to set this */
+	fbh->ColDisplaySize = 2001; /* XXX! */
 #endif
 
 #ifdef SQL_COLUMN_LENGTH
@@ -684,7 +694,8 @@ dbd_describe(h, imp_sth)
 	    break;
 	}
 #else
-	fbh->ColLength = 100;	/* XXX! */
+	/* XXX we should at least allow an attribute to set this */
+	fbh->ColLength = 2001;	/* XXX! */
 #endif
 
 	/* change fetched size for some types
@@ -713,7 +724,7 @@ dbd_describe(h, imp_sth)
 
 	if (dbis->debug >= 2)
 	    fprintf(DBILOGFP, 
-	    "    describe: col %d '%s': len=%d disp=%d, prec=%d scale=%d\n", 
+	    "      col %2d: %-8s len=%3d disp=%3d, prec=%3d scale=%d\n", 
 		    i+1, S_SqlTypeToString(fbh->ColSqlType),
 		    fbh->ColLength, fbh->ColDisplaySize,
 		    fbh->ColDef, fbh->ColScale
@@ -776,7 +787,7 @@ dbd_describe(h, imp_sth)
 	);
 	if (dbis->debug >= 2)
 	    fprintf(DBILOGFP, 
-	    "    describe: col %d '%s': sqltype=%s, ctype=%s, maxlen=%d\n",
+	    "      col %2d: '%s' sqltype=%s, ctype=%s, maxlen=%d\n",
 		    i+1, fbh->ColName,
 		    S_SqlTypeToString(fbh->ColSqlType),
 		    S_SqlCTypeToString(fbh->ftype),
@@ -806,12 +817,6 @@ dbd_st_execute(sth, imp_sth)	/* <= -2:error, >=0:ok row count, (-1=unknown count
     RETCODE rc;
     int debug = dbis->debug;
 
-    if (!imp_sth->done_desc) {
-	/* describe and allocate storage for results (if any needed)	*/
-	if (!dbd_describe(sth, imp_sth))
-	    return -2; /* dbd_describe already called ora_error()	*/
-    }
-
     /* bind input parameters */
 
     if (debug >= 2)
@@ -827,12 +832,21 @@ dbd_st_execute(sth, imp_sth)	/* <= -2:error, >=0:ok row count, (-1=unknown count
 
     rc = SQLRowCount(imp_sth->hstmt, &imp_sth->RowCount);
     if (!SQL_ok(rc)) {
-	dbd_error(sth, rc, "st_execute/SQLRowCount");
+	dbd_error(sth, rc, "st_execute/SQLRowCount");	/* XXX ? */
 	imp_sth->RowCount = -1;
-	/* return -1; XXX */
     }
 
-    DBIc_ACTIVE_on(imp_sth);	/* XXX should only set for select ?	*/
+    if (!imp_sth->done_desc) {
+	/* This needs to be done after SQLExecute for some drivers!	*/
+	/* Especially for order by and join queries.			*/
+	/* See Microsoft Knowledge Base article (#Q124899)		*/
+	/* describe and allocate storage for results (if any needed)	*/
+	if (!dbd_describe(sth, imp_sth))
+	    return -2; /* dbd_describe already called ora_error()	*/
+    }
+
+    if (DBIc_NUM_FIELDS(imp_sth) > 0)
+	DBIc_ACTIVE_on(imp_sth);	/* only set for select (?)	*/
     imp_sth->eod = SQL_SUCCESS;
     return imp_sth->RowCount;
 }
@@ -859,17 +873,19 @@ dbd_st_fetch(sth, imp_sth)
     /* that dbd_describe() executed sucessfuly so the memory buffers	*/
     /* are allocated and bound.						*/
     if ( !DBIc_ACTIVE(imp_sth) ) {
-	dbd_error(sth, SQL_ERROR, "no statement executing");
+	dbd_error(sth, SQL_ERROR, "no select statement currently executing");
 	return Nullav;
     }
     
     rc = SQLFetch(imp_sth->hstmt);
-    if (dbis->debug >= 2)
-	fprintf(DBILOGFP, "SQLFetch rc %d\n", rc);
+    if (dbis->debug >= 3)
+	fprintf(DBILOGFP, "       SQLFetch rc %d\n", rc);
     imp_sth->eod = rc;
     if (!SQL_ok(rc)) {
 	if (rc != SQL_NO_DATA_FOUND)
 	    dbd_error(sth, rc, "st_fetch/SQLFetch");
+	/* XXX need to 'finish' here */
+	dbd_st_finish(sth, imp_sth);
 	return Nullav;
     }
 
@@ -886,7 +902,7 @@ dbd_st_fetch(sth, imp_sth)
 	imp_fbh_t *fbh = &imp_sth->fbh[i];
 	SV *sv = AvARRAY(av)[i]; /* Note: we (re)use the SV in the AV	*/
 
-        if (dbis->debug >= 4)
+	if (dbis->debug >= 4)
 	    fprintf(DBILOGFP, "fetch col#%d %s datalen=%d displ=%d\n",
 		i, fbh->ColName, fbh->datalen, fbh->ColDisplaySize);
 
@@ -895,8 +911,16 @@ dbd_st_fetch(sth, imp_sth)
 	    continue;
 	}
 
-	if (fbh->datalen > fbh->ColDisplaySize) { 
+	if (fbh->datalen > fbh->ColDisplaySize || fbh->datalen < 0) { 
 	    /* truncated LONG ??? DBIcf_LongTruncOk() */
+	    /* DBIcf_LongTruncOk this should only apply to LONG type fields	*/
+	    /* truncation of other fields should always be an error since it's	*/
+	    /* a sign of an internal error */
+	    if (!DBIc_has(imp_sth, DBIcf_LongTruncOk)
+		/*  && rc == SQL_SUCCESS_WITH_INFO */) {
+		dbd_error(sth, rc, "st_fetch/SQLFetch (long truncated)");
+		return Nullav;
+	    }
 	    sv_setpvn(sv, (char*)fbh->data, fbh->ColDisplaySize);
 	}
 	else switch(fbh->ftype) {
@@ -905,16 +929,15 @@ dbd_st_fetch(sth, imp_sth)
 	case SQL_C_TIMESTAMP:
 	    ts = (TIMESTAMP_STRUCT *)fbh->data;
 	    sprintf(cvbuf, "%04d-%02d-%02d %02d:%02d:%02d",
-		    ts->year, ts->month, ts->day, 
-		    ts->hour, ts->minute, ts->second,
-		    ts->fraction);
+		ts->year, ts->month, ts->day, 
+		ts->hour, ts->minute, ts->second, ts->fraction);
 	    sv_setpv(sv, cvbuf);
 	    break;
 #endif
 	default:
 	    if (ChopBlanks && fbh->ColSqlType == SQL_CHAR && fbh->datalen > 0) {
-		char *p = ((char*)fbh->data) + fbh->datalen;
-		while(p[fbh->datalen]==' ' && fbh->datalen)
+		char *p = (char*)fbh->data;
+		while(fbh->datalen && p[fbh->datalen - 1]==' ')
 		    --fbh->datalen;
 	    }
 	    sv_setpvn(sv, (char*)fbh->data, fbh->datalen);
@@ -946,7 +969,8 @@ dbd_st_finish(sth, imp_sth)
     /* We don't close the cursor till DESTROY (dbd_st_destroy). */
     /* The application may re execute(...) it.                  */
 
-/* XXX semantics of finish (eg oracle vs odbc) need more thought */
+/* XXX semantics of finish (eg oracle vs odbc) need lots more thought */
+/* re-read latest DBI specs and ODBC manuals */
     if (DBIc_ACTIVE(imp_sth) && imp_dbh->hdbc != SQL_NULL_HDBC) {
 	rc = SQLFreeStmt(imp_sth->hstmt, SQL_CLOSE);
 	if (!SQL_ok(rc)) {
@@ -1029,7 +1053,8 @@ _dbd_rebind_ph(sth, imp_sth, phs, maxlen)
 
     if (dbis->debug >= 2) {
         char *text = neatsvpv(phs->sv,0);
-        fprintf(DBILOGFP, "bind %s <== %s (size %d/%d/%ld, ptype %ld, otype %d)\n",
+        fprintf(DBILOGFP,
+	    "bind %s <== %s (size %d/%d/%ld, ptype %ld, otype %d)\n",
             phs->name, text, SvCUR(phs->sv),SvLEN(phs->sv),phs->maxlen,
             SvTYPE(phs->sv), phs->ftype);
     }
@@ -1098,6 +1123,7 @@ _dbd_rebind_ph(sth, imp_sth, phs, maxlen)
 	    fprintf(DBILOGFP,
 		"    SQLDescribeParam %s: SqlType=%s, ColDef=%d\n",
 		phs->name, S_SqlTypeToString(fSqlType), cbColDef);
+
 	phs->sql_type = fSqlType;
     }
 
@@ -1142,6 +1168,9 @@ _dbd_rebind_ph(sth, imp_sth, phs, maxlen)
 	value_len, value_len/*ibScale*/,
 	rgbValue, value_len/*cbValueMax*/, &phs->cbValue
     );
+	if (dbis->debug >= 2) {
+		fprintf(DBILOGFP, "SQLBindParameter returned %d for the value %s\n", rc, rgbValue);
+	}
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "_rebind_ph/SQLBindParameter");
 	return 0;
@@ -1255,15 +1284,16 @@ dbd_st_blob_read(sth, imp_sth, field, offset, len, destrv, destoffset)
 
     /* XXX for this to work be probably need to avoid calling SQLGetData in	*/
     /* fetch. The definition of SQLGetData doesn't work well with the DBI's	*/
-    /* notion of how LongReadLen would work. Needs more thought.		*/
+    /* notion of how LongReadLen would work. Needs more thought.	*/
 
     rc = SQLGetData(imp_sth->hstmt, (UWORD)field+1,
 	    SQL_C_BINARY,
 	    ((UCHAR *)SvPVX(bufsv)) + destoffset, (SDWORD)len, &retl
     );
     if (dbis->debug >= 2)
-	fprintf(DBILOGFP, "SQLGetData(...,off=%d, len=%d)->rc=%d,len=%d SvCUR=%d\n",
-		destoffset, len, rc, retl, SvCUR(bufsv));
+	fprintf(DBILOGFP,
+	    "SQLGetData(...,off=%d, len=%d)->rc=%d,len=%d SvCUR=%d\n",
+	    destoffset, len, rc, retl, SvCUR(bufsv));
 
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "dbd_st_blob_read/SQLGetData");
@@ -1617,3 +1647,300 @@ dbd_st_STORE_attrib(sth, imp_sth, keysv, valuesv)
 	}
     return FALSE;
 }
+
+
+SV *
+odbc_get_info(dbh, ftype)
+    SV *dbh;
+    int ftype;
+{
+    D_imp_dbh(dbh);
+    RETCODE rc;
+    SV *retsv = NULL;
+    int i;
+    char rgbInfoValue[256];
+    SWORD cbInfoValue = -2;
+
+    /* See fancy logic below */
+    for (i = 0; i < 6; i++)
+	rgbInfoValue[i] = 0xFF;
+    
+    rc = SQLGetInfo(imp_dbh->hdbc, ftype,
+	rgbInfoValue, sizeof(rgbInfoValue)-1, &cbInfoValue);
+    if (!SQL_ok(rc)) {
+	dbd_error(dbh, rc, "odbc_get_info/SQLGetInfo");
+	return Nullsv;
+    }
+
+    /* Fancy logic here to determine if result is a string or int */
+    if (cbInfoValue == -2)				/* is int */
+	retsv = newSViv(*(int *)rgbInfoValue);	/* XXX cast */
+    else if (cbInfoValue != 2 && cbInfoValue != 4)	/* must be string */
+	retsv = newSVpv(rgbInfoValue, 0);
+    else if (rgbInfoValue[cbInfoValue+1] == '\0')	/* must be string */
+	retsv = newSVpv(rgbInfoValue, 0);
+    else if (cbInfoValue == 2)			/* short */
+	retsv = newSViv(*(short *)rgbInfoValue);	/* XXX cast */
+    else if (cbInfoValue == 4)			/* int */
+	retsv = newSViv(*(int *)rgbInfoValue);	/* XXX cast */
+    else
+	croak("panic: SQLGetInfo cbInfoValue == %d", cbInfoValue);
+
+    if (dbis->debug >= 2)
+	fprintf(DBILOGFP, "SQLGetInfo: ftype %d, cbInfoValue %d: %s\n",
+	    ftype, cbInfoValue, neatsvpv(retsv,0));
+
+    return sv_2mortal(retsv);
+}
+
+
+int
+odbc_describe_col(sth, colno, ColumnName, BufferLength, NameLength, DataType, ColumnSize, DecimalDigits, Nullable)
+    SV *sth;
+    int colno;
+    SQLCHAR *ColumnName;
+    SQLSMALLINT BufferLength;
+    SQLSMALLINT *NameLength;
+    SQLSMALLINT *DataType;
+    SQLUINTEGER *ColumnSize;
+    SQLSMALLINT *DecimalDigits;
+    SQLSMALLINT *Nullable;
+{
+    D_imp_sth(sth);
+    RETCODE rc;
+    rc = SQLDescribeCol(imp_sth->hstmt, colno,
+	ColumnName, BufferLength, NameLength,
+	DataType, ColumnSize, DecimalDigits, Nullable);
+    if (!SQL_ok(rc)) {
+	dbd_error(sth, rc, "DescribeCol/SQLDescribeCol");
+	return 0;
+    }
+    return 1;
+}
+
+
+int
+odbc_get_type_info(dbh, sth, ftype)
+    SV *dbh;
+    SV *sth;
+    int ftype;
+{
+    D_imp_dbh(dbh);
+    D_imp_sth(sth);
+    RETCODE rc;
+    SV **svp;
+    char cname[128];			/* cursorname */
+
+    imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
+    imp_sth->hdbc = imp_dbh->hdbc;
+
+    imp_sth->done_desc = 0;
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    if (rc != SQL_SUCCESS) {
+	dbd_error(sth, rc, "odbc_get_type_info/SQLGetTypeInfo");
+	return 0;
+    }
+
+    /* just for sanity, later. Any internals that may rely on this (including */
+    /* debugging) will have valid data */
+    imp_sth->statement = (char *)safemalloc(strlen(cSqlGetTypeInfo)+ftype/10+1);
+    sprintf(imp_sth->statement, cSqlGetTypeInfo, ftype);
+
+    rc = SQLGetTypeInfo(imp_sth->hstmt, ftype);
+    
+    dbd_error(sth, rc, "odbc_get_type_info/SQLGetTypeInfo");
+    if (!SQL_ok(rc)) {
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	imp_sth->hstmt = SQL_NULL_HSTMT;
+	return 0;
+    }
+
+    /* XXX Way too much duplicated code here */
+
+    if (dbis->debug >= 2)
+	fprintf(DBILOGFP,
+	    "    odbc_get_type_info/SQLGetTypeInfo sql f%d\n\t%s\n",
+	    imp_sth->hstmt, imp_sth->statement);
+    
+    /* init sth pointers */
+    imp_sth->fbh = NULL;
+    imp_sth->ColNames = NULL;
+    imp_sth->RowBuffer = NULL;
+    imp_sth->RowCount = -1;
+    imp_sth->eod = -1;
+
+    if (!dbd_describe(sth, imp_sth)) {
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	imp_sth->hstmt = SQL_NULL_HSTMT;
+	return 0; /* dbd_describe already called ora_error()	*/
+    }
+
+    if (dbd_describe(sth, imp_sth) <= 0)
+	return 0;
+
+    DBIc_IMPSET_on(imp_sth);
+
+    imp_sth->RowCount = -1;
+    rc = SQLRowCount(imp_sth->hstmt, &imp_sth->RowCount);
+    dbd_error(sth, rc, "st_execute/SQLRowCount");
+    if (rc != SQL_SUCCESS) {
+	return -1;
+    }
+
+    DBIc_ACTIVE_on(imp_sth); /* XXX should only set for select ?	*/
+    imp_sth->eod = SQL_SUCCESS;
+    return 1;
+}
+
+
+SV *
+odbc_col_attributes(sth, colno, desctype)
+   SV *sth;
+   int colno;
+   int desctype;
+{
+    D_imp_sth(sth);
+    RETCODE rc;
+    SV *retsv = NULL;
+    int i;
+    char rgbInfoValue[256];
+    SWORD cbInfoValue = -2;
+    SDWORD fDesc;
+    
+    for (i = 0; i < 6; i++)
+		rgbInfoValue[i] = 0xFF;
+
+    if ( !DBIc_ACTIVE(imp_sth) ) {
+		dbd_error(sth, SQL_ERROR, "no statement executing");
+		return Nullsv;
+	}
+ 
+/*  fprintf(DBILOGFP,
+	"SQLColAttributes: colno = %d, desctype = %d, cbInfoValue = %d\n",
+	colno, desctype, cbInfoValue);
+    at least on Win95, calling this with colno==0 would "core" dump/GPF.
+    protect, even though it's valid for some values of desctype
+    (e.g. SQL_COLUMN_COUNT, since it doesn't depend on the colcount)
+*/
+    if (colno == 0) {
+		dbd_error(sth, SQL_ERROR,
+				  "can not obtain SQLColAttributes for column 0");
+		return Nullsv;
+	}
+
+    rc = SQLColAttributes(imp_sth->hstmt, colno, desctype,
+						  rgbInfoValue, sizeof(rgbInfoValue)-1, &cbInfoValue, &fDesc);
+    if (!SQL_ok(rc)) {
+		dbd_error(sth, rc, "odbc_col_attributes/SQLColAttributes");
+		return Nullsv;
+    }
+
+    if (dbis->debug >= 2)
+		fprintf(DBILOGFP,
+				"SQLColAttributes: colno = %d, desctype = %d, cbInfoValue = %d, fDesc = %d\n",
+				colno, desctype, cbInfoValue, fDesc);
+
+	/* sigh...Oracle's ODBC driver version 8.0.4 resets cbInfoValue to 0, when
+	   putting a value in fDesc.  This is a change!
+	*/
+	if (cbInfoValue == -2 || cbInfoValue == 0)
+		retsv = newSViv(fDesc);
+	else if (cbInfoValue != 2 && cbInfoValue != 4)
+		retsv = newSVpv(rgbInfoValue, 0);
+	else if (rgbInfoValue[cbInfoValue+1] == '\0')
+		retsv = newSVpv(rgbInfoValue, 0);
+    else {
+		if (cbInfoValue == 2)
+			retsv = newSViv(*(short *)rgbInfoValue);
+		else
+			retsv = newSViv(*(int *)rgbInfoValue);
+	}
+
+    return sv_2mortal(retsv);
+}
+
+
+int	
+odbc_db_columns(dbh, sth, catalog, schema, table, column)
+    SV *dbh;
+    SV *sth;
+    char *catalog;
+    char *schema;
+    char *table;
+    char *column;
+{
+    D_imp_dbh(dbh);
+    D_imp_sth(sth);
+    RETCODE rc;
+    imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
+    imp_sth->hdbc = imp_dbh->hdbc;
+
+    imp_sth->done_desc = 0;
+    rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
+    if (rc != SQL_SUCCESS) {
+	dbd_error(sth, rc, "odbc_db_columns/SQLAllocStmt");
+	return 0;
+    }
+
+    /* just for sanity, later.  Any internals that may rely on this (including */
+    /* debugging) will have valid data */
+    imp_sth->statement = (char *)safemalloc(strlen(cSqlColumns)+
+	    strlen(XXSAFECHAR(catalog))+
+	    strlen(XXSAFECHAR(schema))+
+	    strlen(XXSAFECHAR(table))+
+	    strlen(XXSAFECHAR(column))+1);
+
+    sprintf(imp_sth->statement,
+	cSqlColumns, XXSAFECHAR(catalog), XXSAFECHAR(schema),
+	XXSAFECHAR(table), XXSAFECHAR(column));
+
+    rc = SQLColumns(imp_sth->hstmt,
+	   catalog, SQL_NTS,
+	   schema, SQL_NTS,
+	   table, SQL_NTS,
+	   column, SQL_NTS);
+    
+    dbd_error(sth, rc, "odbc_columns/SQLColumns");
+
+    if (!SQL_ok(rc)) {
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	imp_sth->hstmt = SQL_NULL_HSTMT;
+	return 0;
+    }
+
+    /* XXX Way too much duplicated code here (again) */ 
+
+    if (dbis->debug >= 2)
+	fprintf(DBILOGFP, "    odbc_db_columns sql f%d\n\t%s\n",
+	    imp_sth->hstmt, imp_sth->statement);
+
+    /* init sth pointers */
+    imp_sth->fbh = NULL;
+    imp_sth->ColNames = NULL;
+    imp_sth->RowBuffer = NULL;
+    imp_sth->RowCount = -1;
+    imp_sth->eod = -1;
+
+    if (!dbd_describe(sth, imp_sth)) {
+	SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+	imp_sth->hstmt = SQL_NULL_HSTMT;
+	return 0; /* dbd_describe already called ora_error()	*/
+    }
+
+    if (dbd_describe(sth, imp_sth) <= 0)
+	    return 0;
+
+    DBIc_IMPSET_on(imp_sth);
+
+    imp_sth->RowCount = -1;
+    rc = SQLRowCount(imp_sth->hstmt, &imp_sth->RowCount);
+    dbd_error(sth, rc, "odbc_db_columns/SQLRowCount");
+    if (rc != SQL_SUCCESS) {
+	return -1;
+    }
+
+    DBIc_ACTIVE_on(imp_sth); /* XXX should only set for select ?	*/
+    imp_sth->eod = SQL_SUCCESS;
+    return 1;
+}
+

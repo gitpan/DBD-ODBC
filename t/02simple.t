@@ -1,8 +1,13 @@
 #!/usr/bin/perl -I./t
 $| = 1;
+
+use DBI qw(:sql_types);
+use ODBCTEST;
+
 print "1..$tests\n";
 
-use DBI;
+my ($longstr) = "THIS IS A STRING LONGER THAN 80 CHARS.  THIS SHOULD BE CHECKED FOR TRUNCATION AND COMPARED WITH ITSELF.";
+my ($longstr2) = $longstr . "  " . $longstr . "  " . $longstr . "  " . $longstr;
 
 print "ok 1\n";
 
@@ -17,13 +22,13 @@ print "ok 2\n";
 #### testing a simple select
 
 print " Test 3: create test table\n";
-$rc = tab_create($dbh);
+$rc = ODBCTEST::tab_create($dbh);
 print "not " unless($rc);
 print "ok 3\n";
 
 print " Test 4: check existance of test table\n";
 my $rc = 0;
-$rc = tab_exists($dbh);
+$rc = ODBCTEST::tab_exists($dbh);
 print "not " unless($rc >= 0);
 print "ok 4\n";
 
@@ -37,26 +42,129 @@ $rc = tab_select($dbh);
 print "not " unless($rc);
 print "ok 6\n";
 
-$rc = tab_delete($dbh);
+print " Tests 7,8: test LongTruncOk\n";
+$rc = undef;
+$dbh->{LongReadLen} = 50;
+$dbh->{LongTruncOk} = 1;
+$rc = select_long($dbh);
+print "not " unless($rc);
+print "ok 7\n";
 
-BEGIN {$tests = 6;}
+$dbh->{LongTruncOk} = 0;
+$rc = select_long($dbh);
+print "not " if ($rc);
+print "ok 8\n";
+
+print " Test 9: test ColAttributes\n";
+$sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY A");
+
+if ($sth) {
+	$sth->execute();
+	my $colcount = $sth->func(1, 0, ColAttributes); # 1 for col (unused) 0 for SQL_COLUMN_COUNT
+	print "Column count is: $colcount\n";
+	my ($coltype, $colname, $i, @row);
+	my $is_ok = 0;
+	for ($i = 1; $i <= $colcount; $i++) {
+		# $i is colno (1 based) 2 is for SQL_COLUMN_TYPE, 1 is for SQL_COLUMN_NAME
+		$coltype = $sth->func($i, 2, ColAttributes);
+		$colname = $sth->func($i, 1, ColAttributes);
+		print "$i: $colname = $coltype\n";
+ 		++$is_ok if grep { $coltype == $_ } @{$ODBCTEST::TestFieldInfo{$colname}};
+	}
+	print "not " unless $is_ok == $colcount;
+	print "ok 9\n";
+	
+	$sth->finish;
+}
+else {
+	print "not ok 9\n";
+}
+
+print " Test 10: test \$DBI::err\n";
+$dbh->{RaiseError} = 0;
+$dbh->{PrintError} = 0;
+#
+# some ODBC drivers will prepare this OK, but not execute.
+# 
+$sth = $dbh->prepare("SELECT XXNOTCOLUMN FROM $ODBCTEST::table_name");
+$sth->execute() if $sth;
+print "not " if (length($DBI::err) < 1);
+print "ok 10\n";
+
+print " Test 11: test date values\n";
+$sth = $dbh->prepare("SELECT D FROM $ODBCTEST::table_name WHERE D > {d '1998-05-13'}");
+$sth->execute();
+my $count = 0;
+while (@row = $sth->fetchrow) {
+	$count++ if ($row[0]);
+	# print "$row[0]\n";
+}
+print "not " if $count != 1;
+print "ok 11\n";
+
+print " Test 12: test group by queries\n";
+$sth = $dbh->prepare("SELECT A, COUNT(*) FROM $ODBCTEST::table_name GROUP BY A");
+$sth->execute();
+$count = 0;
+while (@row = $sth->fetchrow) {
+	$count++ if ($row[0]);
+	print "$row[0], $row[1]\n";
+}
+print "not " if $count == 0;
+print "ok 12\n";
+
+$rc = ODBCTEST::tab_delete($dbh);
+
+BEGIN {$tests = 12;}
 exit(0);
 
 sub tab_select
-    {
-    my $dbh = shift;
+{
+	my $dbh = shift;
     my @row;
+	my $rowcount = 0;
 
-    my $sth = $dbh->prepare("SELECT * FROM perl_dbd_test")
-    	or return undef;
+	$dbh->{LongReadLen} = 1000;
+
+    my $sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY A")
+		or return undef;
     $sth->execute();
-    while (@row = $sth->fetchrow())
-    	{
-	print "$row[0]|$row[1]|$row[2]|\n";
+    while (@row = $sth->fetchrow())	{
+		print "$row[0]|$row[1]|$row[2]|\n";
+		++$rowcount;
+		if ($rowcount != $row[0]) {
+			print "Basic retrieval of rows not working!\nRowcount = $rowcount, while retrieved value = $row[0]\n";
+			$sth->finish;
+			return 0;
+		}
 	}
-    $sth->finish();
-    return 1;
-    }
+	$sth->finish();
+
+	$sth = $dbh->prepare("SELECT A,C FROM $ODBCTEST::table_name WHERE A>=4")
+    	or return undef;
+	$sth->execute();
+	while (@row = $sth->fetchrow()) {
+		if ($row[0] == 4) {
+			if ($row[1] eq $longstr) {
+				print "retrieved ", length($longstr), " byte string OK\n";
+			} else {
+				print "Basic retrieval of longer rows not working!\nRetrieved value = $row[0]\n";
+				return 0;
+			}
+		} elsif ($row[0] == 5) {
+			if ($row[1] eq $longstr2) {
+				print "retrieved ", length($longstr2), " byte string OK\n";
+			} else {
+				print "Basic retrieval of row longer than 255 chars not working!",
+						"\nRetrieved ", length($row[1]), " bytes instead of ", 
+						length($longstr2), "\nRetrieved value = $row[1]\n";
+				return 0;
+			}
+		}
+	}
+
+	return 1;
+}
 
 #
 # show various ways of inserting data without binding parameters.
@@ -67,171 +175,47 @@ sub tab_insert {
     my $dbh = shift;
 
     # qeDBF needs a space after the table name!
-    my $stmt = "INSERT INTO perl_dbd_test (a, b, c) VALUES ("
-	    . join(", ", 3, $dbh->quote("bletch"), $dbh->quote("bletch varchar")). ")";
+    my $stmt = "INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES ("
+	    . join(", ", 3, $dbh->quote("bletch"), $dbh->quote("bletch varchar"), 
+			"{d '1998-05-10'}"). ")";
     my $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
     $sth->execute || die "execute: $stmt: $DBI::errstr";
     $sth->finish;
 
-    $dbh->do(q{INSERT INTO perl_dbd_test (a, b, c) VALUES (1, 'foo', 'foo varchar')});
-    $dbh->do(q{INSERT INTO perl_dbd_test (a, b, c) VALUES (2, 'bar', 'bar varchar')});
+    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
+    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
+    $stmt = "INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES ("
+	    . join(", ", 4, $dbh->quote("80char"), $dbh->quote($longstr), "{d '1998-05-13'}"). ")";
+    $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
+    $sth->execute || die "execute: $stmt: $DBI::errstr";
+    $stmt = "INSERT INTO $ODBCTEST::table_name (a, b, c, d) VALUES ("
+	    . join(", ", 5, $dbh->quote("gt250char"), $dbh->quote($longstr2), "{d '1998-05-14'}"). ")";
+    $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
+    $sth->execute || die "execute: $stmt: $DBI::errstr";
+    $sth->finish;
 }
 
-sub tab_create {
-    my $dbh = shift;
-    $dbh->{PrintError} = 0;	# Umm, need a better (croak safe) way!
-    $dbh->do("DROP TABLE perl_dbd_test");
-    $dbh->{PrintError} = 1;
-
-    my $fields = "A INTEGER, B CHAR(20), C VARCHAR(100)";
-    if ($^O eq 'solaris') {	# Assume Dbf driver. Sad and tacky.
-	$fields = "A FLOAT(10,0), B CHAR(20), C MEMO";
-    }
-    $dbh->do("CREATE TABLE perl_dbd_test ($fields)");
-}
-
-sub tab_delete {
-    $dbh->do("DELETE FROM perl_dbd_test");
-}
-
-#
-sub tab_exists {
-    my $dbh = shift;
-    my (@rows, @row, $rc);
-
-    $rc = -1;
-
-	unless ($sth = $dbh->tables()) {
-		print "Can't list tables\n";
-		return -1;
+sub select_long
+{
+	my $dbh = shift;
+	my @row;
+	my $sth;
+	my $rc = undef;
+	
+	$dbh->{RaiseError} = 1;
+	$sth = $dbh->prepare("SELECT A,C FROM $ODBCTEST::table_name WHERE A=4");
+	if ($sth) {
+		$sth->execute();
+		eval {
+			while (@row = $sth->fetchrow()) {
+			}
+		};
+		$rc = 1 unless ($@) ;
 	}
-	# TABLE_QUALIFIER,TABLE_OWNER,TABLE_NAME,TABLE_TYPE,REMARKS
-	while ($row = $sth->fetchrow_hashref()) {
-		# XXX not fully true.  The "owner" could be different.  Need to check!
-		# In Oracle, testing $user against $row[1] works, but does NOT in SQL Server.
-		# SQL server returns the device and something else I haven't quite taken the time
-		# to figure it out, since I'm not a SQL server expert.  Anyone out there?
-		# (mine returns "dbo" for the owner on ALL my tables.  This is obviously something
-		# significant for SQL Server...one of these days I'll dig...
-		if (("PERL_DBD_TEST" eq uc($row->{TABLE_NAME}))) {
-									# and (uc($user) eq uc($row[1]))) 
-			# qeDBF driver returns null for TABLE_OWNER
-			my $owner = $row->{TABLE_OWNER} || '(unknown owner)';
-			print "$owner.$row->{TABLE_NAME}\n";
-			$rc = 1;
-			last;
-		}
-	}
-	$sth->finish();
 	$rc;
 }
-	
 
 __END__
-
-if ($sth && $sth->execute())
-    {
-    @row = $sth->execute();
-    
-    while (@row = $sth->execute())
-	{
-	push(@rows, [ @row ]);
-	}
-    print "not ok 3" if ($DBI::errstr);
-    $sth->finish() || print "not ok 3";
-    }
-else
-    {
-    print "not ok 3\n";
-    }
-
-my $sth = $dbh->prepare(<<"/");
-CREATE TABLE perl_dbd_test(
-	A integer,
-	B char(20),
-	C timestamp)
-/
-print STDERR $DBI::errstr unless($sth);
-
-
-BEGIN {$tests = 3;}
-exit(0);
-
-__END__
-######################### End of black magic.
-
-# Insert your test code below (better if it prints "ok 13"
-# (correspondingly "not ok 13") depending on the success of chunk 13
-# of the test code):
-
-
-
-
-$DBI::dbi_debug = 2;
-my $dbh = DBI->connect('', 'system', 'manager', 'Solid');
-print STDERR $DBI::errstr, "\n" unless $dbh;
-print "not " unless $dbh;
-print "ok 2\n";
-
-
-my $sth = $dbh->prepare('select table_name, table_type from tables');
-print STDERR $DBI::errstr, "\n" unless $sth;
-print "not " unless $sth;
-print "ok 3\n";
-
-my $h = $sth->execute();
-print STDERR $DBI::errstr, "\n" unless $h;
-print "not " unless $h;
-print "ok 4\n";
-
-my @row;
-my $rc = 0;
-while ((@row = $sth->fetchrow()) && $rc < 3)
-    {
-    print $DBI::errstr, "\n" if ($DBI::errstr); 
-    print $row[0], " ", $row[1], "\n";
-    $rc++;
-    }
-
-$sth->finish();
-
-$sth = $dbh->prepare(<<"/");
-select table_name from tables
-where table_type = :1
-  and table_schema = :2
-/
-print $DBI::errstr, "\n" unless($sth);
-
-$rc = $sth->execute('BASE TABLE', 'TOM');
-print $DBI::errstr, "\n" unless($rc);
-
-while (@row = $sth->fetchrow())
-    {
-    print $row[0], " ", $row[1], "\n";
-    }
-print $DBI::errstr, "\n" if ($DBI::errstr); 
-$sth->finish();
-$dbh->disconnect();
-
-$dbh=DBI->connect('', 'tom', 'pinga', 'Solid');
-
-print "TESTING integer parameter\n";
-
-$sth = $dbh->prepare('select a,b from nix where a = :1');
-print $DBI::errstr, "\n" unless($sth);
-
-$rc = $sth->execute('1');
-print $DBI::errstr, "\n" unless($rc);
-
-while (@row = $sth->fetchrow())
-    {
-    print $row[0], " ", $row[1], "\n";
-    }
-print $DBI::errstr, "\n" if ($DBI::errstr); 
-$sth->finish();
-
-
-$dbh->disconnect();
 
 
 

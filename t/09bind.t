@@ -3,6 +3,7 @@ $| = 1;
 print "1..$tests\n";
 
 use DBI qw(:sql_types);
+use ODBCTEST;
 
 print "ok 1\n";
 
@@ -12,10 +13,10 @@ my $dbh = DBI->connect() || die "Connect failed: $DBI::errstr\n";
 print "ok 2\n";
 
 
-#### testing a simple select
+#### testing a simple select"
 
 print " Test 3: create test table\n";
-$rc = tab_create($dbh);
+$rc = ODBCTEST::tab_create($dbh);
 print "not " unless($rc);
 print "ok 3\n";
 
@@ -34,72 +35,63 @@ $rc = tab_select($dbh, \@data);
 print "not " unless($rc);
 print "ok 5\n";
 
-$rc = tab_delete($dbh);
+$rc = ODBCTEST::tab_delete($dbh);
 
 BEGIN {$tests = 5;}
 exit(0);
 
-sub tab_select
-    {
-    my $dbh = shift;
+sub tab_select {
+	my $dbh = shift;
     my $dref = shift;
     my @data = @{$dref};
     my @row;
 
-    my $sth = $dbh->prepare("SELECT * FROM perl_dbd_test WHERE a = :1")
-    	or return undef;
-    $sth->execute(1);
-    while (@row = $sth->fetchrow()) {
-	print "$row[0]|$row[1]|$row[2]|\n";
+    my $sth = $dbh->prepare("SELECT A,B,C,D FROM $ODBCTEST::table_name WHERE a = ?")
+		or return undef;
+	my @bind_vals = (1, 3);
+	my $bind_val;
+	foreach $bind_val (@bind_vals) {
+		$sth->bind_param(1, $bind_val, SQL_INTEGER);
+		$sth->execute;
+		while (@row = $sth->fetchrow()) {
+			print "$row[0]|$row[1]|$row[2]|\n";
+			if ($row[0] != $bind_val) {
+				print "Bind value failed! bind value = $bind_val, returned value = $row[0]\n";
+				return undef;
+			}
+		}
     }
-    $sth->finish();
-    return 1;
+	return 1;
 }
 
 sub tab_insert {
     my $dbh = shift;
     my $dref = shift;
     my @data = @{$dref};
+
     my $sth = $dbh->prepare(<<"/");
-INSERT INTO perl_dbd_test (a, b, c)
-VALUES (:1, :2, :3)
+INSERT INTO $ODBCTEST::table_name (a, b, c)
+VALUES (?, ?, ?)
 /
     unless ($sth) {
 	warn $DBI::errstr;
 	return 0;
     }
     foreach (@data) {
-	$sth->bind_param(1, $_->[0], SQL_FLOAT);
-	$sth->bind_param(2, $_->[1], SQL_VARCHAR);
-	$sth->bind_param(3, $_->[2], SQL_VARCHAR);
-	unless ($sth->execute) {
-	    warn $DBI::errstr;
-	    return 0;
+		$sth->bind_param(1, $_->[0], SQL_INTEGER);	## JLU need to test here for different driver types
+		$sth->bind_param(2, $_->[1], SQL_VARCHAR);
+		$sth->bind_param(3, $_->[2], SQL_VARCHAR);
+		unless ($sth->execute) {
+			warn $DBI::errstr;
+			return 0;
+		}
+		# $sth->finish();
 	}
-	$sth->finish();
-    }
-    unless ($dbh->commit()) {
-	warn $DBI::errstr;
-	return 0;
-    }
-    1;
-}
-
-sub tab_create {
-    $dbh->do(<<"/");
-DROP TABLE perl_dbd_test
-/
-    my $fields = "A INTEGER, B CHAR(20), C VARCHAR(100)";
-    if ($^O eq 'solaris') {	# Assume Dbf driver. Sad and tacky.
-	$fields = "A FLOAT(10,0), B CHAR(20), C MEMO";
-    }
-    $dbh->do("CREATE TABLE perl_dbd_test ($fields)");
-}
-
-sub tab_delete {
-    $dbh->do(<<"/");
-DELETE FROM perl_dbd_test
-/
+   #unless ($dbh->commit()) {
+	#warn $DBI::errstr;
+	#return 0;
+   #}
+   1;
 }
 
 __END__

@@ -79,6 +79,12 @@ print "ok 6\n";
 
 $sth->finish();
 
+# turn off error warnings.  We expect one here (invalid transaction state)
+$dbh->{RaiseError} = 0;
+$dbh->{PrintError} = 0;
 $dbh->disconnect();
 
-BEGIN { $::tests = 6; }
+# make sure there is an invalid transaction state error at the end here.
+print "not " if $DBI::err ne "25000";
+print "ok 7\n"; 
+BEGIN { $::tests = 7; }
