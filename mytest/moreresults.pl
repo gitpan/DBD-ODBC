@@ -17,7 +17,7 @@ $| = 1;
 
 my $sth;
 
-$sth = $dbh->prepare("exec sp_spaceused")
+$sth = $dbh->prepare("{call sp_spaceused}")
 	  or die $dbh->errstr;
 $sth->execute
    or die $sth->errstr;

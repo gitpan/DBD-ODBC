@@ -123,55 +123,59 @@ print "Data sources:\n\t", join("\n\t",@data_sources),"\n\n";
 print "not " if ($#data_sources < 0);
 print "ok 13\n";
 
-BEGIN {$tests = 13;}
+print " Test 14: test ping method\n";
+print "not " unless $dbh->ping;
+print "ok 14\n";
+
+BEGIN {$tests = 14;}
 exit(0);
 
 sub tab_select
 {
-	my $dbh = shift;
+    my $dbh = shift;
     my @row;
-	my $rowcount = 0;
+    my $rowcount = 0;
 
-	$dbh->{LongReadLen} = 1000;
+    $dbh->{LongReadLen} = 1000;
 
     my $sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY A")
 		or return undef;
     $sth->execute();
     while (@row = $sth->fetchrow())	{
-		print "$row[0]|$row[1]|$row[2]|\n";
-		++$rowcount;
-		if ($rowcount != $row[0]) {
-			print "Basic retrieval of rows not working!\nRowcount = $rowcount, while retrieved value = $row[0]\n";
-			$sth->finish;
-			return 0;
-		}
+	print "$row[0]|$row[1]|$row[2]|\n";
+	++$rowcount;
+	if ($rowcount != $row[0]) {
+	    print "Basic retrieval of rows not working!\nRowcount = $rowcount, while retrieved value = $row[0]\n";
+	    $sth->finish;
+	    return 0;
 	}
-	$sth->finish();
-
-	$sth = $dbh->prepare("SELECT A,C FROM $ODBCTEST::table_name WHERE A>=4")
-    	or return undef;
-	$sth->execute();
-	while (@row = $sth->fetchrow()) {
-		if ($row[0] == 4) {
-			if ($row[1] eq $longstr) {
-				print "retrieved ", length($longstr), " byte string OK\n";
-			} else {
-				print "Basic retrieval of longer rows not working!\nRetrieved value = $row[0]\n";
-				return 0;
-			}
-		} elsif ($row[0] == 5) {
-			if ($row[1] eq $longstr2) {
-				print "retrieved ", length($longstr2), " byte string OK\n";
-			} else {
-				print "Basic retrieval of row longer than 255 chars not working!",
+    }
+    $sth->finish();
+    
+    $sth = $dbh->prepare("SELECT A,C FROM $ODBCTEST::table_name WHERE A>=4")
+	   or return undef;
+    $sth->execute();
+    while (@row = $sth->fetchrow()) {
+	if ($row[0] == 4) {
+	    if ($row[1] eq $longstr) {
+		print "retrieved ", length($longstr), " byte string OK\n";
+	    } else {
+		print "Basic retrieval of longer rows not working!\nRetrieved value = $row[0]\n";
+		return 0;
+	    }
+	} elsif ($row[0] == 5) {
+	    if ($row[1] eq $longstr2) {
+		print "retrieved ", length($longstr2), " byte string OK\n";
+	    } else {
+		print "Basic retrieval of row longer than 255 chars not working!",
 						"\nRetrieved ", length($row[1]), " bytes instead of ", 
 						length($longstr2), "\nRetrieved value = $row[1]\n";
-				return 0;
-			}
-		}
+		return 0;
+	    }
 	}
+    }
 
-	return 1;
+    return 1;
 }
 
 #

@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.26';
+$DBD::ODBC::VERSION = '0.27';
 
 {
     package DBD::ODBC;
@@ -141,7 +141,8 @@ $DBD::ODBC::VERSION = '0.26';
 	    local $dbh->{PrintError} = 0 if $dbh->{PrintError};
 	    my $sql = "select col_does_not_exist from table_does_not_exist";
 	    my $ok = $dbh->prepare($sql);
-	    my $state = $dbh->state;
+	    # fixed "my" $state = below.  Was causing problem with ping!
+	    $state = $dbh->state;
 	    $DBD::ODBC::err = 0;
 	    $DBD::ODBC::errstr = "";
 	    $DBD::ODBC::sqlstate = "00000";
@@ -264,6 +265,14 @@ See L<DBI> for more information.
 
 =head2 Recent Updates
 
+=over 4
+
+=item B<DBD::ODBC 0.27>
+
+Examined patch for ping method to repair problem reported by Chris Bezil.  Thanks Chris!
+
+Added simple test for ping method working which should identify this in the future.
+
 =item B<DBD::ODBC 0.26>
 
 Put in patch for returning only positive rowcounts from dbd_st_execute.  The original patch
@@ -280,8 +289,6 @@ Put in rudimentary cancel support via SQLCancel.  Call $sth->cencel to utilize. 
 untested by me, as I do not have a good sample for this yet.  It may come in handy with threaded
 perl, someday or it may work in a signal handler.
    
-=over 8
-
 =item B<DBD::ODBC 0.25>
 
 Added conditional compilation for SQL_WVARCHAR and SQL_WLONGVARCHAR.  If they
