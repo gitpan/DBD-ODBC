@@ -141,6 +141,7 @@ while (@row = $sth->fetchrow_array) {
 }
 
 Test($iErrCount == 0);
+print STDERR "Please upgrade your ODBC drivers to the latest SQL Server drivers available.\n" if ($iErrCount != 0);
 
 $dbh->{PrintError} = 0;
 eval {$dbh->do("DROP TABLE PERL_DBD_TABLE1");};

@@ -210,10 +210,6 @@ int dbd_db_execdirect( SV *dbh,
 	 }
       }
    }
-   /* changed from SQLFreeHandle to SQLFreeStmt to support older ODBC
-    * drivers.
-    */
-   /* ret = SQLFreeHandle( SQL_HANDLE_STMT, stmt ); */
    ret = SQLFreeHandle(SQL_HANDLE_STMT,stmt);
    /* ret = SQLFreeStmt(stmt, SQL_DROP); *//* TBD: 3.0 update */
    if (!SQL_ok(ret)) {
@@ -1443,7 +1439,7 @@ imp_sth_t *imp_sth;
      * */
     Newz(42, imp_sth->ColNames, t_cbufl + num_fields+255, UCHAR);
     /* allocate Row memory */
-    Newz(42, imp_sth->RowBuffer, t_dbsize + num_fields + 1024, UCHAR);
+    Newz(42, imp_sth->RowBuffer, t_dbsize + num_fields, UCHAR);
 
     /* Second pass:
     - get column names
@@ -2074,9 +2070,10 @@ imp_sth_t *imp_sth;
     }
 
     /* SQLxxx functions dump core when no connection exists. This happens
-     * when the db was disconnected before perl ending.
+     * when the db was disconnected before perl ending.  Hence,
+     * checking for the dirty flag.
      */
-    if (imp_dbh->hdbc != SQL_NULL_HDBC) {
+    if (imp_dbh->hdbc != SQL_NULL_HDBC && !dirty) {
 
        rc = SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
        /* rc = SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*//* TBD: 3.0 update */

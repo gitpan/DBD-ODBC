@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.45_11';
+$DBD::ODBC::VERSION = '0.45_12';
 
 {
     package DBD::ODBC;
@@ -436,6 +436,10 @@ See L<DBI> for more information.
  returning multiple result sets.
 
 
+=item B<DBD::ODBC 0.45_12>
+
+Fixed global destruction access violation (which was seemingly random).
+ 
 =item B<DBD::ODBC 0.45_11>
 Updated manifest to include more samples.
 Working on checking for leaks on Linux, where I might get more information about

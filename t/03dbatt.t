@@ -96,8 +96,6 @@ if ($dbname =~ /Access/i) {
 Test($dbname eq $dbh->{odbc_SQL_DBMS_NAME});
 
 BEGIN { $tests = 16; }
-# for now, force the clearing of the sth before the DBH destroy.
-$sth = undef;
 $dbh->disconnect;
 # print STDERR $dbh->{odbc_SQL_DRIVER_ODBC_VER}, "\n";
 
