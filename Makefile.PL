@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 246 2004-03-26 14:17:35Z jurl $
+# $Id: Makefile.PL 545 2004-10-29 13:44:06Z jurl $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -20,6 +20,7 @@ my %opts =
 (
     NAME	=> 'DBD::ODBC',
     VERSION_FROM => 'ODBC.pm',
+    PREREQ_PM => { "Test::Simple" => 0.40 }, # actually Test::More pkg in T::S dist
     clean	=> { FILES=> 'ODBC.xsi dbdodbc.h' },
     dist	=> {
 	#DIST_DEFAULT=> 'clean distcheck disttest ci tardist',

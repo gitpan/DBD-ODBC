@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 522 2004-10-26 19:10:34Z jurl $
+# $Id: ODBC.pm 568 2004-11-08 15:12:37Z jurl $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '1.12';
+$DBD::ODBC::VERSION = '1.13';
 
 {
     package DBD::ODBC;
@@ -20,7 +20,7 @@ $DBD::ODBC::VERSION = '1.12';
     
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 522 2004-10-26 19:10:34Z jurl $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 568 2004-11-08 15:12:37Z jurl $, 13,2);
 
     require_version DBI 1.21;
 
@@ -548,9 +548,9 @@ There are drivers that only support SQLExecDirect and the DBD::ODBC
 do() override doesn't allow returning result sets.  Therefore, the
 way to do this now is to set the attributed odbc_exec_direct.
 There are currently two ways to get this:
-	$dbh->prepare($sql, { odbc_execdirect => 1}); 
+	$dbh->prepare($sql, { odbc_exec_direct => 1}); 
  and
-	$dbh->{odbc_execdirect} = 1;
+	$dbh->{odbc_exec_direct} = 1;
  When $dbh->prepare() is called with the attribute "ExecDirect" set to a non-zero value 
  dbd_st_prepare do NOT call SQLPrepare, but set the sth flag odbc_exec_direct to 1.
  
