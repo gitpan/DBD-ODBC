@@ -38,7 +38,8 @@ int
 {
     RETCODE rc;
     D_imp_sth(sth);
-
+    dTHR;
+    
     if (DBIS->debug >= 2)
 	fprintf(DBILOGFP, "    build_results sql f%d\n\t%s\n",
 		imp_sth->hstmt, imp_sth->statement);

@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.21';
+$DBD::ODBC::VERSION = '0.22';
 
 {
     package DBD::ODBC;
@@ -256,6 +256,13 @@ See L<DBI> for more information.
 =head1 DESCRIPTION
 
 =head2 Recent Updates
+
+=item B<DBD::ODBC 0.22>
+
+Fixed for threaded perl builds.  Note that this was tested only on Win32, with no threads in use and using DBI 1.13.
+Note, for ActiveState/PERL_OBJECT builds, DBI 1.13_01 is required as of 9/8/99.  
+If you are using ActiveState's perl, this can be installed by using PPM.
+
 
 =item B<DBD::ODBC 0.21>
 
