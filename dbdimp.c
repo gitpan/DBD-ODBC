@@ -2017,11 +2017,12 @@ int maxlen;
     STRLEN value_len;
 
     if (DBIS->debug >= 2) {
-	char *text = neatsvpv(phs->sv,0);
+	char *text = neatsvpv(phs->sv,value_len);
 	PerlIO_printf(DBILOGFP,
 		      "bind %s <== %s (size %d/%d/%ld, ptype %ld, otype %d, sqltype %d)\n",
-		      phs->name, text, SvCUR(phs->sv),SvLEN(phs->sv),phs->maxlen,
+		      phs->name, text, SvOK(phs->sv) ? SvCUR(phs->sv) : -1, SvOK(phs->sv) ? SvLEN(phs->sv) : -1 ,phs->maxlen,
 		      SvTYPE(phs->sv), phs->ftype, phs->sql_type);
+	PerlIO_flush(DBILOGFP);
     }
 
     /* At the moment we always do sv_setsv() and rebind.        */
@@ -2048,7 +2049,9 @@ int maxlen;
     if (SvOK(phs->sv)) {
 	phs->sv_buf = SvPV(phs->sv, value_len);
     }
-    else {      /* it's null but point to buffer incase it's an out var */
+    else {
+       /* it's undef but if it was inout param it would point to a
+        * valid buffer, at least  */
 	phs->sv_buf = SvPVX(phs->sv);
 	value_len   = 0;
     }
@@ -2058,8 +2061,9 @@ int maxlen;
 
     if (DBIS->debug >= 3) {
 	PerlIO_printf(DBILOGFP, "bind %s <== '%.100s' (len %ld/%ld, null %d)\n",
-		      phs->name, phs->sv_buf,
+		      phs->name, SvOK(phs->sv) ? phs->sv_buf : "(null)",
 		      (long)value_len,(long)phs->maxlen, SvOK(phs->sv)?0:1);
+	PerlIO_flush(DBILOGFP);
     }
 
     /* ----------------------------------------------------------------	*/
@@ -2173,7 +2177,9 @@ int maxlen;
 	       fSqlType = SQL_VARCHAR;
 	       // cbColDef = 23;
 	       ibScale = 0;		/* tbd: millisecondS?) */
-	       {
+	       /* bug fix! if phs->sv is not OK, then there's a chance
+	        * we go through garbage data to determine the length */
+	       if (SvOK(phs->sv)) {
 		  char *cp;
 		  if (phs->sv_buf && *phs->sv_buf) {
 		     cp = strchr(phs->sv_buf, '.');
@@ -2227,8 +2233,19 @@ int maxlen;
     }
 
     if (!SvOK(phs->sv)) {
-	rgbValue = NULL;
-	phs->cbValue = SQL_NULL_DATA;
+       /* if is_inout, shouldn't we null terminate the buffer and send
+        * it, instead?? */
+       if (phs->is_inout) {
+	  if (!phs->sv_buf) {
+	     croak("panic: DBD::ODBC binding undef with bad buffer!!!!");
+	  }
+	  phs->sv_buf[0] = '\0'; /* just in case, we *know* we called SvGROW above */
+	  rgbValue = phs->sv_buf;
+       } else {
+	  rgbValue = NULL;
+	  phs->cbValue = SQL_NULL_DATA;
+	  cbColDef = 1;
+       }
     }
     else {
 	rgbValue = phs->sv_buf;
@@ -2303,6 +2320,7 @@ IV maxlen;			/* ??? */
     char namebuf[30];
     phs_t *phs;
 
+
     if (SvNIOK(ph_namesv) ) {	/* passed as a number	*/
 	name = namebuf;
 	sprintf(name, "%d", (int)SvIV(ph_namesv));
@@ -2328,9 +2346,11 @@ IV maxlen;			/* ??? */
 
 #endif
 
-    if (DBIS->debug >= 2)
+    if (DBIS->debug >= 2) {
 	PerlIO_printf(DBILOGFP, "bind %s <== '%.200s' (attribs: %s), type %d\n",
 		      name, SvPV(newvalue,na), attribs ? SvPV(attribs,na) : "", sql_type );
+	PerlIO_flush(DBILOGFP);
+    }
 
     phs_svp = hv_fetch(imp_sth->all_params_hv, name, name_len, 0);
     if (phs_svp == NULL)

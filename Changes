@@ -26,6 +26,13 @@ Includes all the updates in the 0.45 developer releases (0.45_1 thru 0.45_7)
 
 Adding support for array binding, but not finished.
 
+Fixed bug in tracing code when binding an undef parameter which did not
+happen to have a valid buffer with tracing level >= 2
+
+Fixed bug when binding undef after a valid data bind on a timestamp.  
+
+Fixed SQL Server issue when binding a null and the length was set to 0 instead of 1
+
 Fixed bug where SqlServer Stored procedures which perform INSERT would not correctly
 return a result set.  Thanks to Joe Tebelskis for finding it and Martin Evans for
 supplying a fix.

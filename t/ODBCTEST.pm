@@ -169,10 +169,8 @@ require 5.004;
    sub isDateType($) {
       my $type = shift;
       if ($type == SQL_DATE  || $type == SQL_TYPE_DATE) {
-	 print "$type is date!\n";
 	 return 1;
       } else {
-	 print "$type is not date!\n";
 	 return 0;
       }
    }

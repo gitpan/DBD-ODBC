@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.45_7';
+$DBD::ODBC::VERSION = '0.45_8';
 
 {
     package DBD::ODBC;
@@ -434,6 +434,21 @@ See L<DBI> for more information.
  Also note that some tests may be skipped, such as
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
+
+=item B<DBD::ODBC 0.45_8>
+
+Fixed bug in tracing code when binding an undef parameter which did not
+happen to have a valid buffer with tracing level >= 2
+
+Fixed bug when binding undef after a valid data bind on a timestamp.  The
+Scale value was being calculated based upon the string that had been bound
+prior to the bind of the undef and if that had a sub-second value, then
+the scale would be set to the wrong value...
+ I.e. bind_param(1, '2000-05-17 00:01:00.250', SQL_TYPE_TIMESTAMP) then
+       execute
+      bind_param(1, undef, SQL_TYPE_TIMESTAMP) then
+
+Fixed SQL Server issue when binding a null and the length was set to 0 instead of 1
 
 =item B<DBD::ODBC 0.45_7>
 

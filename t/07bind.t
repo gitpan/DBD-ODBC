@@ -1,7 +1,6 @@
 #!/usr/bin/perl -I./t
 $| = 1;
 
-
 # to help ActiveState's build process along by behaving (somewhat) if a dsn is not provided
 BEGIN {
    unless (defined $ENV{DBI_DSN}) {
@@ -43,7 +42,7 @@ my @data = (
 	[ 2, 'bar', 'bar varchar', "1998-05-14", "1998-05-14 00:01:00" ],
 	[ 3, 'bletch', 'bletch varchar', "1998-05-15", "1998-05-15 00:01:00" ],
 	[ 4, 'bletch4', 'bletch varchar', "1998-05-15", "1998-05-15 00:01:00.1" ],
-	[ 5, 'bletch5', 'bletch varchar', "1998-05-15", "1998-05-15 00:01:00.23" ],
+	[ 5, 'bletch5', undef, "1998-05-15", "1998-05-15 00:01:00.23" ],
 	[ 6, '', '', "1998-05-15", "1998-05-15 00:01:00.233" ],
 );
 my $longstr = "This is a test of a string that is longer than 80 characters.  It will be checked for truncation and compared with itself.";
@@ -132,14 +131,18 @@ sub tab_select {
 		print "Bind value failed! bind value = $bind_val, returned value = $row[0]\n";
 		return undef;
 	    }
-	    # Oracle typically treats empty blanks as NULL in varchar, so that's what we should
-	    # expect!
-	    if (!defined($row[2] && $dbname =~ /Oracle/)) {
-	       $row[2] = "";
-	    }
-	    if ($row[2] ne $_->[2]) {
-		print "Column C value failed! bind value = $bind_val, returned values = $row[0]|$row[1]|$row[2]|$row[3]\n";
-		return undef;
+	    if (!defined($row[2]) && !defined($_->[2])) {
+	       # ok...
+	    } else {
+	       if (!defined($row[2] && $dbname =~ /Oracle/)) {
+		  # Oracle typically treats empty blanks as NULL in varchar, so that's what we should
+		  # expect!
+		  $row[2] = "";
+	       }
+	       if ($row[2] ne $_->[2]) {
+		  print "Column C value failed! bind value = $bind_val, returned values = $row[0]|$row[1]|$row[2]|$row[3]\n";
+		  return undef;
+	       }
 	    }
 	}
     }
