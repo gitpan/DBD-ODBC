@@ -21,13 +21,16 @@ print "not " unless($rc);
 print "ok 3\n";
 
 print " Test 4: insert test data\n";
-my @data = 
-    ( [ 1, 'foo', 'foo varchar' ],
-      [ 2, 'bar', 'bar varchar' ],
-	  [ 3, 'bletch', 'bletch varchar' ],
-    );
+my @data = (
+	[ 1, 'foo', 'foo varchar' ],
+	[ 2, 'bar', 'bar varchar' ],
+	[ 3, 'bletch', 'bletch varchar' ],
+);
 $rc = tab_insert($dbh, \@data);
-print "not " unless($rc);
+unless ($rc) {
+	warn "Test 4 is known to fail often. It is not a major concern.\n";
+	print "not "
+}
 print "ok 4\n";
 
 print " Test 5: select test data\n";
@@ -77,20 +80,13 @@ VALUES (?, ?, ?)
 	warn $DBI::errstr;
 	return 0;
     }
+	$sth->{PrintError} = 1;
     foreach (@data) {
 		$sth->bind_param(1, $_->[0], SQL_INTEGER);	## JLU need to test here for different driver types
 		$sth->bind_param(2, $_->[1], SQL_VARCHAR);
 		$sth->bind_param(3, $_->[2], SQL_VARCHAR);
-		unless ($sth->execute) {
-			warn $DBI::errstr;
-			return 0;
-		}
-		# $sth->finish();
+		return 0 unless $sth->execute;
 	}
-   #unless ($dbh->commit()) {
-	#warn $DBI::errstr;
-	#return 0;
-   #}
    1;
 }
 

@@ -31,12 +31,12 @@ DescribeCol(sth, colno)
 
 	PPCODE:
 
-	SQLCHAR ColumnName[SQL_MAX_COLUMN_NAME_LEN];
-	SQLSMALLINT NameLength;
-	SQLSMALLINT DataType;
-	SQLUINTEGER ColumnSize;
-	SQLSMALLINT DecimalDigits;
-	SQLSMALLINT Nullable;
+	char ColumnName[SQL_MAX_COLUMN_NAME_LEN];
+	I16 NameLength;
+	I16 DataType;
+	U32 ColumnSize;
+	I16 DecimalDigits;
+	I16 Nullable;
 	int rc;
 
 	rc = odbc_describe_col(sth, colno, ColumnName, sizeof(ColumnName), &NameLength,

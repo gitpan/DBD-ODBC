@@ -1,8 +1,9 @@
 DBD::ODBC -- DBD module interfacing the ODBC databases.
 
-   $Id: README,v 1.4 1998/07/01 23:42:24 timbo Exp $
-   Copyright (c) 1994,1995,1996,1997  Tim Bunce
-   portions Copyright (c) 1997 Jeff Urlwin
+   $Id: README,v 1.5 1998/08/08 16:58:30 timbo Exp $
+
+   Copyright (c) 1994,1995,1996,1997,1998  Tim Bunce
+   portions Copyright (c) 1997,1998 Jeff Urlwin
    portions Copyright (c) 1997  Thomas K. Wenrich
 
    You may distribute under the terms of either the GNU General Public
@@ -10,18 +11,14 @@ DBD::ODBC -- DBD module interfacing the ODBC databases.
 
    PLEASE READ THE ENTIRE README FILE CAREFULLY !
 
-*  WARNING: THIS IS MOSTLY ALPHA SOFTWARE. Your mileage may vary.       *
-
-*  Most of the code (and most parts of this README) were stolen from the 
-*  DBD-Solid distribution.  I suspect most problems you may encounter with
-*  this release are related to my efforts to port it to straight ODBC.
+   WARNING: THIS IS MOSTLY ALPHA SOFTWARE. Your mileage may vary.
 
 *BEFORE* BUILDING, TESTING AND INSTALLING this you will need to:
 
     Build, test and install Perl 5 (at least 5.004).
     It is very important to TEST it and INSTALL it!
 
-    Build, test and install the DBI module (at least DBI 0.86).
+    Build, test and install the DBI module (at least DBI 0.93).
     It is very important to TEST it and INSTALL it!
 
     Remember to *read* the DBI README file!
@@ -62,7 +59,7 @@ TESTING
   addition to discovering it.
 
 
-NOTES ON ODBC Drivers and Compatibility with DBD-ODBC
+NOTES on ODBC Drivers and Compatibility with DBD-ODBC
 
 This version utilizes at least one "Level 2" ODBC call (SQLDescribeParam).  
 This *will* affect compatibility with specific ODBC drivers.  If the
@@ -83,9 +80,8 @@ Driver						Version				Platform tested
 Microsoft SQL Server		v 2.65.0240			NT 4.0
 Intersolv Oracle7 Driver*	v 3.00.0000			NT 4.0
 
-
 *full support is optional, via configuration of DSN -- Advanced page.
-Select "Enable SQLDescribeParam)
+Select "Enable SQLDescribeParam".
 
 
 IF YOU HAVE PROBLEMS:
@@ -144,3 +140,4 @@ Follow "Microsoft ODBC Desktop Database Drivers 3.5 For 32-Bit Programs"
 and "ODBC Drivers for Win95 Applications".
 For Access use version "Access ODBC driver 3.40.2111 27/03/96" or later.
 
+End.

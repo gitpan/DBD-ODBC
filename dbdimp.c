@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c,v 1.8 1998/07/09 15:57:33 timbo Exp $
+/* $Id: dbdimp.c,v 1.10 1998/08/08 16:58:30 timbo Exp $
  * 
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -20,7 +20,7 @@ static const char *cSqlGetTypeInfo = "SQLGetTypeInfo(%d)";
 /* for sanity/ease of use with potentially null strings */
 #define XXSAFECHAR(p) ((p) ? (p) : "(null)")
 
-static void dbd_error _((SV *h, RETCODE badrc, char *what));
+static void dbd_error _((SV *h, RETCODE err_rc, char *what));
 
 DBISTATE_DECLARE;
 
@@ -204,9 +204,9 @@ dbd_db_rollback(dbh, imp_dbh)
   empties entire ODBC error queue.
 ------------------------------------------------------------*/
 static void
-dbd_error(h, badrc, what)
+dbd_error(h, err_rc, what)
     SV *h;
-    RETCODE badrc;
+    RETCODE err_rc;
     char *what;
 {
     D_imp_xxh(h);
@@ -219,7 +219,7 @@ dbd_error(h, badrc, what)
     SV *errstr;
     int i;
 
-    if (badrc == SQL_SUCCESS && dbis->debug<3)	/* nothing to do */
+    if (err_rc == SQL_SUCCESS && dbis->debug<3)	/* nothing to do */
 	return;
 
     switch(DBIc_TYPE(imp_xxh)) {
@@ -232,47 +232,59 @@ dbd_error(h, badrc, what)
 	imp_dbh = (struct imp_dbh_st *)(imp_xxh);
 	break;
     default:
-	croak("panic dbd_error on bad handle type");
+	croak("panic: dbd_error on bad handle type");
     }
     hdbc = imp_dbh->hdbc;
     henv = imp_dbh->henv;
 
     errstr = DBIc_ERRSTR(imp_xxh);
     sv_setpvn(errstr, "", 0);
-    sv_setiv(DBIc_ERR(imp_xxh), (IV)badrc);
+    sv_setiv(DBIc_ERR(imp_xxh), (IV)err_rc);
     /* sqlstate isn't set for SQL_NO_DATA returns  */
     sv_setpvn(DBIc_STATE(imp_xxh), "00000", 5);
     
     while(henv != SQL_NULL_HENV) {
-	UCHAR sqlstate[SQL_SQLSTATE_SIZE*2];
-	UCHAR ErrorMsg[SQL_MAX_MESSAGE_LENGTH*2];
+	UCHAR sqlstate[SQL_SQLSTATE_SIZE+1];
+	/* ErrorMsg must not be greater than SQL_MAX_MESSAGE_LENGTH (says spec) */
+	UCHAR ErrorMsg[SQL_MAX_MESSAGE_LENGTH];
 	SWORD ErrorMsgLen;
 	SDWORD NativeError;
 	RETCODE rc = 0;
 
 	if (dbis->debug >= 3)
-	    fprintf(DBILOGFP, "dbd_error: badrc=%d rc=%d i=%d s/d/e: %d/%d/%d\n", 
-	       badrc, rc, i, hstmt,hdbc,henv);
+	    fprintf(DBILOGFP, "dbd_error: err_rc=%d rc=%d i=%d s/d/e: %d/%d/%d\n", 
+	       err_rc, rc, i, hstmt,hdbc,henv);
 
 	while( (rc=SQLError(henv, hdbc, hstmt,
-			  sqlstate, &NativeError,
-			  ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen
+		      sqlstate, &NativeError,
+		      ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen
 		)) == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO
 	) {
 	    sv_setpvn(DBIc_STATE(imp_xxh), sqlstate, 5);
-	    if (SvCUR(errstr) > 0)
+	    if (SvCUR(errstr) > 0) {
 		sv_catpv(errstr, "\n");
+		/* JLU: attempt to get a reasonable error	*/
+		/* from first SQLError result on lowest handle	*/
+		sv_setpv(DBIc_ERR(imp_xxh), sqlstate);
+	    }
 	    sv_catpvn(errstr, ErrorMsg, ErrorMsgLen);
 	    sv_catpv(errstr, " (SQL-");
 	    sv_catpv(errstr, sqlstate);
 	    sv_catpv(errstr, ")");
 
-	    /* JLU: attempt to get a reasonable err. */
-	    sv_setpv(DBIc_ERR(imp_xxh), sqlstate);
 	    if (dbis->debug >= 3)
 		fprintf(DBILOGFP, 
 		    "dbd_error: SQL-%s (native %d): %s\n",
 			sqlstate, NativeError, SvPVX(errstr));
+	}
+	if (rc != SQL_NO_DATA_FOUND) {	/* should never happen */
+	    if (dbis->debug)
+		fprintf(DBILOGFP, 
+		    "dbd_error: SQLError returned %d unexpectedly.\n", rc);
+	    if (!SvTRUE(errstr)) { /* set some values to indicate the problem */
+		sv_setpvn(DBIc_STATE(imp_xxh), "IM008", 5); /* "dialog failed" */
+		sv_catpv(errstr, "(Unable to fetch information about the error)");
+	    }
 	}
 
 	/* climb up the tree each time round the loop		*/
@@ -281,10 +293,10 @@ dbd_error(h, badrc, what)
 	else henv = SQL_NULL_HENV;	/* done the top		*/
     }
 
-    if (badrc != SQL_SUCCESS) {
+    if (err_rc != SQL_SUCCESS) {
 	if (what) {
 	    char buf[10];
-	    sprintf(buf, " err=%d", badrc);
+	    sprintf(buf, " err=%d", err_rc);
 	    sv_catpv(errstr, "(DBD: ");
 	    sv_catpv(errstr, what);
 	    sv_catpv(errstr, buf);
@@ -295,7 +307,7 @@ dbd_error(h, badrc, what)
 
 	if (dbis->debug >= 2)
 	    fprintf(DBILOGFP, "%s error %d recorded: %s\n",
-		    what, badrc, SvPV(errstr,na));
+		    what, err_rc, SvPV(errstr,na));
     }
 }
 
@@ -1048,6 +1060,9 @@ _dbd_rebind_ph(sth, imp_sth, phs, maxlen)
     SWORD fCType;
     SWORD fSqlType;
     UCHAR *rgbValue;
+    UDWORD cbColDef;
+    SWORD ibScale;
+    SDWORD cbValueMax;
 
     STRLEN value_len;
 
@@ -1087,13 +1102,14 @@ _dbd_rebind_ph(sth, imp_sth, phs, maxlen)
         phs->sv_buf = SvPVX(phs->sv);
         value_len   = 0;
     }
+    /* value_len has current value length now */
     phs->sv_type = SvTYPE(phs->sv);     /* part of mutation check       */
-    phs->maxlen  = SvLEN(phs->sv)-1;    /* avail buffer space   */
-    /* value_len has current value length */
+    phs->maxlen  = SvLEN(phs->sv)-1;    /* avail buffer space  		*/
 
     if (dbis->debug >= 3) {
-        fprintf(DBILOGFP, "bind %s <== '%.100s' (size %d, ok %d)\n",
-            phs->name, phs->sv_buf, (long)phs->maxlen, SvOK(phs->sv)?1:0);
+        fprintf(DBILOGFP, "bind %s <== '%.100s' (len %ld/%ld, null %d)\n",
+            phs->name, phs->sv_buf,
+	    (long)value_len,(long)phs->maxlen, SvOK(phs->sv)?0:1);
     }
 
     /* ----------------------------------------------------------------	*/
@@ -1111,9 +1127,9 @@ _dbd_rebind_ph(sth, imp_sth, phs, maxlen)
     if (phs->sql_type == 0) {
 	SWORD fNullable;
 	SWORD ibScale;
-	UDWORD cbColDef;
+	UDWORD dp_cbColDef;
 	rc = SQLDescribeParam(imp_sth->hstmt,
-	      phs->idx, &fSqlType, &cbColDef, &ibScale, &fNullable
+	      phs->idx, &fSqlType, &dp_cbColDef, &ibScale, &fNullable
 	);
 	if (!SQL_ok(rc)) {
 	    dbd_error(sth, rc, "_rebind_ph/SQLDescribeParam");
@@ -1122,13 +1138,16 @@ _dbd_rebind_ph(sth, imp_sth, phs, maxlen)
 	if (dbis->debug >=2)
 	    fprintf(DBILOGFP,
 		"    SQLDescribeParam %s: SqlType=%s, ColDef=%d\n",
-		phs->name, S_SqlTypeToString(fSqlType), cbColDef);
+		phs->name, S_SqlTypeToString(fSqlType), dp_cbColDef);
 
 	phs->sql_type = fSqlType;
     }
 
     fParamType = SQL_PARAM_INPUT;
     fCType = phs->ftype;
+    ibScale = value_len;
+    cbColDef = value_len;
+    cbValueMax = value_len;
 
     /* When we fill a LONGVARBINARY, the CTYPE must be set 
      * to SQL_C_BINARY.
@@ -1154,23 +1173,21 @@ _dbd_rebind_ph(sth, imp_sth, phs, maxlen)
 	phs->cbValue = SQL_NULL_DATA;
     }
     else {
-	STRLEN len;
 	rgbValue = phs->sv_buf;
 	phs->cbValue = (UDWORD) value_len;
     }
-
     if (dbis->debug >=2)
-	fprintf(DBILOGFP, "    bind %s: CType=%d, SqlType=%s, ColDef=%d\n",
-	    phs->name, fCType, S_SqlTypeToString(phs->sql_type), maxlen);
+	fprintf(DBILOGFP,
+	    "    bind %s: CTy=%d, STy=%s, CD=%d, Sc=%d, VM=%d.\n",
+	    phs->name, fCType, S_SqlTypeToString(phs->sql_type),
+	    cbColDef, ibScale, cbValueMax);
 
     rc = SQLBindParameter(imp_sth->hstmt,
 	phs->idx, fParamType, fCType, phs->sql_type,
-	value_len, value_len/*ibScale*/,
-	rgbValue, value_len/*cbValueMax*/, &phs->cbValue
+	cbColDef, ibScale,
+	rgbValue, cbValueMax, &phs->cbValue
     );
-	if (dbis->debug >= 2) {
-		fprintf(DBILOGFP, "SQLBindParameter returned %d for the value %s\n", rc, rgbValue);
-	}
+
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "_rebind_ph/SQLBindParameter");
 	return 0;
@@ -1698,13 +1715,13 @@ int
 odbc_describe_col(sth, colno, ColumnName, BufferLength, NameLength, DataType, ColumnSize, DecimalDigits, Nullable)
     SV *sth;
     int colno;
-    SQLCHAR *ColumnName;
-    SQLSMALLINT BufferLength;
-    SQLSMALLINT *NameLength;
-    SQLSMALLINT *DataType;
-    SQLUINTEGER *ColumnSize;
-    SQLSMALLINT *DecimalDigits;
-    SQLSMALLINT *Nullable;
+    char *ColumnName;
+    I16 BufferLength;
+    I16 *NameLength;
+    I16 *DataType;
+    U32 *ColumnSize;
+    I16 *DecimalDigits;
+    I16 *Nullable;
 {
     D_imp_sth(sth);
     RETCODE rc;
@@ -1808,12 +1825,12 @@ odbc_col_attributes(sth, colno, desctype)
     SDWORD fDesc;
     
     for (i = 0; i < 6; i++)
-		rgbInfoValue[i] = 0xFF;
+	rgbInfoValue[i] = 0xFF;
 
     if ( !DBIc_ACTIVE(imp_sth) ) {
-		dbd_error(sth, SQL_ERROR, "no statement executing");
-		return Nullsv;
-	}
+	dbd_error(sth, SQL_ERROR, "no statement executing");
+	return Nullsv;
+    }
  
 /*  fprintf(DBILOGFP,
 	"SQLColAttributes: colno = %d, desctype = %d, cbInfoValue = %d\n",
@@ -1823,38 +1840,38 @@ odbc_col_attributes(sth, colno, desctype)
     (e.g. SQL_COLUMN_COUNT, since it doesn't depend on the colcount)
 */
     if (colno == 0) {
-		dbd_error(sth, SQL_ERROR,
-				  "can not obtain SQLColAttributes for column 0");
-		return Nullsv;
-	}
+	dbd_error(sth, SQL_ERROR,
+	      "can not obtain SQLColAttributes for column 0");
+	return Nullsv;
+    }
 
     rc = SQLColAttributes(imp_sth->hstmt, colno, desctype,
-						  rgbInfoValue, sizeof(rgbInfoValue)-1, &cbInfoValue, &fDesc);
+		  rgbInfoValue, sizeof(rgbInfoValue)-1, &cbInfoValue, &fDesc);
     if (!SQL_ok(rc)) {
-		dbd_error(sth, rc, "odbc_col_attributes/SQLColAttributes");
-		return Nullsv;
+	    dbd_error(sth, rc, "odbc_col_attributes/SQLColAttributes");
+	    return Nullsv;
     }
 
     if (dbis->debug >= 2)
-		fprintf(DBILOGFP,
-				"SQLColAttributes: colno = %d, desctype = %d, cbInfoValue = %d, fDesc = %d\n",
-				colno, desctype, cbInfoValue, fDesc);
+	fprintf(DBILOGFP,
+		"SQLColAttributes: colno = %d, desctype = %d, cbInfoValue = %d, fDesc = %d\n",
+		colno, desctype, cbInfoValue, fDesc);
 
-	/* sigh...Oracle's ODBC driver version 8.0.4 resets cbInfoValue to 0, when
-	   putting a value in fDesc.  This is a change!
-	*/
-	if (cbInfoValue == -2 || cbInfoValue == 0)
-		retsv = newSViv(fDesc);
-	else if (cbInfoValue != 2 && cbInfoValue != 4)
-		retsv = newSVpv(rgbInfoValue, 0);
-	else if (rgbInfoValue[cbInfoValue+1] == '\0')
-		retsv = newSVpv(rgbInfoValue, 0);
+    /* sigh...Oracle's ODBC driver version 8.0.4 resets cbInfoValue to 0, when
+       putting a value in fDesc.  This is a change!
+    */
+    if (cbInfoValue == -2 || cbInfoValue == 0)
+	    retsv = newSViv(fDesc);
+    else if (cbInfoValue != 2 && cbInfoValue != 4)
+	    retsv = newSVpv(rgbInfoValue, 0);
+    else if (rgbInfoValue[cbInfoValue+1] == '\0')
+	    retsv = newSVpv(rgbInfoValue, 0);
     else {
-		if (cbInfoValue == 2)
-			retsv = newSViv(*(short *)rgbInfoValue);
-		else
-			retsv = newSViv(*(int *)rgbInfoValue);
-	}
+	if (cbInfoValue == 2)
+	    retsv = newSViv(*(short *)rgbInfoValue);
+	else
+	    retsv = newSViv(*(int *)rgbInfoValue);
+    }
 
     return sv_2mortal(retsv);
 }
@@ -1944,3 +1961,4 @@ odbc_db_columns(dbh, sth, catalog, schema, table, column)
     return 1;
 }
 
+/* end */

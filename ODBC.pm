@@ -1,15 +1,15 @@
-# $Id: ODBC.pm,v 1.8 1998/07/09 15:57:33 timbo Exp $
+# $Id: ODBC.pm,v 1.10 1998/08/08 16:58:30 timbo Exp $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
-# portions Copyright (c) 1997  Thomas K. Wenrich
 # portions Copyright (c) 1997,1998  Jeff Urlwin
+# portions Copyright (c) 1997  Thomas K. Wenrich
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.17';
+$DBD::ODBC::VERSION = '0.19';
 
 {
     package DBD::ODBC;
@@ -19,7 +19,7 @@ $DBD::ODBC::VERSION = '0.17';
 
     @ISA = qw(DynaLoader);
 
-    my $Revision = substr(q$Revision: 1.8 $, 10);
+    my $Revision = substr(q$Revision: 1.10 $, 10);
 
     require_version DBI 0.86;
 
@@ -196,6 +196,11 @@ see DBI for more information.
 =head1 DESCRIPTION
 
 =head2 Recent Updates
+
+=item DBD::ODBC 0.18
+
+Enhancements to build process. Better handling of errors in
+error handling code.
 
 =item DBD::ODBC 0.17
 
