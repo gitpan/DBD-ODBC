@@ -110,6 +110,19 @@ _GetPrimaryKeys(dbh, sth, CatalogName, SchemaName, TableName)
 	ST(0) = odbc_get_primary_keys(dbh, sth, CatalogName, SchemaName, TableName) ? &sv_yes : &sv_no;
 
 void 
+_GetSpecialColumns(dbh, sth, Identifier, CatalogName, SchemaName, TableName, Scope, Nullable)
+	SV *	dbh
+	SV *	sth
+	int     Identifier
+	char *	CatalogName
+	char *	SchemaName
+	char *	TableName
+    int     Scope
+    int     Nullable
+	CODE:
+	ST(0) = odbc_get_special_columns(dbh, sth, Identifier, CatalogName, SchemaName, TableName, Scope, Nullable) ? &sv_yes : &sv_no;
+
+void 
 _GetForeignKeys(dbh, sth, PK_CatalogName, PK_SchemaName, PK_TableName, FK_CatalogName, FK_SchemaName, FK_TableName)
 	SV *	dbh
 	SV *	sth

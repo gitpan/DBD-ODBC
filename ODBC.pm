@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.27';
+$DBD::ODBC::VERSION = '0.28';
 
 {
     package DBD::ODBC;
@@ -205,6 +205,18 @@ $DBD::ODBC::VERSION = '0.27';
 			$sth;
     }
 
+    # Call the ODBC function SQLSpecialColumns
+    # Args are:
+    # See the ODBC documentation for more information about this call.
+    #
+    sub GetSpecialColumns {
+	my ($dbh, $Identifier, $Catalog, $Schema, $Table, $Scope, $Nullable) = @_;
+	# create a "blank" statement handle
+	my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLSpecialColumns" });
+	_GetSpecialColumns($dbh, $sth, $Identifier, $Catalog, $Schema, $Table, $Scope, $Nullable) or return undef;
+	$sth;
+    }
+	
     sub GetTypeInfo {
 	my ($dbh, $sqltype) = @_;
 	# create a "blank" statement handle
@@ -266,6 +278,12 @@ See L<DBI> for more information.
 =head2 Recent Updates
 
 =over 4
+
+=item B<DBD::DOBC 0.28>
+
+Added support for SQLSpecialColumns thanks to patch provided by Martin J. Evans [martin@easysoft.com]
+
+Fixed bug introduced in 0.26 which was introduced of SQLMoreResults was not supported by the driver.
 
 =item B<DBD::ODBC 0.27>
 
@@ -508,13 +526,15 @@ Example (using MS Access):
 =item SQLDataSources
 
 All handled, currently (as of 0.21)
-	
+
+=item SQLSpecialColumns
+
+Handled as of version 0.28
+ 
 =item Others/todo?
 
 Level 1
 
-    SQLColumns	
-    SQLSpecialColumns
     SQLTables (use tables()) call
 
 Level 2

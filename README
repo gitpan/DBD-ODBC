@@ -100,7 +100,7 @@ web you can subscribe by sending a message to dbi-request@fugue.com, it
 may take a few days to be processed).
 
 Please post details of any problems (or changes you needed to make) to
-dbi-users@fugue.com and CC them to me at jurlwin@access.digex.net. But note...
+dbi-users@fugue.com and CC them to me at jurlwin@bellatlantic.net. But note...
 
 ** IT IS IMPORTANT TO INCLUDE THE FOLLOWING INFORMATION:
 
@@ -132,7 +132,6 @@ DBI 'home page': http://www.arcana.co.uk/technologia/perl/DBI/index.html
 
 perldoc DBI
 perldoc DBD::ODBC	(which will include the DBD::ODBC FAQ list)
-Jeff's 'home page' : http://users.iamdigex.net/jurlwin
 
 Win32 ODBC drivers:
 http://www.microsoft.com/support/products/backoffice/odbc/
