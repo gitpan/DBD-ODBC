@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.35';
+$DBD::ODBC::VERSION = '0.36';
 
 {
     package DBD::ODBC;
@@ -387,6 +387,11 @@ See L<DBI> for more information.
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
    
+=item B<DBD::ODBC 0.36>
+
+ Fixed build for ODBC 2.x drivers.  The new SQLExecDirect code
+ had SQLFreeHandle which is a 3.x function, not a 2.x function.
+ 
 =item B<DBD::ODBC 0.35>
 
  Fixed (finally) multiple result sets with differing

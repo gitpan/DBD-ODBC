@@ -123,10 +123,10 @@ sub RunMultiTest {
       # print join(", ", @{$sth->{NAME}}), "\n";
       my $i = 0;
       while ( my $ref = $sth->fetchrow_arrayref ) {
-	 if ($] > 5.005) {
-	    no warnings;
+	 # if ($] > 5.005) {
+	 #   no warnings;
 	    # print join(":", @$ref), "\n";
-	 }
+         #}
 	 my $row = $ODBCTEST::tab_insert_values[$i];
 	 
 	 my $j;

@@ -134,7 +134,11 @@ int dbd_db_execdirect( SV *dbh,
 	 }
       }
    }
-   ret = SQLFreeHandle( SQL_HANDLE_STMT, stmt );
+   /* changed from SQLFreeHandle to SQLFreeStmt to support older ODBC
+    * drivers.
+    */
+   /* ret = SQLFreeHandle( SQL_HANDLE_STMT, stmt ); */
+   ret = SQLFreeStmt(stmt, SQL_DROP);
    if (!SQL_ok(ret)) {
       dbd_error( dbh, ret, "Statement destruction error" );
    }
