@@ -51,6 +51,8 @@ my @data_with_dates = (
 );
 
 print "1..3\n";
+my $dbname = $dbh->get_info(17); # DBI::SQL_DBMS_NAME
+
 print " Test 1:  insert various test data, without having this test tell the driver the type\n";
 print "          that is being bound to a column.  This tests the use of SQLDescribeParam to obtain \n";
 print "          the column type on the insert.  This is experimental and will most likely fail.\n";
@@ -67,7 +69,9 @@ $rc = ODBCTEST::tab_insert_bind($dbh, \@data_no_dates_with_long, 0);
 Test($rc);
 
 $rc = ODBCTEST::tab_insert_bind($dbh, \@data_with_dates, 0);
-Test($rc);
+if (!Test($rc) && $dbname =~ /Oracle/i) {
+   warn "\nThis test is known to fail using Oracle's ODBC drivers for versions 8.x and 9.0 -- please ignore the failure or, better yet, bug Oracle :)\n\n";
+}
 
 ODBCTEST::tab_delete($dbh);
 

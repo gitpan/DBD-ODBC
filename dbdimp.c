@@ -1396,7 +1396,7 @@ imp_sth_t *imp_sth;
 	if (SQL_NO_DATA_FOUND == rc) {
 
 	   /* See if we can check for multiple results */
-	   if (imp_dbh->odbc_sqlmoreresults_supported == -1) { /* flag to see if SQLDescribeParam is supported */
+	   if (imp_dbh->odbc_sqlmoreresults_supported == -1) { /* flag to see if SQLMoreResults is supported */
 	      rc = SQLGetFunctions(imp_dbh->hdbc, SQL_API_SQLMORERESULTS, 
 				   &supported);
 	      if (DBIS->debug >= 3)
@@ -1676,9 +1676,9 @@ int maxlen;
     if (DBIS->debug >= 2) {
 	char *text = neatsvpv(phs->sv,0);
 	PerlIO_printf(DBILOGFP,
-		      "bind %s <== %s (size %d/%d/%ld, ptype %ld, otype %d)\n",
+		      "bind %s <== %s (size %d/%d/%ld, ptype %ld, otype %d, sqltype %d)\n",
 		      phs->name, text, SvCUR(phs->sv),SvLEN(phs->sv),phs->maxlen,
-		      SvTYPE(phs->sv), phs->ftype);
+		      SvTYPE(phs->sv), phs->ftype, phs->sql_type);
     }
 
     /* At the moment we always do sv_setsv() and rebind.        */
@@ -1753,19 +1753,30 @@ int maxlen;
 	   }
 	}
 	if (imp_dbh->odbc_sqldescribeparam_supported == 1) {
+	   if (DBIS->debug > 5) {
+	      PerlIO_printf(DBILOGFP, "SQLDescribeParam idx = %d.\n", phs->idx);
+	   }
+	      
 	   rc = SQLDescribeParam(imp_sth->hstmt,
 				 phs->idx, &fSqlType, &dp_cbColDef, &ibScale, &fNullable
 				);
 	   if (!SQL_ok(rc)) {
-	      dbd_error(sth, rc, "_rebind_ph/SQLDescribeParam"); 
-	      return 0;
+	      /* SQLDescribeParam didn't work */
+	      phs->sql_type = ODBC_BACKUP_BIND_TYPE_VALUE;
+	      /* dbd_error(sth, rc, "_rebind_ph/SQLDescribeParam");  */
+	      if (DBIS->debug > 0)
+		 PerlIO_printf(DBILOGFP, "SQLDescribeParam failed reverting to default type for this parameter: ");
+	      AllODBCErrors(imp_sth->henv, imp_sth->hdbc, imp_sth->hstmt,
+			    (DBIS->debug > 0));
+	      /* fall through */
+	      /* return 0; */
 	   } else {
 	      if (DBIS->debug >=2) 
 		 PerlIO_printf(DBILOGFP,
 			       "    SQLDescribeParam %s: SqlType=%s, ColDef=%d\n",
 			       phs->name, S_SqlTypeToString(fSqlType), dp_cbColDef);
 	   
-	   phs->sql_type = fSqlType;
+	      phs->sql_type = fSqlType;
 	   }
 	} else {
 	   /* SQLDescribeParam is unsupported */
@@ -1930,8 +1941,8 @@ IV maxlen;			/* ??? */
 	croak("Can't bind non-scalar value (currently)");
 
     if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "bind %s <== '%.200s' (attribs: %s)\n",
-		      name, SvPV(newvalue,na), attribs ? SvPV(attribs,na) : "" );
+	PerlIO_printf(DBILOGFP, "bind %s <== '%.200s' (attribs: %s), type %d\n",
+		      name, SvPV(newvalue,na), attribs ? SvPV(attribs,na) : "", sql_type );
 
     phs_svp = hv_fetch(imp_sth->all_params_hv, name, name_len, 0);
     if (phs_svp == NULL)

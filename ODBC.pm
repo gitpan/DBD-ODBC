@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.40';
+$DBD::ODBC::VERSION = '0.41';
 
 {
     package DBD::ODBC;
@@ -392,6 +392,20 @@ See L<DBI> for more information.
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
 
+=item B<DBD::ODBC 0.41>
+
+A patch to handle SQLDescribeParam failing in some
+circumstances.  I believe this is a bug in the ODBC
+driver, but this happens with SQL Server and INNER
+JOIN syntax queries, but not when where a.i = b.i.
+The behavior is now to revert to assume SQL_VARCHAR
+if SQLDescribeParam fails for whatever reason.					     
+
+Added warning during tests when the Oracle ODBC driver
+is detected and it is a known error.  I didn't want
+to make it pass the test silently, but I did want to print
+a message indicating it was expected.
+   
 =item B<DBD::ODBC 0.40>
 
 Two minor patches for building.  One for Cygwin support
