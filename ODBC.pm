@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.28';
+$DBD::ODBC::VERSION = '0.30';
 
 {
     package DBD::ODBC;
@@ -149,11 +149,12 @@ $DBD::ODBC::VERSION = '0.28';
 	    return 1 if $ok;
 	}
 	return 1 if $state eq 'S0002';	# Base table not found
+ 	return 1 if $state eq '42S02';  # Base table not found.Solid EE v3.51
 	return 1 if $state eq 'S0022';	# Column not found
 	return 1 if $state eq '37000';  # statement could not be prepared (19991011, JLU)
 	# We assume that any other error means the database
 	# is no longer connected.
-	# Some special cases may need to be added to the code above.
+# Some special cases may need to be added to the code above.
 	return 0;
     }
 
@@ -228,6 +229,7 @@ $DBD::ODBC::VERSION = '0.28';
 
     sub type_info_all {
 	my ($dbh, $sqltype) = @_;
+	$sqltype = DBI::SQL_ALL_TYPES unless defined $sqltype;
 	my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLGetTypeInfo" });
 	_GetTypeInfo($dbh, $sth, $sqltype) or return undef;
 	my $info = $sth->fetchall_arrayref;
@@ -279,7 +281,94 @@ See L<DBI> for more information.
 
 =over 4
 
-=item B<DBD::DOBC 0.28>
+=item B<DBD::ODBC 0.30>
+
+ Added ping patch for Solid courtesy of Marko Asplund
+
+ Updated disconnect to rollback if autocommit is not on.
+ This should silence some errors when disconnecting.
+
+ Updated SQL_ROWSET_SIZE attribute.  Needed to force it to
+ odbc_SQL_ROWSET_SIZE to obey the DBI rules.
+
+ Added odbc_SQL_DRIVER_ODBC_VER, which obtains the version of
+ the Driver upon connect.  This internal capture of the version is
+ a read-only attributed and is used during array binding of parameters.
+ 
+ Added odbc_ignore_named_placeholders attribute to facilicate creating triggers
+ within SAP and Oracle, to name two. The syntax in these DBs is to allow use of
+ :old and :new to access column values before and after updates.  Example:
+
+ $dbh->{odbc_ignore_named_placeholders} = 1; # set it for all future statements
+					  # ignores :foo, :new, etc, but not :1 or ?
+ $dbh->do("create or replace etc :new.D = sysdate etc");
+ 
+
+=item B<DBD::ODBC 0.29>
+
+ Cygwin patches from Neil Lunn (untested by me).  Thanks Neil!
+ 
+SQL_ROWSET_SIZE attribute patch from Andrew Brown 
+> There are only 2 additional lines allowing for the setting of
+> SQL_ROWSET_SIZE as db handle option.
+>
+> The purpose to my madness is simple. SqlServer (7 anyway) by default
+> supports only one select statement at once (using std ODBC cursors).
+> According to the SqlServer documentation you can alter the default setting
+> of
+> three values to force the use of server cursors - in which case multiple
+> selects are possible.
+>
+> The code change allows for:
+> $dbh->{SQL_ROWSET_SIZE} = 2;    # Any value > 1
+>
+> For this very purpose.
+>
+> The setting of SQL_ROWSET_SIZE only affects the extended fetch command as
+> far as I can work out and thus setting this option shouldn't affect
+> DBD::ODBC operations directly in any way.
+>
+> Andrew
+>
+
+VMS and other patches from Martin Evans (thanks!)
+
+[1] a fix for Makefile.PL to build DBD::ODBC on OpenVMS.
+
+[2] fix trace message coredumping after SQLDriverConnect
+
+[3] fix call to SQLCancel which fails to pass the statement handle properly.
+
+[4] consume diagnostics after SQLDriverConnect/SQLConnect call or they remain
+    until the next error occurs and it then looks confusing (this is due to
+    ODBC spec for SQLError). e.g. test 02simple returns a data truncated error
+    only now instead of all the informational diags that are left from the
+    connect call, like the "database changed", "language changed" messages you
+    get from MS SQL Server.
+
+Replaced C++ style comments with C style to support more platforms more easily.
+
+Fixed bug which use the single quote (') instead of a double quote (") for "literal" column names.  This
+   helped when having a colon (:) in the column name.
+
+Fixed bug which would cause DBD::ODBC to core-dump (crash) if DBI tracing level was greater than 3.
+
+Fixed problem where ODBC.pm would have "use of uninitialized variable" if calling DBI's type_info.
+
+Fixed problem where ODBC.xs *may* have an overrun when calling SQLDataSources. 
+
+Fixed problem with DBI 1.14, where fprintf was being called instead of PerlIO_printf for debug information
+
+Fixed problem building with unixODBC per patch from Nick Gorham   
+
+Added ability to bind_param_inout() via patches from Jeremy Cooper.  Haven't figured out a good, non-db specific
+   way to test.  My current test platform attempts to determine the connected database type via
+   ugly hacks and will test, if it thinks it can.  Feel free to patch and send me something...Also, my
+   current Oracle ODBC driver fails miserably and dies.
+
+Updated t/02simple.t to not print an error, when there is not one.
+   
+=item B<DBD::ODBC 0.28>
 
 Added support for SQLSpecialColumns thanks to patch provided by Martin J. Evans [martin@easysoft.com]
 
@@ -629,13 +718,24 @@ to ODBC developers (but I don't want to loose them).
 
 	http://dataramp.com/
 
+	http://www.syware.com
+
+	http://www.microsoft.com/odbc
+
+   For Linux/Unix folks, compatible ODBC driver managers can be found at:
+   
+        http://www.easysoft.com		unixODBC driver manager source
+				        *and* ODBC-ODBC bridge for accessing Win32 ODBC sources from Linux
+
+        http://www.iodbc.org		iODBC driver manager source
+
+   Also, for Linux folks, you can checkout the following for another ODBC-ODBC bridge and support for iODBC.
+
 	http://www.openlink.co.uk 
 		or
 	http://www.openlinksw.com 
 
-	http://www.syware.com
 
-	http://www.microsoft.com/odbc
 
 =head2 Frequently Asked Questions
 Answers to common DBI and DBD::ODBC questions:
@@ -661,7 +761,9 @@ with many applications.  For Linux/Unix, some hunting is required, but
 you may find something useful at:
 
 	http://www.openlinksw.com
+        http://www.easysoft.com
 	http://www.intersolv.com
+	      
 
 2) ODBC Driver Manager - the piece of software which interacts with the drivers
 for the application.  It "hides" some of the differences between the
@@ -669,7 +771,8 @@ drivers (i.e. if a function call is not supported by a driver, it 'hides'
 that and informs the application that the call is not supported.
 DBD::ODBC needs this to talk to drivers.  Under Win32, it is built in
 to the OS.  Under Unix/Linux, in most cases, you will want to use freeODBC,
-unixODBC or iODBC.  iODBC is bundled with DBD::ODBC.
+unixODBC or iODBC.  iODBC was bundled with DBD::ODBC, but you will need to find one
+which suits your needs.  Please see www.openlinksw.com, www.easysoft.com or www.iodbc.org
 
 3) DBD::ODBC.  DBD::ODBC uses the driver manager to talk to the ODBC driver(s) on
 your system.  You need both a driver manager and driver installed and tested
@@ -686,11 +789,12 @@ You can configure the DSN to have use information when you refer to the DSN.
 
 DBD::ODBC comes with one (iODBC).  In the DBD::ODBC source release is a directory named iodbcsrc.  
 There are others.  UnixODBC, FreeODBC and some of the drivers will come with one of these managers.
-For example Openlink's drivers (see below) come with the iODBC driver manager.
+For example Openlink's drivers (see below) come with the iODBC driver manager.  Easysoft
+supplies both ODBC-ODBC bridge software and unixODBC.
 
 =item How do I access a MS SQL Server database from Linux?
 
-Try using drivers from http://www.openlinksw.com
+Try using drivers from http://www.openlinksw.com or www.easysoft.com
 The multi-tier drivers have been tested with Linux and Redhat 5.1.
 
 =item How do I access an MS-Access database from Linux?

@@ -23,6 +23,7 @@ DBD::ODBC -- DBD module interfacing the ODBC databases.
 
     Remember to *read* the DBI README file!
 
+    Remember to *read* the ODBC.pm POD documentation!!!
 BUILDING:
 
   set-up these environment variables:

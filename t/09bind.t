@@ -127,6 +127,7 @@ VALUES (?, ?, ?, ?)
     foreach (@data) {
 	my @row;
 	@row = ODBCTEST::get_type_for_column($dbh, 'A');
+	print "Binding the value: $_->[0] type = $row[1]\n";
 	$sth->bind_param(1, $_->[0], { TYPE => $row[1] });
 	@row = ODBCTEST::get_type_for_column($dbh, 'B');
 	$sth->bind_param(2, $_->[1], { TYPE => $row[1] });

@@ -46,6 +46,7 @@ print " Tests 7,8: test LongTruncOk\n";
 $rc = undef;
 $dbh->{LongReadLen} = 50;
 $dbh->{LongTruncOk} = 1;
+$dbh->{PrintError} = 0;
 $rc = select_long($dbh);
 print "not " unless($rc);
 print "ok 7\n";
@@ -127,7 +128,16 @@ print " Test 14: test ping method\n";
 print "not " unless $dbh->ping;
 print "ok 14\n";
 
-BEGIN {$tests = 14;}
+print " Test 15: test storing of DBH parameter\n";
+if ($dbh->{odbc_ignore_named_placeholders}) {
+   print "Attrib not 0 to start (", $dbh->{odbc_ignore_named_placeholders}, ")\nnot ";
+} else {
+   $dbh->{odbc_ignore_named_placeholders} = 1;
+   print "Attrib not true (", $dbh->{odbc_ignore_named_placeholders}, ")\nnot " unless $dbh->{odbc_ignore_named_placeholders};
+}
+print "ok 15\n";
+print "ok 16\n";
+BEGIN {$tests = 16;}
 exit(0);
 
 sub tab_select

@@ -26,11 +26,11 @@ require 5.004;
     $table_name = "PERL_DBD_TEST";
 
     %TestFieldInfo = (
-	'A' => [SQL_SMALLINT,SQL_BIGINT, SQL_TINYINT, SQL_NUMERIC, SQL_DECIMAL, SQL_FLOAT, SQL_REAL],
-	'B' => [SQL_VARCHAR, SQL_CHAR],
-	'C' => [SQL_LONGVARCHAR],
-	'D' => [SQL_DATE, SQL_TIMESTAMP],
-    );
+		      'A' => [SQL_SMALLINT,SQL_BIGINT, SQL_TINYINT, SQL_NUMERIC, SQL_DECIMAL, SQL_FLOAT, SQL_REAL],
+		      'B' => [SQL_VARCHAR, SQL_CHAR],
+		      'C' => [SQL_LONGVARCHAR],
+		      'D' => [SQL_DATE, SQL_TIMESTAMP],
+		     );
 
     sub get_type_for_column {
 	my $dbh = shift;
@@ -42,12 +42,16 @@ require 5.004;
 	foreach $type (@{ $TestFieldInfo{$column} }) {
 	    $sth = $dbh->func($type, GetTypeInfo);
 	    # may not correct behavior, but get the first compat type
-	    @row = $sth->fetchrow();
-	    $sth->finish();
-	    last if @row;
+	    if ($sth) {
+		@row = $sth->fetchrow();
+		$sth->finish();
+		last if @row;
+	    } else {
+		    # warn "Unable to get type for type $type\n";
+	    }
 	}
 	die "Unable to find a suitable test type for field $column"
-	    unless @row;
+		unless @row;
 	# warn join(", ",@row);
 	return @row;
     }
@@ -116,7 +120,7 @@ require 5.004;
 	$sth->finish();
 	$rc;
     }
-	
+
     1;
 }
 
