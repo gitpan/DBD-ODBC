@@ -20,6 +20,40 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
 =head1 CHANGES
 
+=item Changes in DBD::ODBC 1.00 December 8, 2002
+
+ (Please see all changes since version 0.43)
+
+ Updated Makefile.PL to handle SQL_Wxxx types correctly with unixODBC and linking 
+ directly with EasySoft OOB.  Note that I could not find where iODBC defines SQL_WLONG_VARCHAR,
+ so I'm not sure it's fixed on all other platforms.  Should not have been a problem under
+ Win32...
+
+ Found that the fix in _18 was only enabled if debug enabled and it broke something else.
+ removed the fix.
+
+ Updated Makefile.PL to use DBI version 1.21 instead of 1.201 to facilitate builds under
+ latest development versions of Perl.
+
+ Updated code to use the *greater* of the column display size and the column length for
+ allocating column buffers.  This *should* workaround a problem with DBD::ODBC and the 
+ Universe database.
+
+ Added code thanks to Michael Riber to handle SQLExecDirect instead of SQLPrepare.  There are 
+ two ways to get this:
+	$dbh->prepare($sql, { odbc_execdirect => 1}); 
+ and
+	$dbh->{odbc_execdirect} = 1;
+ When $dbh->prepare() is called with the attribute "ExecDirect" set to a non-zero value 
+ dbd_st_prepare do NOT call SQLPrepare, but set the sth flag odbc_exec_direct to 1.
+ 
+ Fixed numeric value binding when binding non-integral values.  Now lets the driver 
+ or the database handle the conversion.
+
+ Fixed makefile.pl generation of makefile to force the ODBC directory first in the 
+ include list to help those installing ODBC driver managers on systems which 
+ already have ODBC drivers in their standard include path.
+
 =item Changes in DBD::ODBC 0.45_18 September 26, 2002
 
  Updated MANIFEST to include more of the mytest/* files (examples, tests)
@@ -60,7 +94,9 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 =item Changes in DBD::ODBC 0.45_14 August 13, 2002
 
 Added support to handle (better) DBI begin_work().
+
 Fix for binding undef parameters on SQL Server.
+
 Fix bug when connecting twice in the same script.  Trying to set the environment ODBC version
 twice against the same henv caused an error.
 
@@ -75,6 +111,7 @@ the change log will be removed from here and put in changes to tidy up a bit.
 Fixed global destruction access violation (which was seemingly random).
  
 =item Changes in DBD::ODBC 0.45_11 August 8, 2002
+
 Updated manifest to include more samples.
 Working on checking for leaks on Linux, where I might get more information about
 the process memory.

@@ -37,7 +37,8 @@ AV *dbd_st_fetch(SV *	sth, imp_sth_t *imp_sth);
 #define ODBC_ERR_HANDLER               0x8335
 #define ODBC_ROWCACHESIZE              0x8336
 #define ODBC_ROWSINCACHE               0x8337
-#define ODBC_FORCE_REBIND         0x8338
+#define ODBC_FORCE_REBIND	       0x8338
+#define ODBC_EXEC_DIRECT               0x8339
 
 /* ODBC_DEFAULT_BIND_TYPE_VALUE is now set to 0, which means that
  * DBD::ODBC will call SQLDescribeParam to find out what type of
@@ -552,6 +553,7 @@ SV   *attr;
     imp_dbh->odbc_sqlmoreresults_supported = -1; /* flag to see if SQLDescribeParam is supported */
     imp_dbh->odbc_defer_binding = 0;
     imp_dbh->odbc_force_rebind = 0;
+    imp_dbh->odbc_exec_direct = 0;	/* default to not having SQLExecDirect used */
     imp_dbh->RowCacheSize = 1;	/* default value for now */
 
     /* see if we're connected to MS SQL Server */
@@ -1221,27 +1223,43 @@ SV *attribs;
 	return 0;
     }
 
+    imp_sth->odbc_exec_direct = imp_dbh->odbc_exec_direct;
+
+    {
+       /*
+        * allow setting of odbc_execdirect in prepare() or overriding
+        */
+       SV **odbc_exec_direct_sv;
+       /* if the attribute is there, let it override what the default
+        * value from the dbh is (set above).
+        */
+       if ((odbc_exec_direct_sv = DBD_ATTRIB_GET_SVP(attribs, "odbc_execdirect", 10)) != NULL) {
+	  imp_sth->odbc_exec_direct = SvIV(*odbc_exec_direct_sv) != 0;
+       }
+    }
     /* scan statement for '?', ':1' and/or ':foo' style placeholders	*/
     dbd_preparse(imp_sth, statement);
 
-    /* parse the (possibly edited) SQL statement */
-    rc = SQLPrepare(imp_sth->hstmt, 
-		    imp_sth->statement, strlen(imp_sth->statement));
-    if (DBIc_DEBUGIV(imp_sth) >= 2)
-       PerlIO_printf(DBIc_LOGPIO(imp_dbh), "    SQLPrepare returned %d\n\n",
-		     rc);
+    /* Hold this statement for subsequent call of dbd_execute */
+    if (!imp_sth->odbc_exec_direct) {
+       /* parse the (possibly edited) SQL statement */
+       rc = SQLPrepare(imp_sth->hstmt, 
+		       imp_sth->statement, strlen(imp_sth->statement));
+       if (DBIc_DEBUGIV(imp_sth) >= 2)
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "    SQLPrepare returned %d\n\n",
+			rc);
 
-    if (!SQL_ok(rc)) {
-	dbd_error(sth, rc, "st_prepare/SQLPrepare");
-	SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
-	/* SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*//* TBD: 3.0 update */
-	imp_sth->hstmt = SQL_NULL_HSTMT;
-	return 0;
+       if (!SQL_ok(rc)) {
+	  dbd_error(sth, rc, "st_prepare/SQLPrepare");
+	  SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
+	  /* SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*//* TBD: 3.0 update */
+	  imp_sth->hstmt = SQL_NULL_HSTMT;
+	  return 0;
+       }
     }
-
     if (DBIc_DEBUGIV(imp_sth) >= 2)
-	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "    dbd_st_prepare'd sql f%d\n\t%s\n",
-		      imp_sth->hstmt, imp_sth->statement);
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "    dbd_st_prepare'd sql f%d, ExecDirect=%d\n\t%s\n",
+		      imp_sth->hstmt, imp_sth->odbc_exec_direct, imp_sth->statement);
 
     /* init sth pointers */
     imp_sth->henv = imp_dbh->henv;
@@ -1494,6 +1512,12 @@ imp_sth_t *imp_sth;
 	/* XXX we should at least allow an attribute to set this */
 	fbh->ColLength = 2001;	/* XXX! */
 #endif
+
+	/* may want to ensure Display Size at least as large as column
+	 * length -- workaround for some drivers which report a shorter
+	 * display length 
+	 * */
+	fbh->ColDisplaySize = fbh->ColDisplaySize > fbh->ColLength ? fbh->ColDisplaySize : fbh->ColLength;
 
 	/* change fetched size for some types
 	 */
@@ -1752,12 +1776,17 @@ imp_sth_t *imp_sth;
 	PerlIO_flush(DBIc_LOGPIO(imp_dbh));
     }
 
-    rc = SQLExecute(imp_sth->hstmt);
+    if (imp_sth->odbc_exec_direct) {
+      /* statement ready for SQLExecDirect */
+       rc = SQLExecDirect(imp_sth->hstmt, imp_sth->statement, SQL_NTS);
+    } else {
+       rc = SQLExecute(imp_sth->hstmt);
+    }
     if (debug >= 8) {
-	PerlIO_printf(DBIc_LOGPIO(imp_dbh),
-		      "    dbd_st_execute (for hstmt %d after, rc = %d)...\n",
-		      imp_sth->hstmt, rc);
-	PerlIO_flush(DBIc_LOGPIO(imp_dbh));
+       PerlIO_printf(DBIc_LOGPIO(imp_dbh),
+		     "    dbd_st_execute (for hstmt %d after, rc = %d)...\n",
+		     imp_sth->hstmt, rc);
+       PerlIO_flush(DBIc_LOGPIO(imp_dbh));
     }
     /*
      * If asynchronous execution has been enabled, SQLExecute will
@@ -1883,14 +1912,14 @@ imp_sth_t *imp_sth;
 	if (debug >= 2) {
 	    PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			  "    dbd_st_execute got no rows: resetting ACTIVE, moreResults\n");
-	    imp_sth->moreResults = 0;
-	    /* flag that we've done the describe to avoid a problem
-	     * where calling describe after execute returned no rows
-	     * caused SQLServer to provide a description of a query
-	     * that didn't quite apply. */
-	    imp_sth->done_desc = 1; 
-	    DBIc_ACTIVE_off(imp_sth);
 	}
+	imp_sth->moreResults = 0;
+	/* flag that we've done the describe to avoid a problem
+	 * where calling describe after execute returned no rows
+	 * caused SQLServer to provide a description of a query
+	 * that didn't quite apply. */
+	// imp_sth->done_desc = 1; 
+	DBIc_ACTIVE_off(imp_sth);
     }
     imp_sth->eod = SQL_SUCCESS;
 
@@ -2068,6 +2097,9 @@ imp_sth_t *imp_sth;
 		dbd_error(sth, SQL_ERROR, "st_fetch/SQLFetch (long truncated)");
 		return Nullav;
 	    }
+	    /* LongTruncOk true, just ensure perl has the right length
+	     * for the truncated data.
+	     */
 	    sv_setpvn(sv, (char*)fbh->data, fbh->ColDisplaySize);
 	}
 	else switch(fbh->ftype) {
@@ -2235,12 +2267,31 @@ _dbd_get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
 	      /* fall through */
 	      /* return 0; */
 	 } else {
-	    if (DBIc_DEBUGIV(imp_sth) >=2) 
+	    if (DBIc_DEBUGIV(imp_sth) >=5) 
 	       PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			     "    SQLDescribeParam %s: SqlType=%s, ColDef=%d\n",
 			     phs->name, S_SqlTypeToString(fSqlType), dp_cbColDef);
 
-	    phs->sql_type = fSqlType;
+	    
+	    /* for non-integral numeric types, let the driver/database handle the
+	     * conversion for us
+	     */
+	    switch(fSqlType) {
+	       case SQL_NUMERIC:
+	       case SQL_DECIMAL:
+	       case SQL_FLOAT:
+	       case SQL_REAL:
+	       case SQL_DOUBLE:
+		  if (DBIc_DEBUGIV(imp_sth) >=5) 
+		     PerlIO_printf(DBIc_LOGPIO(imp_dbh),
+				   "    (DBD::ODBC SQLDescribeParam NUMERIC FIXUP %s: SqlType=%s, ColDef=%d\n",
+				   phs->name, S_SqlTypeToString(fSqlType), dp_cbColDef);
+		  phs->sql_type = SQL_VARCHAR;
+		  break;
+
+	       default:
+		  phs->sql_type = fSqlType;
+	    }
 	 }
       } else {
 	   /* SQLDescribeParam is unsupported */
@@ -2395,6 +2446,7 @@ static int
 	       }
 		  
 	       break;
+
 #if 0
 	    case SQL_INTEGER:
 	    case SQL_SMALLINT:
@@ -2724,6 +2776,7 @@ static db_params S_db_storeOptions[] =  {
     { "odbc_force_rebind", ODBC_FORCE_REBIND },
     { "odbc_async_exec", ODBC_ASYNC_EXEC },
     { "odbc_err_handler", ODBC_ERR_HANDLER },
+    { "odbc_exec_direct", ODBC_EXEC_DIRECT },
     { NULL },
 };
 
@@ -2807,6 +2860,18 @@ SV *valuesv;
 
 	   break;
 
+	case ODBC_EXEC_DIRECT:
+	   bSetSQLConnectionOption = FALSE;
+	   /*
+	    * set value of odbc_exec_direct.  Non-zero will 
+	    * make prepare, essentially a noop and make execute
+	    * use SQLExecDirect.  This is to support drivers that
+	    * _only_ support SQLExecDirect.
+	    */
+	   imp_dbh->odbc_exec_direct = SvIV(valuesv);
+
+	   break;
+	   
         case ODBC_ASYNC_EXEC:
 	   bSetSQLConnectionOption = FALSE;
 	   /*
@@ -2953,6 +3018,7 @@ static db_params S_db_fetchOptions[] =  {
     { "odbc_async_exec", ODBC_ASYNC_EXEC },
     { "odbc_err_handler", ODBC_ERR_HANDLER },
     { "odbc_SQL_DBMS_NAME", SQL_DBMS_NAME },
+    { "odbc_exec_direct", ODBC_EXEC_DIRECT },
     { NULL }
 };
 
@@ -3029,6 +3095,13 @@ SV *keysv;
 	 * fetch current value of force rebind.
 	 */
 	  retsv = newSViv(imp_dbh->odbc_force_rebind);
+	  break;
+
+       case ODBC_EXEC_DIRECT:
+	/*
+	 * fetch current value of exec_direct.
+	 */
+	  retsv = newSViv(imp_dbh->odbc_exec_direct);
 	  break;
 
        case ODBC_ASYNC_EXEC:

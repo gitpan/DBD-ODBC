@@ -35,6 +35,7 @@ mytest/longbin.pl
 mytest/moreresults.pl
 mytest/proctest1.pl
 mytest/proctest2.pl
+mytest/proctest3.pl
 mytest/randombind.pl
 mytest/sqltmptabs.pl
 mytest/testconn.pl

@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.45_18';
+$DBD::ODBC::VERSION = '1.00';
 
 {
     package DBD::ODBC;
@@ -44,7 +44,7 @@ $DBD::ODBC::VERSION = '0.45_18';
 	    'Err'    => \$DBD::ODBC::err,
 	    'Errstr' => \$DBD::ODBC::errstr,
 	    'State' => \$DBD::ODBC::sqlstate,
-	    'Attribution' => 'ODBC DBD by Tim Bunce',
+	    'Attribution' => 'ODBC DBD by Jeff Urlwin',
 	    });
 
 	$drh;
@@ -496,6 +496,19 @@ Allow asynchronous execution of queries.  Right now, this causes a spin-loop
 if you want the error handling and asynchronous messages (see the err_handler)
 below.  See t/20SQLServer.t for an example of this.
 
+=item odbc_exec_direct
+
+Force DBD::ODBC to use SQLExecDirect instead of SQLPrepare() then SQLExecute.
+There are drivers that only support SQLExecDirect and the DBD::ODBC
+do() override doesn't allow returning result sets.  Therefore, the
+way to do this now is to set the attributed odbc_exec_direct.
+There are currently two ways to get this:
+	$dbh->prepare($sql, { odbc_execdirect => 1}); 
+ and
+	$dbh->{odbc_execdirect} = 1;
+ When $dbh->prepare() is called with the attribute "ExecDirect" set to a non-zero value 
+ dbd_st_prepare do NOT call SQLPrepare, but set the sth flag odbc_exec_direct to 1.
+ 
 =item odbc_err_handler
 
 Allow errors to be handled by the application.  A call-back function supplied
