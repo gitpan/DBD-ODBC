@@ -2,8 +2,8 @@
 $| = 1;
 
 
+my $tests = 25;
 # to help ActiveState's build process along by behaving (somewhat) if a dsn is not provided
-my $tests = 8;
 BEGIN {
    unless (defined $ENV{DBI_DSN}) {
       print "1..0 # Skipped: DBI_DSN is undefined\n";
@@ -13,7 +13,7 @@ BEGIN {
 
 use DBI qw(:sql_types);
 use ODBCTEST;
-
+# use Data::Dumper;
 {
     my $numTest = 0;
     sub Test($;$) {
@@ -228,7 +228,163 @@ Test($iErrCount == 0);
 eval {$dbh->do("DROP TABLE PERL_DBD_TABLE1");};
 eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
 
+eval {$dbh->do("CREATE TABLE PERL_DBD_TABLE1 (i INTEGER, j integer)");};
+$proc1 = <<EOT;
+CREATE PROCEDURE PERL_DBD_PROC1 (\@i INT) AS
+DECLARE \@result INT;
+BEGIN
+   SET \@result = \@i;
+   IF (\@i = 99)
+      BEGIN
+	 UPDATE PERL_DBD_TABLE1 SET i=\@i;
+	 SET \@result = \@i + 1;
+      END;
+   SELECT \@result;
+END
+EOT
+$dbh->{RaiseError} = 0;
+eval {$dbh->do($proc1);};
+my $sth = $dbh->prepare ("{call PERL_DBD_PROC1 (?)}");
+my $success = -1;
 
+$sth->bind_param (1, 99, SQL_INTEGER);
+$sth->execute();
+$success = -1;
+while (my @data = $sth->fetchrow_array()) {($success) = @data;}
+Test($success == 100);
+
+$sth->bind_param (1, 10, SQL_INTEGER);
+$sth->execute();
+$success = -1;
+while (my @data = $sth->fetchrow_array()) {($success) = @data;}
+Test($success == 10);
+
+$sth->bind_param (1, 111, SQL_INTEGER);
+$sth->execute();
+$success = -1;
+do {
+   my @data;
+   while (@data = $sth->fetchrow_array()) {
+      if ($#data == 0) {
+	  ($success) = @data;
+      }
+   }
+} while ($sth->{odbc_more_results});
+Test($success == 111);
+
+
+#
+# special tests for even stranger cases...
+#
+eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
+$proc1 = <<EOT;
+   CREATE PROCEDURE PERL_DBD_PROC1 (\@i INT) AS
+   DECLARE \@result INT;
+   BEGIN
+   SET \@result = \@i;
+   IF (\@i = 99)
+      BEGIN
+	 UPDATE PERL_DBD_TABLE1 SET i=\@i;
+	 SET \@result = \@i + 1;
+      END;
+   IF (\@i > 100)
+      BEGIN
+	 INSERT INTO PERL_DBD_TABLE1 (i, j) VALUES (\@i, \@i);
+	 SELECT i, j from PERL_DBD_TABLE1;
+      END;
+   SELECT \@result;
+   END
+EOT
+
+eval {$dbh->do($proc1);};
+
+# set the required attribute and check it.
+$dbh->{odbc_force_rebind} = 1;
+Test($dbh->{odbc_force_rebind});
+$dbh->{odbc_force_rebind} = 0;
+Test($dbh->{odbc_force_rebind} == 0);
+
+$sth = $dbh->prepare ("{call PERL_DBD_PROC1 (?)}");
+Test($sth->{odbc_force_rebind} == 0);
+$success = -1;
+
+$sth->bind_param (1, 99, SQL_INTEGER);
+$sth->execute();
+$success = -1;
+while (my @data = $sth->fetchrow_array()) {($success) = @data;}
+Test($success == 100);
+  
+$sth->bind_param (1, 10, SQL_INTEGER);
+$sth->execute();
+$success = -1;
+while (my @data = $sth->fetchrow_array()) {($success) = @data;}
+Test($success == 10);
+
+$sth->bind_param (1, 111, SQL_INTEGER);
+$sth->execute();
+$success = -1;
+do {
+   my @data;
+   while (@data = $sth->fetchrow_array()) {
+      if ($#data == 0) {
+	 ($success) = @data;
+      } else {
+	 print "Data: ", join(',', @data), "\n";
+      }
+   }
+} while ($sth->{odbc_more_results});
+Test($success == 111);
+
+# ensure the attribute is automatically set.
+# the multiple result sets will trigger this.
+Test($sth->{odbc_force_rebind});
+   
+
+#
+# more special tests
+# make sure output params are being set properly when
+# multiple result sets are available.  Also, ensure fetchrow_hashref
+# works with multiple statements.
+#
+eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
+$dbh->do("CREATE PROCEDURE  PERL_DBD_TESTPRC
+\@parameter1 int = 22
+AS
+	/* SET NOCOUNT ON */
+	select 1 as some_data
+	select isnull(\@parameter1, 0) as parameter1, 3 as some_more_data
+	RETURN(\@parameter1 + 1)");
+
+my $queryInputParameter1 = 2222;
+my $queryOutputParameter = 0;
+	
+$sth = $dbh->prepare('{? = call PERL_DBD_TESTPRC(?) }');
+$sth->bind_param_inout(1, \$queryOutputParameter, 30, { TYPE => DBI::SQL_INTEGER });
+$sth->bind_param(2, $queryInputParameter1, { TYPE => DBI::SQL_INTEGER });
+					
+$sth->execute();
+
+do {
+   for(my $rowRef; $rowRef = $sth->fetchrow_hashref('NAME'); )  {
+      my %outputData = %$rowRef;
+      if (defined($outputData{some_data})) {
+	 Test($outputData{some_data} == 1);
+	 Test(!defined($outputData{parameter1}));
+	 Test(!defined($outputData{some_more_data}));
+      } else {
+	 Test($outputData{parameter1} == 2222);
+	 Test($outputData{some_more_data} == 3);
+	 Test(!defined($outputData{some_data}));
+      }
+      # print 'outputData ', Dumper(\%outputData), "\n";
+   }
+} while($sth->{odbc_more_results});
+
+Test($queryOutputParameter == $queryInputParameter1 + 1);
+
+# clean up test table and procedure
+eval {$dbh->do("DROP TABLE PERL_DBD_TABLE1");};
+eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
 
 $dbh->{odbc_async_exec} = 1;
 print "odbc_async_exec is: $dbh->{odbc_async_exec}\n";

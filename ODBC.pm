@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.45_14';
+$DBD::ODBC::VERSION = '0.45_16';
 
 {
     package DBD::ODBC;
@@ -50,6 +50,7 @@ $DBD::ODBC::VERSION = '0.45_14';
 	$drh;
     }
 
+    sub CLONE { undef $drh }
     1;
 }
 
@@ -440,9 +441,107 @@ See L<DBI> for more information.
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.  This is normal.
 
+=item B<Private DBD::ODBC Attributes>
+=item odbc_more_results (applies to statement handle only!)
 
+Use this attribute to determine if there are more result sets
+available.  SQL Server supports this feature.  Use this as follows:
+
+do {
+   my @row;
+   while (@row = $sth->fetchrow_array()) {
+      # do stuff here
+   }
+} while ($sth->{odbc_more_results});
+
+=item odbc_ignore_named_placeholders
+
+Use this if you have special needs (such as Oracle triggers, etc) where
+:new or :name mean something special and are not just place holder names
+You I<must> then use ? for binding parameters.  Example:
+ $dbh->{odbc_ignore_named_placeholders} = 1;
+ $dbh->do("create trigger foo as if :new.x <> :old.x then ... etc");
+
+Without this, DBD::ODBC will think :new and :old are placeholders for binding
+and get confused.
+ 
+=item odbc_default_bind_type
+
+This value defaults to 0.  Older versions of DBD::ODBC assumed that the binding
+type was 12 (SQL_VARCHAR).  Newer versions default to 0, which means that
+DBD::ODBC will attempt to query the driver via SQLDescribeParam to determine
+the correct type.  If the driver doesn't support SQLDescribeParam, then DBD::ODBC
+falls back to using SQL_VARCHAR as the default, unless overridden by bind_param()
+
+=item odbc_force_rebind
+
+This is to handle special cases, especially when using multiple result sets.
+Set this before execute to "force" DBD::ODBC to re-obtain the result set's
+number of columns and column types for each execute.  Especially useful for
+calling stored procedures which may return different result sets each
+execute.  The only performance penalty is during execute(), but I didn't
+want to incur that penalty for all circumstances.  It is probably fairly
+rare that this occurs.  This attribute will be automatically set when
+multiple result sets are triggered.  Most people shouldn't have to worry
+about this.
+
+=item odbc_async_exec
+
+Allow asynchronous execution of queries.  Right now, this causes a spin-loop
+(with a small "sleep") until the sql is complete.  This is useful, however,
+if you want the error handling and asynchronous messages (see the err_handler)
+below.  See t/20SQLServer.t for an example of this.
+
+=item odbc_err_handler
+
+Allow errors to be handled by the application.  A call-back function supplied
+by the application to handle or ignore messages.  If the error handler returns
+0, the error is ignored, otherwise the error is passed through the normal
+DBI error handling structure(s).
+ 
+=item odbc_SQL_ROWSET_SIZE
+
+Here is the information from the original patch, however, I've learned
+since from other sources that this could/has caused SQL Server to "lock up".
+Please use at your own risk!
+   
+SQL_ROWSET_SIZE attribute patch from Andrew Brown 
+> There are only 2 additional lines allowing for the setting of
+> SQL_ROWSET_SIZE as db handle option.
+>
+> The purpose to my madness is simple. SqlServer (7 anyway) by default
+> supports only one select statement at once (using std ODBC cursors).
+> According to the SqlServer documentation you can alter the default setting
+> of
+> three values to force the use of server cursors - in which case multiple
+> selects are possible.
+>
+> The code change allows for:
+> $dbh->{SQL_ROWSET_SIZE} = 2;    # Any value > 1
+>
+> For this very purpose.
+>
+> The setting of SQL_ROWSET_SIZE only affects the extended fetch command as
+> far as I can work out and thus setting this option shouldn't affect
+> DBD::ODBC operations directly in any way.
+>
+> Andrew
+>
+
+=item SQL_DRIVER_ODBC_VER
+
+This, while available via get_info() is captured here.  I may get rid of this
+as I only used it for debugging purposes.  
+ 
+=item odbc_version
+
+This was added prior to the move to ODBC 3.x to allow the caller to "force" ODBC 3.0
+compatibility.  It's probably not as useful now, but it allowed get_info and get_type_info
+to return correct/updated information that ODBC 2.x didn't permit/provide.
+   
 =item B<Private DBD::ODBC Functions>
-=item GetInfo
+
+=item GetInfo (superceded by get_info(), the DBI standard)
 
 This function maps to the ODBC SQLGetInfo call.  This is a Level 1 ODBC
 function.  An example of this is:
@@ -450,9 +549,10 @@ function.  An example of this is:
   $value = $dbh->func(6, GetInfo);
 
 This function returns a scalar value, which can be a numeric or string value.  
-This depends upon the argument passed to GetInfo. 
+This depends upon the argument passed to GetInfo.
 
-=item SQLGetTypeInfo
+
+=item SQLGetTypeInfo (superceded by get_type_info(), the DBI standard)
 
 This function maps to the ODBC SQLGetTypeInfo call.  This is a Level 1
 ODBC function.  An example of this is:
@@ -473,7 +573,7 @@ interpreted.  This "imports" the sql type names into the program's name
 space.  A very common mistake is to forget the qw(:sql_types) and
 obtain strange results.
 
-=item GetFunctions
+=item GetFunctions (now supports ODBC V3)
 
 This function maps to the ODBC API SQLGetFunctions.  This is a Level 1
 API call which returns supported driver funtions.  Depending upon how
@@ -483,10 +583,13 @@ SQL_API_ALL_FUNCTIONS (0), it will return the 100 element array.
 Otherwise, pass the number referring to the function.  (See your ODBC
 docs for help with this).
 
-=item SQLColumns
+=item SQLColumns 
 
 Support for this function has been added in version 0.17.  It looks to be
 fixed in version 0.20.
+
+Use the DBI statement handle attributes NAME, NULLABLE, TYPE, PRECISION and
+SCALE, unless you have a specific reason.
 
 =item Connect without DSN
 The ability to connect without a full DSN is introduced in version 0.21.
@@ -500,11 +603,15 @@ Example (using MS Access):
 
 =item SQLForeignKeys
 
+See DBI's get_foreign_keys.
+   
 =item SQLPrimaryKeys
 
+See DBI's get_primary_keys
+   
 =item SQLDataSources
 
-All handled, currently (as of 0.21)
+Handled, currently (as of 0.21), also see DBI's data_sources()
 
 =item SQLSpecialColumns
 

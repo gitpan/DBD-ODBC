@@ -30,7 +30,7 @@ my %opts =
     OBJECT	=> '$(O_FILES)',
  );
 if ($ExtUtils::MakeMaker::VERSION >= 5.43) {
-    $opts{AUTHOR} = 'Tim Bunce and Jeff Urlwin ( http://www.isc.org/dbi-lists.html )';
+    $opts{AUTHOR} = 'Tim Bunce and Jeff Urlwin ( http://lists.perl.org/showlist.cgi?name=dbi-users )';
     $opts{ABSTRACT} = 'ODBC driver for the DBI module.';
     $opts{PREREQ_PM} = { DBI => 0 };
     $opts{CAPI} = 'TRUE' if $Config{archname} =~ /-object\b/i;

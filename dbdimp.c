@@ -19,7 +19,7 @@ static const char *cSqlPrimaryKeys = "SQLPrimaryKeys(%s,%s,%s)";
 static const char *cSqlForeignKeys = "SQLForeignKeys(%s,%s,%s)";
 static const char *cSqlColumns = "SQLColumns(%s,%s,%s,%s)";
 static const char *cSqlGetTypeInfo = "SQLGetTypeInfo(%d)";
-static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output);
+static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output, PerlIO *logfp);
 
 char *cvt_av2buf(SV *sth, AV *av, int c_type, int len, int count, long **indics);
 AV *dbd_st_fetch(SV *	sth, imp_sth_t *imp_sth);
@@ -37,6 +37,7 @@ AV *dbd_st_fetch(SV *	sth, imp_sth_t *imp_sth);
 #define ODBC_ERR_HANDLER               0x8335
 #define ODBC_ROWCACHESIZE              0x8336
 #define ODBC_ROWSINCACHE               0x8337
+#define ODBC_FORCE_REBIND         0x8338
 
 /* ODBC_DEFAULT_BIND_TYPE_VALUE is now set to 0, which means that
  * DBD::ODBC will call SQLDescribeParam to find out what type of
@@ -102,6 +103,72 @@ void
 }
 
 
+static void odbc_handle_outparams(imp_sth_t *imp_sth)
+{
+   int i = (imp_sth->out_params_av) ? AvFILL(imp_sth->out_params_av)+1 : 0;
+   int debug = DBIc_DEBUGIV(imp_sth);
+   while (--i >= 0) {
+      phs_t *phs = (phs_t*)(void*)SvPVX(AvARRAY(imp_sth->out_params_av)[i]);
+      SV *sv = phs->sv;
+      if (debug >= 8) {
+	 PerlIO_printf(DBIc_LOGPIO(imp_sth),
+		       "       out %s has length of %d\n",
+		       phs->name, phs->cbValue);
+      }
+
+	    /* phs->cbValue has been updated by ODBC to hold the length of the result	*/
+      if (phs->cbValue != SQL_NULL_DATA) {	/* is okay	*/
+		/*
+		 * When ODBC fills an output parameter buffer, the size of the
+		 * data that were available is written into the memory location
+		 * provided by cbValue pointer argument during the SQLBindParameter() call.
+		 * (In this case, the cbValue pointer has been set to &phs->cbValue).
+		 *
+		 * If the number of bytes available exceeds the size of the output buffer,
+		 * ODBC will truncate the data such that it fits in the available buffer.
+		 * However, the cbValue will still reflect the size of the data before it
+		 * was truncated.
+		 *
+		 * This fact provides us a way to detect truncation on this particular
+		 * output parameter.  Otherwise, the only way to detect truncation is
+		 * through a follow-up to a SQL_SUCCESS_WITH_INFO result.  Such a call
+		 * cannot return enough information to state exactly where the truncation
+		 * occurred.
+		 * -jeremy
+		 */
+
+	 if (phs->cbValue > phs->maxlen) {
+		    /* a truncation occurred */
+	    SvPOK_only(sv);
+	    SvCUR(sv) = phs->maxlen;
+	    *SvEND(sv) = '\0';
+
+	    if (debug >= 2) {
+	       PerlIO_printf(DBIc_LOGPIO(imp_sth),
+			     "       out %s = '%s'\t(TRUNCATED from %d to %ld)\n",
+			     phs->name, SvPV(sv,na), phs->cbValue, (long)phs->maxlen);
+	    }
+	 } else {
+		    /* no truncation occurred */
+	    SvPOK_only(sv);
+	    SvCUR(sv) = phs->cbValue;
+	    *SvEND(sv) = '\0';
+	    if (debug >= 2) {
+	       PerlIO_printf(DBIc_LOGPIO(imp_sth),
+			     "       out %s = '%s'\t(len %ld)\n",
+			     phs->name, SvPV(sv,na), (long)phs->cbValue);
+	    }
+	 }
+      } else {			/* is NULL	*/
+	 (void)SvOK_off(phs->sv);
+	 if (debug >= 2)
+	    PerlIO_printf(DBIc_LOGPIO(imp_sth),
+			  "       out %s = undef (NULL)\n",
+			  phs->name);
+      }
+   }
+}
+
 int
    build_results(sth, orc)
    SV *	 sth;
@@ -111,8 +178,8 @@ int
     D_imp_sth(sth);
     dTHR;
 
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "    build_results sql f%d\n\t%s\n",
+    if ((DBIc_DEBUGIV(imp_sth)) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_sth), "    build_results sql f%d\n\t%s\n",
 		      imp_sth->hstmt, imp_sth->statement);
 
     /* init sth pointers */
@@ -184,8 +251,8 @@ int dbd_db_execdirect( SV *dbh,
       return(-2);
    }
 
-   if (DBIS->debug >= 2)
-      PerlIO_printf(DBILOGFP, "    SQLExecDirect sql %s\n",
+   if (DBIc_DEBUGIV(imp_dbh) >= 2)
+      PerlIO_printf(DBIc_LOGPIO(imp_dbh), "    SQLExecDirect sql %s\n",
 		    statement);
 
    ret = SQLExecDirect(stmt, (SQLCHAR *)statement, SQL_NTS);
@@ -225,16 +292,16 @@ void
 imp_dbh_t *imp_dbh;
 {
 #if 0
-   PerlIO_printf(DBILOGFP, "  dbd_db_destroy (%d)\n", imp_dbh->com.std.kids);
+   PerlIO_printf(DBIc_LOGPIO(imp_dbh), "  dbd_db_destroy (%d)\n", imp_dbh->com.std.kids);
 #endif
    if (DBIc_ACTIVE(imp_dbh))
       dbd_db_disconnect(dbh, imp_dbh);
    /* Nothing in imp_dbh to be freed	*/
 
    DBIc_IMPSET_off(imp_dbh);
-   if (DBIS->debug >= 8) {
-      PerlIO_printf(DBILOGFP, "  DBD::ODBC Disconnected!\n");
-      PerlIO_flush(DBILOGFP);
+   if (DBIc_DEBUGIV(imp_dbh) >= 8) {
+      PerlIO_printf(DBIc_LOGPIO(imp_dbh), "  DBD::ODBC Disconnected!\n");
+      PerlIO_flush(DBIc_LOGPIO(imp_dbh));
    }
 }
 
@@ -322,8 +389,8 @@ SV   *attr;
     }
 
 #ifndef DBD_ODBC_NO_SQLDRIVERCONNECT
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "Driver connect '%s', '%s', '%s'\n", dbname, uid, pwd);
+    if (DBIc_DEBUGIV(imp_dbh) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "Driver connect '%s', '%s', '%s'\n", dbname, uid, pwd);
 
     /*
      * SQLDriverConnect handles/maps/fixes db connections and can optionally
@@ -351,11 +418,11 @@ SV   *attr;
      * and level 2+ just to indicate that we are trying SQLConnect.
      */
     if (!SQL_ok(rc)) {
-	if (DBIS->debug > 3) {
+	if (DBIc_DEBUGIV(imp_dbh) > 3) {
 #ifdef DBD_ODBC_NO_SQLDRIVERCONNECT
-	    PerlIO_printf(DBILOGFP, "SQLDriverConnect unsupported.\n");
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLDriverConnect unsupported.\n");
 #else
-	    PerlIO_printf(DBILOGFP, "SQLDriverConnect failed:\n");
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLDriverConnect failed:\n");
 #endif
 	}
 
@@ -391,11 +458,11 @@ SV   *attr;
 
 	/* ok, the DSN is short, so let's try to use it to connect
 	 * and quietly take all error messages */
-	AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0, 0);
+	AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0, 0, DBIc_LOGPIO(imp_dbh));
 #endif /* DriverConnect supported */
 
-	if (DBIS->debug >= 2)
-	    PerlIO_printf(DBILOGFP, "SQLConnect '%s', '%s'\n", dbname, uid);
+	if (DBIc_DEBUGIV(imp_dbh) >= 2)
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLConnect '%s', '%s'\n", dbname, uid);
 
 	rc = SQLConnect(imp_dbh->hdbc,
 			dbname, (SQLSMALLINT)strlen(dbname),
@@ -414,7 +481,7 @@ SV   *attr;
     } else if (rc == SQL_SUCCESS_WITH_INFO) {
 	/* Consume informational diagnostics */
 	AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
-		      (DBIS->debug > 3));
+		      (DBIc_DEBUGIV(imp_dbh) > 3), DBIc_LOGPIO(imp_dbh));
     }
 
     /* DBI spec requires AutoCommit on */
@@ -445,10 +512,10 @@ SV   *attr;
 #if 0 
     {
        int i;
-       PerlIO_printf(DBILOGFP, "Version: ");
+       PerlIO_printf(DBIc_LOGPIO(imp_dbh), "Version: ");
        for (i = 0; i < sizeof(imp_dbh->odbc_ver); i++)
-	  PerlIO_printf(DBILOGFP, "%c", imp_dbh->odbc_ver[i]);
-       PerlIO_printf(DBILOGFP, "\n");
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "%c", imp_dbh->odbc_ver[i]);
+       PerlIO_printf(DBIc_LOGPIO(imp_dbh), "\n");
        
     }
 #endif
@@ -458,6 +525,7 @@ SV   *attr;
     imp_dbh->odbc_sqldescribeparam_supported = -1; /* flag to see if SQLDescribeParam is supported */
     imp_dbh->odbc_sqlmoreresults_supported = -1; /* flag to see if SQLDescribeParam is supported */
     imp_dbh->odbc_defer_binding = 0;
+    imp_dbh->odbc_force_rebind = 0;
     imp_dbh->RowCacheSize = 1;	/* default value for now */
 
     /* see if we're connected to MS SQL Server */
@@ -474,16 +542,16 @@ SV   *attr;
     } else {
        strcpy(imp_dbh->odbc_dbname, "Unknown/Unsupported");
     }
-    if (DBIS->debug >= 5) {
-       PerlIO_printf(DBILOGFP, "Connected to: %s\n", imp_dbh->odbc_dbname);
+    if (DBIc_DEBUGIV(imp_dbh) >= 5) {
+       PerlIO_printf(DBIc_LOGPIO(imp_dbh), "Connected to: %s\n", imp_dbh->odbc_dbname);
     }
 #endif
     /* check now for SQLMoreResults being supported */
     /* flag to see if SQLMoreResults is supported */
     rc = SQLGetFunctions(imp_dbh->hdbc, SQL_API_SQLMORERESULTS, 
 			 &supported);
-    if (DBIS->debug >= 3)
-       PerlIO_printf(DBILOGFP, "       SQLGetFunctions - SQL_MoreResults supported: %d\n", 
+    if (DBIc_DEBUGIV(imp_dbh) >= 3)
+       PerlIO_printf(DBIc_LOGPIO(imp_dbh), "       SQLGetFunctions - SQL_MoreResults supported: %d\n", 
 		     supported);
     if (SQL_ok(rc)) {
        imp_dbh->odbc_sqlmoreresults_supported = supported ? 1 : 0;
@@ -492,11 +560,11 @@ SV   *attr;
 	* here.
 	*/
        imp_dbh->odbc_sqlmoreresults_supported = 0;
-       if (DBIS->debug > 0) {
-	  PerlIO_printf(DBILOGFP, "SQLGetFunctions failed:\n");
+       if (DBIc_DEBUGIV(imp_dbh) > 0) {
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLGetFunctions failed:\n");
        }
        AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
-		     (DBIS->debug > 0));
+		     (DBIc_DEBUGIV(imp_dbh) > 0), DBIc_LOGPIO(imp_dbh));
     }	
 
     /* call only once per connection / DBH -- may want to do
@@ -509,11 +577,11 @@ SV   *attr;
        imp_dbh->odbc_sqldescribeparam_supported = supported ? 1 : 0;
     } else {
        imp_dbh->odbc_sqldescribeparam_supported = supported ? 1 : 0;
-       if (DBIS->debug > 0) {
-	  PerlIO_printf(DBILOGFP, "SQLGetFunctions failed:\n");
+       if (DBIc_DEBUGIV(imp_dbh) > 0) {
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLGetFunctions failed:\n");
        }
        AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
-		     (DBIS->debug > 0));
+		     (DBIc_DEBUGIV(imp_dbh) > 0), DBIc_LOGPIO(imp_dbh));
     }	
     
     DBIc_set(imp_dbh,DBIcf_AutoCommit, 1);
@@ -538,7 +606,7 @@ imp_dbh_t *imp_dbh;
     /* We assume that disconnect will always work	*/
     /* since most errors imply already disconnected.	*/
 #if 0
-    PerlIO_printf(DBILOGFP, "  dbd_db_disconnect\n");
+    PerlIO_printf(DBIc_LOGPIO(imp_dbh), "  dbd_db_disconnect\n");
 #endif
     DBIc_ACTIVE_off(imp_dbh);
 
@@ -550,13 +618,13 @@ imp_dbh_t *imp_dbh;
     rc = SQLGetConnectOption(imp_dbh->hdbc, SQL_AUTOCOMMIT, &autoCommit);/* TBD: 3.0 update */
     /* quietly handle a problem with SQLGetConnectOption() */
     if (!SQL_ok(rc) || rc == SQL_SUCCESS_WITH_INFO) {
-	AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0, (DBIS->debug > 3));
+	AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0, (DBIc_DEBUGIV(imp_dbh) > 3), DBIc_LOGPIO(imp_dbh));
     }
     else {
 	if (!autoCommit) {
 	    rc = dbd_db_rollback(dbh, imp_dbh);
-	    if (DBIS->debug > 1) {
-		PerlIO_printf(DBILOGFP, "** auto-rollback due to disconnect without commit returned %d\n", rc);
+	    if (DBIc_DEBUGIV(imp_dbh) > 1) {
+		PerlIO_printf(DBIc_LOGPIO(imp_dbh), "** auto-rollback due to disconnect without commit returned %d\n", rc);
 	    }
 	}
     }
@@ -673,8 +741,8 @@ HSTMT hstmt;
       SDWORD NativeError;
       RETCODE rc = 0;
 
-      if (DBIS->debug >= 3)
-	 PerlIO_printf(DBILOGFP, "dbd_error: err_rc=%d rc=%d s/d/e: %d/%d/%d\n", 
+      if (DBIc_DEBUGIV(imp_dbh) >= 3)
+	 PerlIO_printf(DBIc_LOGPIO(imp_dbh), "dbd_error: err_rc=%d rc=%d s/d/e: %d/%d/%d\n", 
 		       err_rc, rc, hstmt,hdbc,henv);
 
       /* TBD: 3.0 update */
@@ -698,8 +766,8 @@ HSTMT hstmt;
              SAVETMPS;
              PUSHMARK(sp);
 
-             if (DBIS->debug >= 3)
-                 PerlIO_printf(DBILOGFP, "dbd_error: calling odbc_err_handler\n"); 
+             if (DBIc_DEBUGIV(imp_dbh) >= 3)
+                 PerlIO_printf(DBIc_LOGPIO(imp_dbh), "dbd_error: calling odbc_err_handler\n"); 
 
              /* 
               * Here are the args to the error handler routine:
@@ -744,14 +812,14 @@ HSTMT hstmt;
 	 if (what && !strcmp(sqlstate, "25000") && !strcmp(what, "db_disconnect/SQLDisconnect")) {
 	    sv_catpv(errstr, " You need to commit before disconnecting! ");
 	 }
-	 if (DBIS->debug >= 3)
-	    PerlIO_printf(DBILOGFP, 
+	 if (DBIc_DEBUGIV(imp_dbh) >= 3)
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 			  "dbd_error: SQL-%s (native %d): %s\n",
 			  sqlstate, NativeError, SvPVX(errstr));
       }
       if (rc != SQL_NO_DATA_FOUND) {	/* should never happen */
-	 if (DBIS->debug)
-	    PerlIO_printf(DBILOGFP, 
+	 if (DBIc_DEBUGIV(imp_xxh))
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 			  "dbd_error: SQLError returned %d unexpectedly.\n", rc);
 	 if (!SvTRUE(errstr)) { /* set some values to indicate the problem */
 	    sv_setpvn(DBIc_STATE(imp_xxh), "IM008", 5); /* "dialog failed" */
@@ -781,8 +849,8 @@ HSTMT hstmt;
 
       DBIh_EVENT2(h, ERROR_event, DBIc_ERR(imp_xxh), errstr);
 
-      if (DBIS->debug >= 2)
-	 PerlIO_printf(DBILOGFP, "%s error %d recorded: %s\n",
+      if (DBIc_DEBUGIV(imp_dbh) >= 2)
+	 PerlIO_printf(DBIc_LOGPIO(imp_dbh), "%s error %d recorded: %s\n",
 		       what, err_rc, SvPV(errstr,na));
    }
 }
@@ -823,7 +891,7 @@ char *what;
      * If an error handler is installed, let it decide what messages
      * should or shouldn't be reported.
      */
-    if (err_rc == SQL_SUCCESS && DBIS->debug < 3 && !imp_dbh->odbc_err_handler)
+    if (err_rc == SQL_SUCCESS && DBIc_DEBUGIV(imp_dbh) < 3 && !imp_dbh->odbc_err_handler)
 	return; 
 
     dbd_error2(h, err_rc, what, imp_dbh->henv, imp_dbh->hdbc, hstmt);
@@ -853,8 +921,8 @@ void
    
    DBIh_EVENT2(h, ERROR_event, DBIc_ERR(imp_xxh), errstr);
    
-   if (DBIS->debug >= 2)
-      PerlIO_printf(DBILOGFP, "%s error %d recorded: %s\n",
+   if (DBIc_DEBUGIV(imp_xxh) >= 2)
+      PerlIO_printf(DBIc_LOGPIO(imp_xxh), "%s error %d recorded: %s\n",
 	      what, -1, SvPV(errstr,na));
 }	
 
@@ -897,8 +965,8 @@ char *statement;
 
     src  = statement;
     dest = imp_sth->statement;
-    if (DBIS->debug >= 5)
-	PerlIO_printf(DBILOGFP, "    ignore named placeholders = %d\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 5)
+	PerlIO_printf(DBIc_LOGPIO(imp_sth), "    ignore named placeholders = %d\n",
 		      imp_sth->odbc_ignore_named_placeholders);
     while(*src) {
 	/*
@@ -948,8 +1016,8 @@ char *statement;
 	    while(isALNUM(*src))	/* includes '_'	*/
 		*p++ = *src++;
 	    *p = 0;
-	    if (DBIS->debug >= 5)
-		PerlIO_printf(DBILOGFP, "    found named parameter = %s\n",
+	    if (DBIc_DEBUGIV(imp_sth) >= 5)
+		PerlIO_printf(DBIc_LOGPIO(imp_sth), "    found named parameter = %s\n",
 			      name);
 	    style = 2;
 	} 
@@ -981,8 +1049,8 @@ char *statement;
     *dest = '\0';
     if (imp_sth->all_params_hv) {
 	DBIc_NUM_PARAMS(imp_sth) = (int)HvKEYS(imp_sth->all_params_hv);
-	if (DBIS->debug >= 2)
-	    PerlIO_printf(DBILOGFP, "    dbd_preparse scanned %d distinct placeholders\n",
+	if (DBIc_DEBUGIV(imp_sth) >= 2)
+	    PerlIO_printf(DBIc_LOGPIO(imp_sth), "    dbd_preparse scanned %d distinct placeholders\n",
 			  (int)DBIc_NUM_PARAMS(imp_sth));
     }
 }
@@ -1031,8 +1099,8 @@ char *table_type;
 		   table_type && *table_type ? table_type : 0, SQL_NTS		/* type (view, table, etc) */
 		  );
 
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "   Tables result %d (%s)\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "   Tables result %d (%s)\n",
 		      rc, table_type ? table_type : "(null)");
 
     dbd_error(sth, rc, "st_tables/SQLTables");
@@ -1085,8 +1153,8 @@ char *table;
 		       (schema && *schema) ? schema : 0, SQL_NTS,
 		       (table && *table) ? table : 0, SQL_NTS);
    
-   if (DBIS->debug >= 2)
-      PerlIO_printf(DBILOGFP, "SQLPrimaryKeys call: cat = %s, schema = %s, table = %s\n",
+   if (DBIc_DEBUGIV(imp_sth) >= 2)
+      PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLPrimaryKeys call: cat = %s, schema = %s, table = %s\n",
 		    XXSAFECHAR(catalog), XXSAFECHAR(schema), XXSAFECHAR(table));
 
    dbd_error(sth, rc, "st_primary_key_info/SQLPrimaryKeys");
@@ -1119,6 +1187,7 @@ SV *attribs;
     imp_sth->hdbc = imp_dbh->hdbc;
     imp_sth->odbc_ignore_named_placeholders = imp_dbh->odbc_ignore_named_placeholders;
     imp_sth->odbc_default_bind_type = imp_dbh->odbc_default_bind_type;
+    imp_sth->odbc_force_rebind = imp_dbh->odbc_force_rebind;
 
     rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);/* TBD: 3.0 update */
     if (!SQL_ok(rc)) {
@@ -1132,8 +1201,8 @@ SV *attribs;
     /* parse the (possibly edited) SQL statement */
     rc = SQLPrepare(imp_sth->hstmt, 
 		    imp_sth->statement, strlen(imp_sth->statement));
-    if (DBIS->debug >= 2)
-       PerlIO_printf(DBILOGFP, "    SQLPrepare returned %d\n\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 2)
+       PerlIO_printf(DBIc_LOGPIO(imp_dbh), "    SQLPrepare returned %d\n\n",
 		     rc);
 
     if (!SQL_ok(rc)) {
@@ -1144,8 +1213,8 @@ SV *attribs;
 	return 0;
     }
 
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "    dbd_st_prepare'd sql f%d\n\t%s\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "    dbd_st_prepare'd sql f%d\n\t%s\n",
 		      imp_sth->hstmt, imp_sth->statement);
 
     /* init sth pointers */
@@ -1280,13 +1349,16 @@ imp_sth_t *imp_sth;
     int t_dsize = 0;		/* display size */
     SWORD num_fields;
     struct imp_dbh_st *imp_dbh = NULL;
+    imp_dbh = (struct imp_dbh_st *)(DBIc_PARENT_COM(imp_sth));
     
     if (imp_sth->done_desc)
 	return 1;	/* success, already done it */
 
-    if (DBIS->debug >= 5)
-       PerlIO_printf(DBILOGFP, "    dbd_describe %d getting num fields\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 5) {
+       PerlIO_printf(DBIc_LOGPIO(imp_sth), "    dbd_describe %d getting num fields\n",
 		     imp_sth->hstmt);
+       PerlIO_flush(DBIc_LOGPIO(imp_sth));
+    }
 
     rc = SQLNumResultCols(imp_sth->hstmt, &num_fields);
     if (!SQL_ok(rc)) {
@@ -1301,19 +1373,19 @@ imp_sth_t *imp_sth;
      * insert data.
      * */
     imp_sth->done_desc = 1;	/* assume ok from here on */
-    imp_dbh = (struct imp_dbh_st *)(DBIc_PARENT_COM(imp_sth));
     while (num_fields == 0 && imp_dbh->odbc_sqlmoreresults_supported == 1) {
        rc = SQLMoreResults(imp_sth->hstmt);
-       if (DBIS->debug >= 8) {
-	  PerlIO_printf(DBILOGFP, "Numfields == 0, SQLMoreResults == %d\n", rc);
-	  PerlIO_flush(DBILOGFP);
+       if (DBIc_DEBUGIV(imp_sth) >= 8) {
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "Numfields == 0, SQLMoreResults == %d\n", rc);
+	  PerlIO_flush(DBIc_LOGPIO(imp_dbh));
        }
        imp_sth->done_desc = 0;	/* reset describe flags, so that we re-describe */
        if (!SQL_ok(rc)) break;
+       imp_sth->odbc_force_rebind = 1; /* force future executes to rebind automatically */
        rc = SQLNumResultCols(imp_sth->hstmt, &num_fields);
-       if (DBIS->debug >= 8) {
-	  PerlIO_printf(DBILOGFP, "Numfields == 0, SQLNumResultCols == %d\n", rc);
-	  PerlIO_flush(DBILOGFP);
+       if (DBIc_DEBUGIV(imp_sth) >= 8) {
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "Numfields == 0, SQLNumResultCols == %d\n", rc);
+	  PerlIO_flush(DBIc_LOGPIO(imp_dbh));
        }
        if (!SQL_ok(rc)) {
 	  dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
@@ -1323,13 +1395,13 @@ imp_sth_t *imp_sth;
     
     DBIc_NUM_FIELDS(imp_sth) = num_fields;
 
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "    dbd_describe sql %d: num_fields=%d\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "    dbd_describe sql %d: num_fields=%d\n",
 		      imp_sth->hstmt, DBIc_NUM_FIELDS(imp_sth));
 
     if (num_fields == 0) {
-	if (DBIS->debug >= 2)
-	    PerlIO_printf(DBILOGFP,
+	if (DBIc_DEBUGIV(imp_sth) >= 2)
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			  "    dbd_describe skipped (no result cols) (sql f%d)\n",
 			  imp_sth->hstmt);
 	return 1;
@@ -1361,10 +1433,10 @@ imp_sth_t *imp_sth;
 
 	t_cbufl += fbh->ColNameLen + 1;
 
-	if (DBIS->debug >= 8) {
-	   PerlIO_printf(DBILOGFP, "   colname %d = %s, len = %d (%d)\n", i+1, ColName, fbh->ColNameLen,
+	if (DBIc_DEBUGIV(imp_sth) >= 8) {
+	   PerlIO_printf(DBIc_LOGPIO(imp_dbh), "   colname %d = %s, len = %d (%d)\n", i+1, ColName, fbh->ColNameLen,
 			t_cbufl);
-	   PerlIO_flush(DBILOGFP);
+	   PerlIO_flush(DBIc_LOGPIO(imp_dbh));
 	}
 
 #ifdef SQL_COLUMN_DISPLAY_SIZE
@@ -1435,8 +1507,8 @@ imp_sth_t *imp_sth;
 	t_dbsize += fbh->ColDisplaySize;
 	t_dbsize += (sizeof(int) - (t_dbsize % sizeof(int))) % sizeof(int);     /* alignment -- always pad so the next column is aligned on a word boundary*/
 
-	if (DBIS->debug >= 2)
-	    PerlIO_printf(DBILOGFP, 
+	if (DBIc_DEBUGIV(imp_sth) >= 2)
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 			  "      col %2d: %-8s len=%3d disp=%3d, prec=%3d scale=%d\n", 
 			  i+1, S_SqlTypeToString(fbh->ColSqlType),
 			  fbh->ColLength, fbh->ColDisplaySize,
@@ -1449,9 +1521,9 @@ imp_sth_t *imp_sth;
     }
 
     /* allocate a buffer to hold all the column names	*/
-    if (DBIS->debug >= 8) {
-       PerlIO_printf(DBILOGFP, "  colname buffer size = %d\n", t_cbufl + num_fields);
-       PerlIO_flush(DBILOGFP);
+    if (DBIc_DEBUGIV(imp_sth) >= 8) {
+       PerlIO_printf(DBIc_LOGPIO(imp_dbh), "  colname buffer size = %d\n", t_cbufl + num_fields);
+       PerlIO_flush(DBIc_LOGPIO(imp_dbh));
     }
 
     /* quick fix for FoxPro: allocate extra 255 bytes as Foxpro seems
@@ -1487,8 +1559,8 @@ imp_sth_t *imp_sth;
 		break;
 	}
 
-	if (DBIS->debug > 8) 
-	   PerlIO_printf(DBILOGFP, 
+	if (DBIc_DEBUGIV(imp_sth) > 8) 
+	   PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 			 "\t\t pre SQLDescribeCol %d: fbh[0]=%x fbh=%x, cbuf_ptr=%x\n",
 			 i, &(imp_sth->fbh[0]), fbh, cbuf_ptr);
 	rc = SQLDescribeCol(imp_sth->hstmt, 
@@ -1507,15 +1579,15 @@ imp_sth_t *imp_sth;
 	cbuf_ptr[fbh->ColNameLen+1] = 0;
 
 	    // debug
-	if (DBIS->debug > 8) 
-	   PerlIO_printf(DBILOGFP, 
+	if (DBIc_DEBUGIV(imp_sth) > 8) 
+	   PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 			 "\t\t post SQLDescribeCol     col %2d: '%s' (%x)\n",
 			 0, imp_sth->fbh[0].ColName, imp_sth->fbh[0].ColName);
 
-	if (DBIS->debug >= 8) {
-	   PerlIO_printf(DBILOGFP, "   colname %d = %s, len = %d (sp = %d)\n", i+1, fbh->ColName, fbh->ColNameLen,
+	if (DBIc_DEBUGIV(imp_sth) >= 8) {
+	   PerlIO_printf(DBIc_LOGPIO(imp_dbh), "   colname %d = %s, len = %d (sp = %d)\n", i+1, fbh->ColName, fbh->ColNameLen,
 			cbuf_ptr - imp_sth->ColNames);
-	   PerlIO_flush(DBILOGFP);
+	   PerlIO_flush(DBIc_LOGPIO(imp_dbh));
 	}
 
 	cbuf_ptr += fbh->ColNameLen+1;
@@ -1523,8 +1595,8 @@ imp_sth_t *imp_sth;
 	fbh->data = rbuf_ptr;
 
 	    // debug
-	if (DBIS->debug > 8) 
-	   PerlIO_printf(DBILOGFP, 
+	if (DBIc_DEBUGIV(imp_sth) > 8) 
+	   PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 			 "\t\t pre   SQLBindCol     col %2d: '%s', %x, %x, %x\n",
 			 0, imp_sth->fbh[0].ColName, imp_sth->fbh[0].ColName, fbh->data, imp_sth->ColNames);
 
@@ -1537,13 +1609,13 @@ imp_sth_t *imp_sth;
 			fbh->ftype, fbh->data,
 			fbh->ColDisplaySize, &fbh->datalen);
 	    // debug
-	if (DBIS->debug > 8) 
-	   PerlIO_printf(DBILOGFP, 
+	if (DBIc_DEBUGIV(imp_sth) > 8) 
+	   PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 			 "\t\t post  SQLBindCol     col %2d: '%s', %x, %x, %x\n",
 			 0, imp_sth->fbh[0].ColName, imp_sth->fbh[0].ColName, fbh->data, imp_sth->ColNames);
 	
-	if (DBIS->debug >= 2)
-	    PerlIO_printf(DBILOGFP, 
+	if (DBIc_DEBUGIV(imp_sth) >= 2)
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 			  "      col %2d: '%s' sqltype=%s, ctype=%s, maxlen=%d, (dp = %d, cp = %d)\n",
 			  i+1, fbh->ColName,
 			  S_SqlTypeToString(fbh->ColSqlType),
@@ -1557,8 +1629,8 @@ imp_sth_t *imp_sth;
 	}
 	
 	    // debug
-	if (DBIS->debug > 8) 
-	   PerlIO_printf(DBILOGFP, 
+	if (DBIc_DEBUGIV(imp_sth) > 8) 
+	   PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 			 "\t\t DEBUG     col %2d: '%s' \n",
 			 0, imp_sth->fbh[0].ColName);
     } /* end pass 2 */
@@ -1581,7 +1653,7 @@ imp_sth_t *imp_sth;
 {
     dTHR;
     RETCODE rc;
-    int debug = DBIS->debug;
+    int debug = DBIc_DEBUGIV(imp_sth);
 #ifdef DBDODBC_DEFER_BINDING
     D_imp_dbh_from_sth;
 #endif    
@@ -1590,7 +1662,7 @@ imp_sth_t *imp_sth;
      */
     int outparams = (imp_sth->out_params_av) ? AvFILL(imp_sth->out_params_av)+1 : 0;
     if (debug >= 4) {
-	PerlIO_printf(DBILOGFP,
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 		      "    dbd_st_execute (outparams = %d)...\n",
 		      outparams);
     }
@@ -1612,7 +1684,7 @@ imp_sth_t *imp_sth;
 		   croak("Can't rebind placeholder %s", phs->name);
 		if (debug >= 8) {
 		   if (phs->ftype == SQL_C_CHAR) {
-		      PerlIO_printf(DBILOGFP, "   rebind check char Param %d (%s)\n",
+		      PerlIO_printf(DBIc_LOGPIO(imp_dbh), "   rebind check char Param %d (%s)\n",
 				    phs->idx, phs->sv_buf);
 		   }
 		}
@@ -1645,18 +1717,18 @@ imp_sth_t *imp_sth;
 
 
     if (debug >= 2) {
-	PerlIO_printf(DBILOGFP,
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 		      "    dbd_st_execute (for hstmt %d before)...\n",
 		      imp_sth->hstmt);
-	PerlIO_flush(DBILOGFP);
+	PerlIO_flush(DBIc_LOGPIO(imp_dbh));
     }
 
     rc = SQLExecute(imp_sth->hstmt);
     if (debug >= 8) {
-	PerlIO_printf(DBILOGFP,
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 		      "    dbd_st_execute (for hstmt %d after, rc = %d)...\n",
 		      imp_sth->hstmt, rc);
-	PerlIO_flush(DBILOGFP);
+	PerlIO_flush(DBIc_LOGPIO(imp_dbh));
     }
     /*
      * If asynchronous execution has been enabled, SQLExecute will
@@ -1680,10 +1752,10 @@ imp_sth_t *imp_sth;
 	UCHAR* ptr;
 
 	if (debug >= 5) {
-	    PerlIO_printf(DBILOGFP,
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			  "    dbd_st_execute (NEED DATA)...\n",
 			  imp_sth->hstmt);
-	    PerlIO_flush(DBILOGFP);
+	    PerlIO_flush(DBIc_LOGPIO(imp_dbh));
 	}
 	if ((rc = SQLParamData(imp_sth->hstmt, (PTR*) &phs))
 	      !=  SQL_NEED_DATA) {
@@ -1714,9 +1786,10 @@ imp_sth_t *imp_sth;
 
     if (rc != SQL_NO_DATA) {
        
+       SWORD num_fields;
        RETCODE rc2;
        if (debug >= 7)
-	  PerlIO_printf(DBILOGFP,
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			"    dbd_st_execute getting row count\n");
        rc2 = SQLRowCount(imp_sth->hstmt, &imp_sth->RowCount);
        if (!SQL_ok(rc2)) {
@@ -1724,11 +1797,45 @@ imp_sth_t *imp_sth;
 	  imp_sth->RowCount = -1;
        }
 
+       /* sanity check for strange circumstances and multiple types of
+        * result sets.  Crazy that it can happen, but it can with
+        * multiple result sets and stored procedures which return
+        * result sets.  
+        * This seems to slow things down a bit and is rarely needed.
+	*
+        * This can happen in Sql Server in strange cases where stored
+        * procs have multiple result sets.  Sometimes, if there is an
+        * select then an insert, etc.  Maybe this should be a special
+        * attribute to force a re-describe after every execute? */
+       if (imp_sth->odbc_force_rebind) {
+	  /* force calling dbd_describe after each execute */
+	  imp_sth->done_desc = 0;
+       }
+#if 0
+       if (imp_sth->done_desc) {
+	  rc2 = SQLNumResultCols(imp_sth->hstmt, &num_fields);
+	  if (num_fields != DBIc_NUM_FIELDS(imp_sth)) {
+	     if (debug >= 7)
+		PerlIO_printf(DBIc_LOGPIO(imp_dbh),
+			      "    dbd_st_execute found different num cols %d != %d, resetting done_desc\n", num_fields,
+			     DBIc_NUM_FIELDS(imp_sth));
+	     imp_sth->done_desc = 0;
+	  }
+       }
+#endif
        if (debug >= 7)
-	  PerlIO_printf(DBILOGFP,
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			"    dbd_st_execute got row count %ld\n", imp_sth->RowCount);
     } else {
        /* SQL_NO_DATA returned, must have no rows :) */
+       /* seem to need to reset the done_desc, but not sure if this is
+        * what we want yet */
+       if (debug >= 7) {
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh),
+			"    dbd_st_execute SQL_NO_DATA...resetting done_desc!\n");
+	  PerlIO_flush(DBIc_LOGPIO(imp_dbh));
+       }
+       imp_sth->done_desc = 0;
        imp_sth->RowCount = 0;
     }
 
@@ -1745,7 +1852,7 @@ imp_sth_t *imp_sth;
 	DBIc_ACTIVE_on(imp_sth);	/* only set for select (?)	*/
     } else {
 	if (debug >= 2) {
-	    PerlIO_printf(DBILOGFP,
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			  "    dbd_st_execute got no rows: resetting ACTIVE, moreResults\n");
 	    imp_sth->moreResults = 0;
 	    DBIc_ACTIVE_off(imp_sth);
@@ -1754,61 +1861,7 @@ imp_sth_t *imp_sth;
     imp_sth->eod = SQL_SUCCESS;
 
     if (outparams) {	/* check validity of bound output SV's	*/
-	int i = outparams;
-	while(--i >= 0) {
-	    phs_t *phs = (phs_t*)(void*)SvPVX(AvARRAY(imp_sth->out_params_av)[i]);
-	    SV *sv = phs->sv;
-
-	    /* phs->cbValue has been updated by ODBC to hold the length of the result	*/
-	    if (phs->cbValue != SQL_NULL_DATA) {	/* is okay	*/
-		/*
-		 * When ODBC fills an output parameter buffer, the size of the
-		 * data that were available is written into the memory location
-		 * provided by cbValue pointer argument during the SQLBindParameter() call.
-		 * (In this case, the cbValue pointer has been set to &phs->cbValue).
-		 *
-		 * If the number of bytes available exceeds the size of the output buffer,
-		 * ODBC will truncate the data such that it fits in the available buffer.
-		 * However, the cbValue will still reflect the size of the data before it
-		 * was truncated.
-		 *
-		 * This fact provides us a way to detect truncation on this particular
-		 * output parameter.  Otherwise, the only way to detect truncation is
-		 * through a follow-up to a SQL_SUCCESS_WITH_INFO result.  Such a call
-		 * cannot return enough information to state exactly where the truncation
-		 * occurred.
-		 * -jeremy
-		 */
-		if (phs->cbValue > phs->maxlen) {
-		    /* a truncation occurred */
-		    SvPOK_only(sv);
-		    SvCUR(sv) = phs->maxlen;
-		    *SvEND(sv) = '\0';
-
-		    if (debug >= 2) {
-			PerlIO_printf(DBILOGFP,
-				      "       out %s = '%s'\t(TRUNCATED from %d to %ld)\n",
-				      phs->name, SvPV(sv,na), phs->cbValue, (long)phs->maxlen);
-		    }
-		} else {
-		    /* no truncation occurred */
-		    SvPOK_only(sv);
-		    SvCUR(sv) = phs->cbValue;
-		    *SvEND(sv) = '\0';
-		    if (debug >= 2) {
-			PerlIO_printf(DBILOGFP,
-				      "       out %s = '%s'\t(len %ld)\n",
-				      phs->name, SvPV(sv,na), (long)phs->cbValue);
-		    }
-		}
-	    } else {			/* is NULL	*/
-		(void)SvOK_off(phs->sv);
-		if (debug >= 2)
-		    PerlIO_printf(DBILOGFP,
-				  "       out %s = undef (NULL)\n",
-				  phs->name);
-	    }
-	}
+       odbc_handle_outparams(imp_sth);
     }
 
     /*
@@ -1840,7 +1893,7 @@ imp_sth_t *imp_sth;
     dTHR;
     D_imp_dbh_from_sth;
     UWORD supported;
-    int debug = DBIS->debug;
+    int debug = DBIc_DEBUGIV(imp_sth);
     int i;
     AV *av;
     RETCODE rc;
@@ -1857,23 +1910,23 @@ imp_sth_t *imp_sth;
     }
 
     rc = SQLFetch(imp_sth->hstmt);
-    if (DBIS->debug >= 3)
-	PerlIO_printf(DBILOGFP, "       SQLFetch rc %d\n", rc);
+    if (DBIc_DEBUGIV(imp_sth) >= 3)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "       SQLFetch rc %d\n", rc);
     imp_sth->eod = rc;
     if (!SQL_ok(rc)) {
 	if (SQL_NO_DATA_FOUND == rc) {
 
 	   if (imp_dbh->odbc_sqlmoreresults_supported == 1) {
 	      /* Check for multiple results */
-	      if (DBIS->debug > 5) {
-		 PerlIO_printf(DBILOGFP, "Getting more results:\n");
+	      if (DBIc_DEBUGIV(imp_sth) > 5) {
+		 PerlIO_printf(DBIc_LOGPIO(imp_dbh), "Getting more results:\n");
 	      }
 	      rc = SQLMoreResults(imp_sth->hstmt);
 	      if (SQL_ok(rc)){
 		 /* More results detected.  Clear out the old result */
 		 /* stuff and re-describe the fields.                */
-		 if (DBIS->debug > 0) {
-		    PerlIO_printf(DBILOGFP, "MORE Results!\n");
+		 if (DBIc_DEBUGIV(imp_sth) > 0) {
+		    PerlIO_printf(DBIc_LOGPIO(imp_dbh), "MORE Results!\n");
 		 }
 		 Safefree(imp_sth->fbh);
 		 Safefree(imp_sth->ColNames);
@@ -1892,12 +1945,13 @@ imp_sth_t *imp_sth;
 		 imp_sth->RowBuffer = NULL;
 		 imp_sth->done_desc = 0;
 
+       		 imp_sth->odbc_force_rebind = 1; /* force future executes to rebind automatically */
 		 /* tell the odbc driver that we need to unbind the
 		  * bound columns.  Fix bug for 0.35 (2/8/02) */
 		 rc = SQLFreeStmt(imp_sth->hstmt, SQL_UNBIND);/* TBD: 3.0 update */
 		 if (!SQL_ok(rc)) {
 		    AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
-				  (DBIS->debug > 0));
+				  (DBIc_DEBUGIV(imp_sth) > 0), DBIc_LOGPIO(imp_dbh));
 		 }
 
 		 if (!dbd_describe(sth, imp_sth))
@@ -1910,11 +1964,17 @@ imp_sth_t *imp_sth;
 	      }
 	      else if (rc == SQL_NO_DATA_FOUND){
 		 /* No more results */
-		 if (DBIS->debug > 5) {
-		    PerlIO_printf(DBILOGFP, "No more results\n");
+		 /* need to check output params here... */
+		 int outparams = (imp_sth->out_params_av) ? AvFILL(imp_sth->out_params_av)+1 : 0;
+		 
+		 if (DBIc_DEBUGIV(imp_sth) > 5) {
+		    PerlIO_printf(DBIc_LOGPIO(imp_sth), "No more results -- outparams = %d\n", outparams);
 		 }
 		 imp_sth->moreResults = 0;
-		 
+
+		 if (outparams) {
+		    odbc_handle_outparams(imp_sth);
+		 }
 		 /* XXX need to 'finish' here */
 		 dbd_st_finish(sth, imp_sth);
 		 return Nullav;
@@ -1950,8 +2010,8 @@ imp_sth_t *imp_sth;
     av = DBIS->get_fbav(imp_sth);
     num_fields = AvFILL(av)+1;
 
-    if (DBIS->debug >= 3)
-	PerlIO_printf(DBILOGFP, "fetch num_fields=%d\n", num_fields);
+    if (DBIc_DEBUGIV(imp_sth) >= 3)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "fetch num_fields=%d\n", num_fields);
 
     ChopBlanks = DBIc_has(imp_sth, DBIcf_ChopBlanks);
 
@@ -1959,8 +2019,8 @@ imp_sth_t *imp_sth;
 	imp_fbh_t *fbh = &imp_sth->fbh[i];
 	SV *sv = AvARRAY(av)[i]; /* Note: we (re)use the SV in the AV	*/
 
-	if (DBIS->debug >= 4)
-	    PerlIO_printf(DBILOGFP, "fetch col#%d %s datalen=%d displ=%d\n",
+	if (DBIc_DEBUGIV(imp_sth) >= 4)
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh), "fetch col#%d %s datalen=%d displ=%d\n",
 			  i, fbh->ColName, fbh->datalen, fbh->ColDisplaySize);
 
 	if (fbh->datalen == SQL_NULL_DATA) {	/* NULL value		*/
@@ -2047,8 +2107,8 @@ imp_sth_t *imp_sth;
 	    dbd_error(sth, rc, "finish/SQLFreeStmt(SQL_CLOSE)");
 	    return 0;
 	}
-	if (DBIS->debug > 5) {
-	   PerlIO_printf(DBILOGFP, "dbd_st_finish closed query:\n");
+	if (DBIc_DEBUGIV(imp_sth) > 5) {
+	   PerlIO_printf(DBIc_LOGPIO(imp_dbh), "dbd_st_finish closed query:\n");
 	}
     }
     DBIc_ACTIVE_off(imp_sth);
@@ -2067,7 +2127,7 @@ imp_sth_t *imp_sth;
 
     /* Free contents of imp_sth	*/
 
-    /* PerlIO_printf(DBILOGFP, "  dbd_st_destroy\n"); */
+    /* PerlIO_printf(DBIc_LOGPIO(imp_dbh), "  dbd_st_destroy\n"); */
     Safefree(imp_sth->fbh);
     Safefree(imp_sth->RowBuffer);
     Safefree(imp_sth->ColNames);
@@ -2100,9 +2160,9 @@ imp_sth_t *imp_sth;
        rc = SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
        /* rc = SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*//* TBD: 3.0 update */
 
-       if (DBIS->debug >= 5) {
-	  PerlIO_printf(DBILOGFP, "   SQLFreeStmt called, returned %d.\n", rc);
-	  PerlIO_flush(DBILOGFP);
+       if (DBIc_DEBUGIV(imp_sth) >= 5) {
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "   SQLFreeStmt called, returned %d.\n", rc);
+	  PerlIO_flush(DBIc_LOGPIO(imp_dbh));
        }
 
        if (!SQL_ok(rc)) {
@@ -2137,8 +2197,8 @@ _dbd_get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
    if (phs->sql_type == 0) {
 
       if (imp_dbh->odbc_sqldescribeparam_supported == 1) {
-	 if (DBIS->debug >= 3) {
-	    PerlIO_printf(DBILOGFP, "SQLDescribeParam idx = %d.\n", phs->idx);
+	 if (DBIc_DEBUGIV(imp_sth) >= 3) {
+	    PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLDescribeParam idx = %d.\n", phs->idx);
 	 }
 
 	 rc = SQLDescribeParam(imp_sth->hstmt,
@@ -2148,15 +2208,15 @@ _dbd_get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
 	      /* SQLDescribeParam didn't work */
 	    phs->sql_type = ODBC_BACKUP_BIND_TYPE_VALUE;
 	      /* dbd_error(sth, rc, "_rebind_ph/SQLDescribeParam");  */
-	    if (DBIS->debug > 0)
-	       PerlIO_printf(DBILOGFP, "SQLDescribeParam failed reverting to default type for this parameter: ");
+	    if (DBIc_DEBUGIV(imp_sth) > 0)
+	       PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLDescribeParam failed reverting to default type for this parameter: ");
 	    AllODBCErrors(imp_sth->henv, imp_sth->hdbc, imp_sth->hstmt,
-			  (DBIS->debug > 0));
+			  (DBIc_DEBUGIV(imp_sth) > 0), DBIc_LOGPIO(imp_sth));
 	      /* fall through */
 	      /* return 0; */
 	 } else {
-	    if (DBIS->debug >=2) 
-	       PerlIO_printf(DBILOGFP,
+	    if (DBIc_DEBUGIV(imp_sth) >=2) 
+	       PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			     "    SQLDescribeParam %s: SqlType=%s, ColDef=%d\n",
 			     phs->name, S_SqlTypeToString(fSqlType), dp_cbColDef);
 
@@ -2189,13 +2249,13 @@ static int
 
     STRLEN value_len = 0;
 
-    if (DBIS->debug >= 2) {
+    if (DBIc_DEBUGIV(imp_sth) >= 2) {
 	char *text = neatsvpv(phs->sv,value_len);
-	PerlIO_printf(DBILOGFP,
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 		      "bind %s <== %s (size %d/%d/%ld, ptype %ld, otype %d, sqltype %d)\n",
 		      phs->name, text, SvOK(phs->sv) ? SvCUR(phs->sv) : -1, SvOK(phs->sv) ? SvLEN(phs->sv) : -1 ,phs->maxlen,
 		      SvTYPE(phs->sv), phs->ftype, phs->sql_type);
-	PerlIO_flush(DBILOGFP);
+	PerlIO_flush(DBIc_LOGPIO(imp_dbh));
     }
 
     /* At the moment we always do sv_setsv() and rebind.        */
@@ -2232,11 +2292,11 @@ static int
     phs->sv_type = SvTYPE(phs->sv);     /* part of mutation check       */
     phs->maxlen  = SvLEN(phs->sv)-1;    /* avail buffer space  		*/
 
-    if (DBIS->debug >= 3) {
-	PerlIO_printf(DBILOGFP, "bind %s <== '%.100s' (len %ld/%ld, null %d)\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 3) {
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "bind %s <== '%.100s' (len %ld/%ld, null %d)\n",
 		      phs->name, SvOK(phs->sv) ? phs->sv_buf : "(null)",
 		      (long)value_len,(long)phs->maxlen, SvOK(phs->sv)?0:1);
-	PerlIO_flush(DBILOGFP);
+	PerlIO_flush(DBIc_LOGPIO(imp_dbh));
     }
 
     /* ----------------------------------------------------------------	*/
@@ -2376,8 +2436,8 @@ static int
 	if (phs->cbValue == 0)
 	   cbColDef = 1;
     }
-    if (DBIS->debug >=2)
-	PerlIO_printf(DBILOGFP,
+    if (DBIc_DEBUGIV(imp_sth) >=2)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 		      "    bind %s: CTy=%d, STy=%s, CD=%d, Sc=%d, VM=%d.\n",
 		      phs->name, fCType, S_SqlTypeToString(phs->sql_type),
 		      cbColDef, ibScale, cbValueMax);
@@ -2399,13 +2459,13 @@ static int
 	rgbValue = (UCHAR*) phs;
     }
 
-    if (DBIS->debug >=5) {
-	PerlIO_printf(DBILOGFP,
+    if (DBIc_DEBUGIV(imp_sth) >=5) {
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 		      "    SQLBindParameter: idx = %d: fParamType=%d, name=%s, fCtype=%d, SQL_Type = %d, cbColDef=%d, scale=%d, rgbValue = %x, cbValueMax=%d, cbValue = %d\n",
 		      phs->idx, fParamType, phs->name, fCType, phs->sql_type,
 		      cbColDef, ibScale, rgbValue, cbValueMax, phs->cbValue);
 	if (fCType == SQL_C_CHAR) {
-	   PerlIO_printf(DBILOGFP, "    Param value = %s\n", rgbValue);
+	   PerlIO_printf(DBIc_LOGPIO(imp_dbh), "    Param value = %s\n", rgbValue);
 	}
     }
 
@@ -2468,18 +2528,18 @@ IV maxlen;			/* ??? */
      */
 #if 0
     if (SvTYPE(newvalue) > SVt_PVMG) {    /* hook for later array logic   */
-       if (DBIS->debug >= 2) 
-	  PerlIO_printf(DBILOGFP, "bind %s perl type = %d -- croaking!\n",
+       if (DBIc_DEBUGIV(imp_sth) >= 2) 
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "bind %s perl type = %d -- croaking!\n",
 			name, SvTYPE(newvalue));
 	croak("Can't bind non-scalar value (currently)");
     }
 
 #endif
 
-    if (DBIS->debug >= 2) {
-	PerlIO_printf(DBILOGFP, "bind %s <== '%.200s' (attribs: %s), type %d\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 2) {
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "bind %s <== '%.200s' (attribs: %s), type %d\n",
 		      name, SvPV(newvalue,na), attribs ? SvPV(attribs,na) : "", sql_type );
-	PerlIO_flush(DBILOGFP);
+	PerlIO_flush(DBIc_LOGPIO(imp_dbh));
     }
 
     phs_svp = hv_fetch(imp_sth->all_params_hv, name, name_len, 0);
@@ -2580,8 +2640,8 @@ long destoffset;
 		    SQL_C_BINARY,
 		    ((UCHAR *)SvPVX(bufsv)) + destoffset, (SDWORD)len, &retl
 		   );
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP,
+    if (DBIc_DEBUGIV(imp_sth) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_sth),
 		      "SQLGetData(...,off=%d, len=%d)->rc=%d,len=%d SvCUR=%d\n",
 		      destoffset, len, rc, retl, SvCUR(bufsv));
 
@@ -2607,8 +2667,8 @@ long destoffset;
     SvCUR_set(bufsv, destoffset+retl);
     *SvEND(bufsv) = '\0'; /* consistent with perl sv_setpvn etc */
 
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "blob_read: SvCUR=%d\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_sth), "blob_read: SvCUR=%d\n",
 		      SvCUR(bufsv));
 
     return 1;
@@ -2641,6 +2701,7 @@ static db_params S_db_storeOptions[] =  {
     { "odbc_SQL_ROWSET_SIZE", SQL_ROWSET_SIZE },
     { "odbc_ignore_named_placeholders", ODBC_IGNORE_NAMED_PLACEHOLDERS },
     { "odbc_default_bind_type", ODBC_DEFAULT_BIND_TYPE },
+    { "odbc_force_rebind", ODBC_FORCE_REBIND },
     { "odbc_async_exec", ODBC_ASYNC_EXEC },
     { "odbc_err_handler", ODBC_ERR_HANDLER },
     { NULL },
@@ -2716,6 +2777,16 @@ SV *valuesv;
 
 	   break;
 
+	case ODBC_FORCE_REBIND:
+	   bSetSQLConnectionOption = FALSE;
+	   /*
+	    * set value of default bind type.  Default is SQL_VARCHAR,
+	    * but setting to 0 will cause SQLDescribeParam to be used.
+	    */
+	   imp_dbh->odbc_force_rebind = SvIV(valuesv);
+
+	   break;
+
         case ODBC_ASYNC_EXEC:
 	   bSetSQLConnectionOption = FALSE;
 	   /*
@@ -2752,8 +2823,8 @@ SV *valuesv;
 		     * Driver has per-connection async option.  Set it
 		     * now in the dbh.
 		     */
-		    if (DBIS->debug >= 2)
-			PerlIO_printf(DBILOGFP, 
+		    if (DBIc_DEBUGIV(imp_dbh) >= 2)
+			PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 				"Supported AsyncType is SQL_AM_CONNECTION\n");
 		    rc = SQLSetConnectOption(imp_dbh->hdbc, 
 					     SQL_ATTR_ASYNC_ENABLE,
@@ -2771,8 +2842,8 @@ SV *valuesv;
 		     * odbc_async_exec and the rest will be handled by 
 		     * dbd_st_prepare.
 		     */
-		    if (DBIS->debug >= 2)
-			PerlIO_printf(DBILOGFP, 
+		    if (DBIc_DEBUGIV(imp_dbh) >= 2)
+			PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 				"Supported AsyncType is SQL_AM_STATEMENT\n");
 		    imp_dbh->odbc_async_exec = 1;
 		}
@@ -2780,8 +2851,8 @@ SV *valuesv;
 		    /*
 		     * We're out of luck.
 		     */
-		    if (DBIS->debug >= 2)
-			PerlIO_printf(DBILOGFP, 
+		    if (DBIc_DEBUGIV(imp_dbh) >= 2)
+			PerlIO_printf(DBIc_LOGPIO(imp_dbh), 
 				"Supported AsyncType is SQL_AM_NONE\n");
 		    imp_dbh->odbc_async_exec = 0;
 		    return FALSE;
@@ -2858,6 +2929,7 @@ static db_params S_db_fetchOptions[] =  {
     { "odbc_SQL_DRIVER_ODBC_VER", SQL_DRIVER_ODBC_VER },
     { "odbc_ignore_named_placeholders", ODBC_IGNORE_NAMED_PLACEHOLDERS },
     { "odbc_default_bind_type", ODBC_DEFAULT_BIND_TYPE },
+    { "odbc_force_rebind", ODBC_FORCE_REBIND },
     { "odbc_async_exec", ODBC_ASYNC_EXEC },
     { "odbc_err_handler", ODBC_ERR_HANDLER },
     { "odbc_SQL_DBMS_NAME", SQL_DBMS_NAME },
@@ -2883,8 +2955,8 @@ SV *keysv;
 
     /* checking pars we need FAST */
 
-    if (DBIS->debug > 7) {
-	PerlIO_printf(DBILOGFP, " FETCH %s\n", key);
+    if (DBIc_DEBUGIV(imp_dbh) > 7) {
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), " FETCH %s\n", key);
     }
 
     if ((pars = S_dbOption(S_db_fetchOptions, key, kl)) == NULL)
@@ -2895,10 +2967,10 @@ SV *keysv;
 #if 0
        {
 	  int i;
-	  PerlIO_printf(DBILOGFP, "Version: ");
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "Version: ");
 	  for (i = 0; i < sizeof(imp_dbh->odbc_ver); i++)
-	     PerlIO_printf(DBILOGFP, "%c", imp_dbh->odbc_ver[i]);
-	  PerlIO_printf(DBILOGFP, "\n");
+	     PerlIO_printf(DBIc_LOGPIO(imp_dbh), "%c", imp_dbh->odbc_ver[i]);
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "\n");
 
        }
 #endif
@@ -2908,10 +2980,10 @@ SV *keysv;
 #if  0
        {
 	  int i;
-	  PerlIO_printf(DBILOGFP, "DBName: ");
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "DBName: ");
 	  for (i = 0; i < sizeof(imp_dbh->odbc_dbname); i++)
-	     PerlIO_printf(DBILOGFP, "%c", imp_dbh->odbc_dbname[i]);
-	  PerlIO_printf(DBILOGFP, "\n");
+	     PerlIO_printf(DBIc_LOGPIO(imp_dbh), "%c", imp_dbh->odbc_dbname[i]);
+	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "\n");
 
        }
 #endif
@@ -2930,6 +3002,13 @@ SV *keysv;
 	 * fetch current value of default bind type.
 	 */
 	  retsv = newSViv(imp_dbh->odbc_default_bind_type);
+	  break;
+
+       case ODBC_FORCE_REBIND:
+	/*
+	 * fetch current value of force rebind.
+	 */
+	  retsv = newSViv(imp_dbh->odbc_force_rebind);
 	  break;
 
        case ODBC_ASYNC_EXEC:
@@ -2962,8 +3041,8 @@ SV *keysv;
 	  rc = SQLGetConnectOption(imp_dbh->hdbc, pars->fOption, &vParam);/* TBD: 3.0 update */
 	  dbd_error(dbh, rc, "db_FETCH/SQLGetConnectOption");
 	  if (!SQL_ok(rc)) {
-	     if (DBIS->debug >= 1)
-		PerlIO_printf(DBILOGFP,
+	     if (DBIc_DEBUGIV(imp_dbh) >= 1)
+		PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			      "SQLGetConnectOption returned %d in dbd_db_FETCH\n", rc);
 	     return Nullsv;
 	  }
@@ -2990,39 +3069,50 @@ SV *keysv;
     return sv_2mortal(retsv);
 }
 
+/*
+ * added "need_describe" flag to handle the situation where you don't
+ * have a result set yet to describe.  Certain attributes don't need
+ * the result set to operate, hence don't do a describe unless you need
+ * to do one.
+ * DBD::ODBC 0.45_15
+ * */
 typedef struct {
     const char *str;
     unsigned len:8;
     unsigned array:1;
-    unsigned filler:23;
+    unsigned need_describe:1;
+    unsigned filler:22;
 } T_st_params;
 
-#define s_A(str) { str, sizeof(str)-1 }
+#define s_A(str,need_describe) { str, sizeof(str)-1,0,need_describe }
 static T_st_params S_st_fetch_params[] = 
 {
-    s_A("NUM_OF_PARAMS"),	/* 0 */
-    s_A("NUM_OF_FIELDS"),	/* 1 */
-    s_A("NAME"),		/* 2 */
-    s_A("NULLABLE"),		/* 3 */
-    s_A("TYPE"),		/* 4 */
-    s_A("PRECISION"),		/* 5 */
-    s_A("SCALE"),		/* 6 */
-    s_A("sol_type"),		/* 7 */
-    s_A("sol_length"),		/* 8 */
-    s_A("CursorName"),		/* 9 */
-    s_A("odbc_more_results"),	/* 10 */
-    s_A("LongReadLen"),		/* 11 */
-    s_A("odbc_ignore_named_placeholders"),	/* 12 */
-    s_A("odbc_default_bind_type"),	/* 13 */
-    s_A("ParamValues"),		/* 14 */
-    s_A(""),			/* END */
+    s_A("NUM_OF_PARAMS",1),	/* 0 */
+    s_A("NUM_OF_FIELDS",1),	/* 1 */
+    s_A("NAME",1),		/* 2 */
+    s_A("NULLABLE",1),		/* 3 */
+    s_A("TYPE",1),		/* 4 */
+    s_A("PRECISION",1),		/* 5 */
+    s_A("SCALE",1),		/* 6 */
+    s_A("sol_type",1),		/* 7 */
+    s_A("sol_length",1),	/* 8 */
+    s_A("CursorName",1),		/* 9 */
+    s_A("odbc_more_results",1),	/* 10 */
+    s_A("ParamValues",1),		/* 11 */
+
+    s_A("LongReadLen",0),		/* 12 */
+    s_A("odbc_ignore_named_placeholders",0),	/* 13 */
+    s_A("odbc_default_bind_type",0),	/* 14 */
+    s_A("odbc_force_rebind",0),	/* 15 */
+    s_A("",0),			/* END */
 };
 
 static T_st_params S_st_store_params[] = 
 {
-   s_A("odbc_ignore_named_placeholders"),	/* 0 */
-   s_A("odbc_default_bind_type"),	/* 1 */
-   s_A(""),			/* END */
+   s_A("odbc_ignore_named_placeholders",0),	/* 0 */
+   s_A("odbc_default_bind_type",0),	/* 1 */
+   s_A("odbc_force_rebind",0),	/* 2 */
+   s_A("",0),			/* END */
 };
 #undef s_A
 
@@ -3055,7 +3145,7 @@ SV *keysv;
     if (par->len <= 0)
 	return Nullsv;
 
-    if (!imp_sth->done_desc && !dbd_describe(sth, imp_sth)) 
+    if (par->need_describe && !imp_sth->done_desc && !dbd_describe(sth, imp_sth)) 
     {
 	/* dbd_describe has already called dbd_error()          */
 	/* we can't return Nullsv here because the xs code will */
@@ -3078,21 +3168,21 @@ SV *keysv;
 	case 2: 			/* NAME */
 	    av = newAV();
 	    retsv = newRV(sv_2mortal((SV*)av));
-	    if (DBIS->debug > 8) {
+	    if (DBIc_DEBUGIV(imp_sth) > 8) {
 	       int j;
-	       PerlIO_printf(DBILOGFP, " dbd_st_FETCH_attrib NAMES %d\n", i);
+	       PerlIO_printf(DBIc_LOGPIO(imp_sth), " dbd_st_FETCH_attrib NAMES %d\n", i);
 
 	       for (j = 0; j < i; j++) {
-		  PerlIO_printf(DBILOGFP, "\t%s\n", imp_sth->fbh[j].ColName);
-		  PerlIO_flush(DBILOGFP);
+		  PerlIO_printf(DBIc_LOGPIO(imp_sth), "\t%s\n", imp_sth->fbh[j].ColName);
+		  PerlIO_flush(DBIc_LOGPIO(imp_sth));
 	       }
-	       PerlIO_flush(DBILOGFP);
+	       PerlIO_flush(DBIc_LOGPIO(imp_sth));
 	    }
 	    while(--i >= 0) {
-	       if (DBIS->debug > 8) {
-		  PerlIO_printf(DBILOGFP, "    Colname %d => %s\n",
+	       if (DBIc_DEBUGIV(imp_sth) > 8) {
+		  PerlIO_printf(DBIc_LOGPIO(imp_sth), "    Colname %d => %s\n",
 				i, imp_sth->fbh[i].ColName);
-		  PerlIO_flush(DBILOGFP);
+		  PerlIO_flush(DBIc_LOGPIO(imp_sth));
 	       }
 		av_store(av, i, newSVpv(imp_sth->fbh[i].ColName, 0));
 	    }
@@ -3147,19 +3237,7 @@ SV *keysv;
 	case 10:                /* odbc_more_results */
 	    retsv = newSViv(imp_sth->moreResults);
 	    break;
-	    /* Umm... This used to be #10.  I don't really see why it's here at  */
-	    /* all since there was no corresponding entry in S_st_fetch_params.  */
-	    /* I'll leave it here as #11 just in case...  [dgood 2/16/00]        */
 	case 11:
-	    retsv = newSViv(DBIc_LongReadLen(imp_sth));
-	    break;
-	case 12:
-	    retsv = newSViv(imp_sth->odbc_ignore_named_placeholders);
-	    break;
-	case 13:
-	   retsv = newSViv(imp_sth->odbc_default_bind_type);
-	   break;
-	case 14:
 	{
 	   /* not sure if there's a memory leak here. */
 	   HV *paramvalues = newHV();
@@ -3179,6 +3257,18 @@ SV *keysv;
 	   /* ensure HV is freed when the ref is freed */
 	   retsv = newRV_noinc((SV *)paramvalues);
 	}
+	break;
+	case 12:
+	    retsv = newSViv(DBIc_LongReadLen(imp_sth));
+	    break;
+	case 13:
+	    retsv = newSViv(imp_sth->odbc_ignore_named_placeholders);
+	    break;
+	case 14:
+	   retsv = newSViv(imp_sth->odbc_default_bind_type);
+	   break;
+	case 15: /* force rebind */
+	   retsv = newSViv(imp_sth->odbc_force_rebind);
 	   break;
 	default:
 	    return Nullsv;
@@ -3222,7 +3312,8 @@ SV *valuesv;
 	   break;
 
 	case 2:/*  */
-	   return TRUE;
+	   imp_sth->odbc_force_rebind = SvIV(valuesv);
+	   break;
     }
     return FALSE;
 }
@@ -3276,8 +3367,8 @@ int ftype;
     else
 	croak("panic: SQLGetInfo cbInfoValue == %d", cbInfoValue);
 
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "SQLGetInfo: ftype %d, cbInfoValue %d: %s\n",
+    if (DBIc_DEBUGIV(imp_dbh) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLGetInfo: ftype %d, cbInfoValue %d: %s\n",
 		      ftype, cbInfoValue, neatsvpv(retsv,0));
 
     Safefree(rgbInfoValue);
@@ -3347,8 +3438,8 @@ char * TableName;
 			CatalogName, strlen(CatalogName), 
 			SchemaName, strlen(SchemaName), 
 			TableName, strlen(TableName));
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "SQLPrimaryKeys rc = %d\n", rc);
+    if (DBIc_DEBUGIV(imp_sth) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLPrimaryKeys rc = %d\n", rc);
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "odbc_get_primary_keys/SQLPrimaryKeys");
 	return 0;
@@ -3547,7 +3638,7 @@ int desctype;
 	return Nullsv;
     }
 
-    /*  PerlIO_printf(DBILOGFP,
+    /*  PerlIO_printf(DBIc_LOGPIO(imp_dbh),
     "SQLColAttributes: colno = %d, desctype = %d, cbInfoValue = %d\n",
     colno, desctype, cbInfoValue);
     at least on Win95, calling this with colno==0 would "core" dump/GPF.
@@ -3567,18 +3658,18 @@ int desctype;
 	return Nullsv;
     }
 
-    if (DBIS->debug >= 2) {
-	PerlIO_printf(DBILOGFP,
+    if (DBIc_DEBUGIV(imp_sth) >= 2) {
+	PerlIO_printf(DBIc_LOGPIO(imp_sth),
 		      "SQLColAttributes: colno=%d, desctype=%d, cbInfoValue=%d, fDesc=%d",
 		      colno, desctype, cbInfoValue, fDesc
 		     );
-	if (DBIS->debug>=4)
-	    PerlIO_printf(DBILOGFP,
+	if (DBIc_DEBUGIV(imp_sth)>=4)
+	    PerlIO_printf(DBIc_LOGPIO(imp_sth),
 			  " rgbInfo=[%02x,%02x,%02x,%02x,%02x,%02x\n",
 			  rgbInfoValue[0] & 0xff, rgbInfoValue[1] & 0xff, rgbInfoValue[2] & 0xff, 
 			  rgbInfoValue[3] & 0xff, rgbInfoValue[4] & 0xff, rgbInfoValue[5] & 0xff
 			 );
-	PerlIO_printf(DBILOGFP,"\n");
+	PerlIO_printf(DBIc_LOGPIO(imp_sth),"\n");
     }
 
     /*
@@ -3646,8 +3737,8 @@ char *column;
 		    (table && *table) ? table : 0, SQL_NTS,
 		    (column && *column) ? column : 0, SQL_NTS);
 
-    if (DBIS->debug >= 2)
-	PerlIO_printf(DBILOGFP, "SQLColumns call: cat = %s, schema = %s, table = %s, column = %s\n",
+    if (DBIc_DEBUGIV(imp_sth) >= 2)
+	PerlIO_printf(DBIc_LOGPIO(imp_dbh), "SQLColumns call: cat = %s, schema = %s, table = %s, column = %s\n",
 		      XXSAFECHAR(catalog), XXSAFECHAR(schema), XXSAFECHAR(table), XXSAFECHAR(column));
     dbd_error(sth, rc, "odbc_columns/SQLColumns");
 
@@ -3661,11 +3752,7 @@ char *column;
     return build_results(sth,rc);
 }
 
-static void AllODBCErrors(henv, hdbc, hstmt, output)
-HENV henv;
-HDBC hdbc;
-HSTMT hstmt;
-int output;
+static void AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output, PerlIO *logfp)
 {
     RETCODE rc;
 
@@ -3681,7 +3768,7 @@ int output;
 		    sqlstate, &NativeError,
 		    ErrorMsg, sizeof(ErrorMsg)-1, &ErrorMsgLen);
 	if (output && SQL_ok(rc))
-	    PerlIO_printf(DBILOGFP, "%s %s\n", sqlstate, ErrorMsg);
+	    PerlIO_printf(logfp, "%s %s\n", sqlstate, ErrorMsg);
 
     } while(SQL_ok(rc));
     return;
