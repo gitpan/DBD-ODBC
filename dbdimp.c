@@ -276,32 +276,31 @@ SV   *attr;
 #else
     SQLSMALLINT cbConnStrOut;
 #endif
+    SV **odbc_version_sv;
+    UV   odbc_version = 0;
 
     if (!imp_drh->connects) {
 	rc = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &imp_drh->henv);		
 	dbd_error(dbh, rc, "db_login/SQLAllocEnv");
 	if (!SQL_ok(rc))
 	    return 0;
-    }
-    {
-	SV **odbc_version_sv;
-	UV   odbc_version = 0;
+
 	DBD_ATTRIB_GET_IV(attr, "odbc_version",12, odbc_version_sv, odbc_version);
 	if (odbc_version) {
-	    rc = SQLSetEnvAttr(imp_drh->henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)odbc_version, SQL_IS_INTEGER);
-	    if (!SQL_ok(rc)) {
-		dbd_error(dbh, rc, "db_login/SQLSetEnvAttr");
-		if (imp_drh->connects == 0) {
-		    SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
-		    imp_drh->henv = SQL_NULL_HENV;
-		}
-		return 0;
-	    }
+	   rc = SQLSetEnvAttr(imp_drh->henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)odbc_version, SQL_IS_INTEGER);
+	   if (!SQL_ok(rc)) {
+	      dbd_error2(dbh, rc, "db_login/SQLSetEnvAttr", imp_drh->henv, 0, 0);
+	      if (imp_drh->connects == 0) {
+		 SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
+		 imp_drh->henv = SQL_NULL_HENV;
+	      }
+	      return 0;
+	   }
 	} else {
 	   /* make sure we request a 3.0 version */
 	   rc = SQLSetEnvAttr(imp_drh->henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, SQL_IS_INTEGER);
 	   if (!SQL_ok(rc)) {
-	      dbd_error(dbh, rc, "db_login/SQLSetEnvAttr");
+	      dbd_error2(dbh, rc, "db_login/SQLSetEnvAttr", imp_drh->henv, 0, 0);
 	      if (imp_drh->connects == 0) {
 		 SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
 		 imp_drh->henv = SQL_NULL_HENV;
@@ -396,7 +395,7 @@ SV   *attr;
 #endif /* DriverConnect supported */
 
 	if (DBIS->debug >= 2)
-	    PerlIO_printf(DBILOGFP, "SQLConnect '%s', '%s', '%s'\n", dbname, uid, pwd);
+	    PerlIO_printf(DBILOGFP, "SQLConnect '%s', '%s'\n", dbname, uid);
 
 	rc = SQLConnect(imp_dbh->hdbc,
 			dbname, (SQLSMALLINT)strlen(dbname),
@@ -597,6 +596,12 @@ imp_dbh_t *imp_dbh;
 	dbd_error(dbh, rc, "db_commit/SQLTransact");
 	return 0;
     }
+    /* support for DBI 1.20 begin_work */
+    if (DBIc_has(imp_dbh, DBIcf_BegunWork)) {
+       // reset autocommit
+       rc = SQLSetConnectOption(imp_dbh->hdbc, SQL_AUTOCOMMIT, SQL_AUTOCOMMIT_ON);
+       DBIc_off(imp_dbh,DBIcf_BegunWork);
+    }
     return 1;
 }
 
@@ -613,6 +618,12 @@ imp_dbh_t *imp_dbh;
     if (!SQL_ok(rc)) {
 	dbd_error(dbh, rc, "db_rollback/SQLTransact");
 	return 0;
+    }
+    /* support for DBI 1.20 begin_work */
+    if (DBIc_has(imp_dbh, DBIcf_BegunWork)) {
+       // reset autocommit
+       rc = SQLSetConnectOption(imp_dbh->hdbc, SQL_AUTOCOMMIT, SQL_AUTOCOMMIT_ON);
+       DBIc_off(imp_dbh,DBIcf_BegunWork);
     }
     return 1;
 }
@@ -2343,16 +2354,19 @@ static int
     if (!SvOK(phs->sv)) {
        /* if is_inout, shouldn't we null terminate the buffer and send
         * it, instead?? */
+       cbColDef = 1;
        if (phs->is_inout) {
 	  if (!phs->sv_buf) {
 	     croak("panic: DBD::ODBC binding undef with bad buffer!!!!");
 	  }
 	  phs->sv_buf[0] = '\0'; /* just in case, we *know* we called SvGROW above */
 	  rgbValue = phs->sv_buf;
+	  /* patch for binding undef inout params on sql server */
+	  ibScale = 1;
+	  phs->cbValue = 1;
        } else {
 	  rgbValue = NULL;
 	  phs->cbValue = SQL_NULL_DATA;
-	  cbColDef = 1;
        }
     }
     else {

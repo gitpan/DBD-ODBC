@@ -3,7 +3,7 @@ $| = 1;
 
 
 # to help ActiveState's build process along by behaving (somewhat) if a dsn is not provided
-my $tests = 7;
+my $tests = 8;
 BEGIN {
    unless (defined $ENV{DBI_DSN}) {
       print "1..0 # Skipped: DBI_DSN is undefined\n";
@@ -154,7 +154,7 @@ eval {$dbh->do("CREATE PROCEDURE PERL_DBD_PROC1 \@inputval int AS ".
 
 
 $sth1 = $dbh->prepare ("{? = call PERL_DBD_PROC1(?) }");
-my $output = 0;
+my $output = undef;
 $i = 1;
 $iErrCount = 0;
 while ($i < 4) {
@@ -172,6 +172,25 @@ while ($i < 4) {
 }
 
 Test($iErrCount == 0);
+$iErrCount = 0;
+eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
+my $proc1 =
+    "CREATE PROCEDURE PERL_DBD_PROC1 (\@i int, \@result int OUTPUT) AS ".
+    "BEGIN ".
+    "    SET \@result = \@i+1;".
+    "END ";
+print "$proc1\n";
+$dbh->do($proc1);
+
+# $dbh->{PrintError} = 1;
+$sth1 = $dbh->prepare ("{call PERL_DBD_PROC1(?, ?)}");
+$i = 12;
+$output = undef;
+$sth1->bind_param(1, $i, DBI::SQL_INTEGER);
+$sth1->bind_param_inout(2, \$output, 100, DBI::SQL_INTEGER);
+$sth1->execute;
+Test($i == $output-1);
+
 $iErrCount = 0;
 $sth = $dbh->prepare("select * from PERL_DBD_TABLE1 order by i");
 $sth->execute;

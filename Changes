@@ -20,6 +20,12 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 =head1 CHANGES
 
  
+=item Changes in DBD::ODBC 0.45_14 August 13, 2002
+
+Added support to handle (better) DBI begin_work().
+Fix for binding undef parameters on SQL Server.
+Fix bug when connecting twice in the same script.  Trying to set the environment ODBC version
+twice against the same henv caused an error.
 
 =item Changes in DBD::ODBC 0.45_13 August 9, 2002
 
