@@ -3,7 +3,7 @@
 $| = 1;
 print "1..$::tests\n";
 
-require DBI;
+use DBI;
 use strict;
 
 my @row;

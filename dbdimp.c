@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c,v 1.4 1997/07/16 19:26:20 timbo Exp $
+/* $Id: dbdimp.c,v 1.5 1997/07/18 16:28:06 timbo Exp $
  * 
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -1290,13 +1290,15 @@ dbd_db_STORE_attrib(dbh, imp_dbh, keysv, valuesv)
 	}
 
     rc = SQLSetConnectOption(imp_dbh->hdbc, pars->fOption, vParam);
-    odbc_error(dbh, rc, "db_STORE/SQLSetConnectOption");
-    if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO)
-	{
+    if (!SQL_ok(rc)) {
+	odbc_error(dbh, rc, "db_STORE/SQLSetConnectOption");
 	return FALSE;
-	}
-    return TRUE;
     }
+    /* keep our flags in sync */
+    if (kl == 10 && strEQ(key, "AutoCommit"))
+	DBIc_set(imp_dbh, DBIcf_AutoCommit, SvTRUE(valuesv));
+    return TRUE;
+}
 
 
 static db_params S_db_fetchOptions[] =  {

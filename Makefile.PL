@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -sw
 #
-# $Id: Makefile.PL,v 1.4 1997/07/16 19:26:20 timbo Exp $
+# $Id: Makefile.PL,v 1.5 1997/07/18 16:28:06 timbo Exp $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -44,26 +44,41 @@ if ($^O eq 'MSWin32') {
     $opts{INC}  = "-I\$(INSTALLSITEARCH)/auto/DBI";
     $opts{dynamic_lib} = { OTHERLDFLAGS => " ODBC32.LIB" };
     $opts{macro}->{EXTRALIB} = 'ODBC32.LIB';
+    print SQLH "#include <windows.h>\n";
     print SQLH "#include <sql.h> \n#include <sqlext.h>\n";
 }
 else {
+    # Use ODBCHOME env var to point to driver manager directory
+    # Then try to work out which driver manager is being used. (not done yet)
+
     my $odbc= $ENV{ODBCHOME} || die "ODBCHOME env var not set\n";
     $ENV{LD_LIBRARY_PATH} =~ /\Q$odbc/ || die "LD_LIBRARY_PATH doesn't include $odbc\n";
     warn "Using ODBC in $odbc\n";
     $opts{INC}  = "-I. -I\$(INSTALLSITEARCH)/auto/DBI";
 
-    # This is a hack using Intersolve's free Solaris ODBC manager
-    # Since it doesn't come with the sql header files (!) we get them from iODBC!
+    # Feel free to come up with neat (or un-neat) hacks to get your's to build!
 
-    $opts{LIBS} = " -L$odbc/lib -R$odbc/lib -lodbc -lqeutl08 -lqebas08 -lodbcinst";
+    my $lib_d1 = "$odbc/lib";
+    my $lib_d2 = "$odbc/dlls";
+    my $libs   = "odbc";
+    $opts{LIBS} = " -L$lib_d1 -R$lib_d1 -L$lib_d2 -R$lib_d2 -l$libs";
 
-my $iodbc = 1;	# hack for now
-    if ($iodbc) {
+my $myodbc = 'iodbc';	# edit and hack to suit!
+
+    if ($myodbc eq 'iodbc') {
+	# This is a hack using Intersolve's free Solaris ODBC manager
+	# Since it doesn't come with the sql header files (!) we get them from iODBC!
 	# Note: we use DEFINE not INC for iODBC so we don't get its config.h
-	$opts{DEFINE}  = "-I/home/timbo/perl/mod/DBD/iODBC/i212";	# hack for now
+	$opts{DEFINE}  = "-I/home/timbo/perl/mod/DBD/iODBC/i212";    # XXX hack for now
 	print SQLH qq{#define FAR \n#define EXPORT \n#define CALLBACK \n};
 	print SQLH qq{#include <isql.h>\n};
 	print SQLH qq{#include <isqlext.h>\n};
+    }
+    elsif ($myodbc eq 'intersolve') {
+  	$opts{INC} .= " -I$ENV{ODBCHOME}/include";
+	$opts{DEFINE}  = "";
+  	print SQLH qq{#include <qeodbc.h>\n};
+	print SQLH qq{#include <sql.h> \n#include <sqlext.h>\n};
     }
     else {
 	$opts{DEFINE}  = "";

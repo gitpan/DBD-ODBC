@@ -2,7 +2,7 @@
 $| = 1;
 print "1..$tests\n";
 
-require DBI;
+use DBI;
 
 print "ok 1\n";
 

@@ -1,6 +1,6 @@
 DBD::ODBC -- DBD module interfacing the ODBC databases.
 
-   $Id: README,v 1.2 1997/07/16 19:39:25 timbo Exp $
+   $Id: README,v 1.3 1997/07/18 16:28:06 timbo Exp $
    Copyright (c) 1994,1995,1996,1997  Tim Bunce
    portions Copyright (c) 1997 Jeff Urlwin
    portions Copyright (c) 1997  Thomas K. Wenrich
@@ -28,12 +28,14 @@ DBD::ODBC -- DBD module interfacing the ODBC databases.
 
 BUILDING:
 
-  set DBI_DSN, DBI_USER and DBI_PASS environment variables
-  set ODBCHOME environment variable
+  set-up these environment variables:
+    DBI_DSN   The dbi data source, e.g. 'dbi:ODBC:YOUR_DSN_HERE'
+    DBI_USER  The username to use to connect to the database
+    DBI_PASS  The username to use to connect to the database
+    ODBCHOME  (Unix only) The dir your driver manager is installed in
   perl Makefile.PL
-  make                (or nmake, if VC++)
-  edit t/testenv.pm   (change the function to return your DSN, UID and Password)
-  make test           (or nmake, if VC++)
+  make                (or nmake, if VC++ on Win32)
+  make test           (or nmake, if VC++ on Win32)
 
 TESTING
   

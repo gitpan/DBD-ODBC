@@ -1,4 +1,4 @@
-# $Id: ODBC.pm,v 1.4 1997/07/16 19:26:20 timbo Exp $
+# $Id: ODBC.pm,v 1.5 1997/07/18 16:28:06 timbo Exp $
 #
 # Copyright (c) 1994,1995,1996  Tim Bunce
 # portions Copyright (c) 1997  Thomas K. Wenrich
@@ -16,8 +16,8 @@ require 5.004;
 
     @ISA = qw(DynaLoader);
 
-    $VERSION = '0.14';
-    my $Revision = substr(q$Revision: 1.4 $, 10);
+    $VERSION = '0.15';
+    my $Revision = substr(q$Revision: 1.5 $, 10);
 
     require_version DBI 0.86;
 

@@ -2,7 +2,7 @@
 $|=1;
 print "1..$tests\n";
 
-require DBI;
+use DBI;
 
 my @row;
 
@@ -51,31 +51,35 @@ $dbh->disconnect();
 # returns true when a row remains inserted after a rollback.
 # this means that autocommit is ON. 
 # ------------------------------------------------------------
-sub commitTest
-    {
+sub commitTest {
     my $dbh = shift;
     my @row;
     my $rc;
     my $sth;
 
-    $dbh->do('delete from perl_dbd_test where a = 100')
-    or return undef;
-    $dbh->commit();
+    $dbh->do('delete from perl_dbd_test where a = 100') or return undef;
+
+    { # suppress the "commit ineffective" warning
+      local($SIG{__WARN__}) = sub { };
+      $dbh->commit();
+    }
 
     $dbh->do("insert into perl_dbd_test values(100, 'x', 'y')");
-    $dbh->rollback();
+    { # suppress the "rollback ineffective" warning
+	  local($SIG{__WARN__}) = sub { };
+      $dbh->rollback();
+    }
     $sth = $dbh->prepare('SELECT a FROM perl_dbd_test WHERE a = 100');
     $sth->execute();
-    if (@row = $sth->fetchrow()) 
-	{
+    if (@row = $sth->fetchrow()) {
         $rc = 1;
-	}
-    else
-	{
+    }
+    else {
 	$rc = 0;
-	}
+    }
     $sth->finish();
     return $rc;
-    }
+}
+
 # ------------------------------------------------------------
 
