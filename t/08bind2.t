@@ -69,3 +69,5 @@ Test($rc);
 $rc = ODBCTEST::tab_insert_bind($dbh, \@data_with_dates, 0);
 Test($rc);
 
+ODBCTEST::tab_delete($dbh);
+

@@ -77,6 +77,18 @@ DescribeCol(sth, colno)
 MODULE = DBD::ODBC    PACKAGE = DBD::ODBC::db
 
 void
+_ExecDirect( dbh, stmt )
+SV *        dbh
+SV *        stmt
+CODE:
+{
+   STRLEN lna;
+   char *pstmt = SvOK(stmt) ? SvPV(stmt,lna) : "";
+   ST(0) = sv_2mortal(newSViv( (IV)dbd_db_execdirect( dbh, pstmt ) ) );
+}
+
+
+void
 _columns(dbh, sth, catalog, schema, table, column)
 	SV *	dbh
 	SV *	sth

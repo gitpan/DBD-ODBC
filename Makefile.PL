@@ -22,12 +22,12 @@ my %opts =
     clean	=> { FILES=> 'ODBC.xsi dbdodbc.h' },
     dist	=> {
 	#DIST_DEFAULT=> 'clean distcheck disttest ci tardist',
-	DIST_DEFAULT=> 'clean distcheck ci tardist',
+	DIST_DEFAULT=> 'clean distcheck tardist',
 	PREOP    => '$(MAKE) -f Makefile.old distdir',
 	COMPRESS => 'gzip -v9', SUFFIX => 'gz'
     },
     OBJECT	=> '$(O_FILES)',
-);
+ );
 if ($ExtUtils::MakeMaker::VERSION >= 5.43) {
     $opts{AUTHOR} = 'Tim Bunce and Jeff Urlwin ( http://www.isc.org/dbi-lists.html )';
     $opts{ABSTRACT} = 'ODBC driver for the DBI module.';

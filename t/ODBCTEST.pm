@@ -136,28 +136,30 @@ require 5.004;
    # Note, these are not necessarily GOOD ways to
    # show this...
    #
+
+   @tab_insert_values = ( 
+			 [1, 'foo', 'foo varchar', "{d '1998-05-11'}"],
+			 [2, 'bar', 'bar varchar', "{d '1998-05-12'}"],
+			 [3, "bletch", "bletch varchar", "{d '1998-05-10'}"],
+			 [4, "80char", $longstr, "{d '1998-05-13'}"],
+			 [5, "gt250char", $longstr2, "{d '1998-05-14'}"],
+			);
+			   
    sub tab_insert {
       my $dbh = shift;
 
        # qeDBF needs a space after the table name!
-      my $stmt = "INSERT INTO $table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
-		 . join(", ", 3, $dbh->quote("bletch"), $dbh->quote("bletch varchar"), 
-			"{d '1998-05-10'}"). ")";
-      my $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
-      $sth->execute || die "execute: $stmt: $DBI::errstr";
-      $sth->finish;
-
-      $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
-      $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
-      $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
-	      . join(", ", 4, $dbh->quote("80char"), $dbh->quote($longstr), "{d '1998-05-13'}"). ")";
-      $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
-      $sth->execute || die "execute: $stmt: $DBI::errstr";
-      $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
-	      . join(", ", 5, $dbh->quote("gt250char"), $dbh->quote($longstr2), "{d '1998-05-14'}"). ")";
-      $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
-      $sth->execute || die "execute: $stmt: $DBI::errstr";
-      $sth->finish;
+      foreach (@tab_insert_values) {
+      
+	 if (!$dbh->do("INSERT INTO $table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
+		 . join(", ", $_->[0],
+			$dbh->quote($_->[1]),
+			$dbh->quote($_->[2]), 
+			$_->[3]). ")")) {
+	    return 0;
+	 }
+      }
+      1;
    }
 
    sub tab_insert_bind {
@@ -201,9 +203,9 @@ require 5.004;
 	 if ($handle_column_type) {
 	    $sth->bind_param(4, $_->[$row[1] == SQL_DATE ? 3 : 4], { TYPE => $row[1] });
 	 } else {
-	    no warnings;
 	    # sigh, couldn't figure out how to get rid of the warning nicely,
-	    # so I turned it off!!!
+	    # so I turned it off!!!  Now, I have to turn it back on due
+	    # to  problems in other perl versions.
 	    $sth->bind_param(4, $_->[$row[1] == SQL_DATE ? 3 : 4]);
 	 }
 	 return 0 unless $sth->execute;

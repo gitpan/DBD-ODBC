@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.34';
+$DBD::ODBC::VERSION = '0.35';
 
 {
     package DBD::ODBC;
@@ -214,6 +214,43 @@ $DBD::ODBC::VERSION = '0.34';
 	return _GetInfo($dbh, $item);
     }
 
+    # new override of do method provided by Merijn Broeren
+    # this optimizes "do" to use SQLExecDirect for simple
+    # do statements without parameters.
+    sub do {
+        my($dbh, $statement, $attr, @params) = @_;
+        my $rows = 0;
+
+        if( -1 == $#params )
+        {
+          # No parameters, use execute immediate
+          $rows = ExecDirect( $dbh, $statement );
+          if( 0 == $rows )
+          {
+            $rows = "0E0";
+          }
+          elsif( $rows < -1 )
+          {
+            undef $rows;
+          }
+        }
+        else
+        {
+          $rows = $dbh->SUPER::do( $statement, $attr, @params );
+        }
+        return $rows
+    }
+
+    #
+    # can also be called as $dbh->func($sql, ExecDirect);
+    # if, for some reason, there are compatibility issues
+    # later with DBI's do.
+    #
+    sub ExecDirect {
+       my ($dbh, $sql) = @_;
+       _ExecDirect($dbh, $sql);
+    }
+
     # Call the ODBC function SQLGetInfo
     # Args are:
     #	$dbh - the database handle
@@ -343,11 +380,32 @@ See L<DBI> for more information.
  These tests run perfectly under SQL Server 2000. This is
  normal and expected.  Until Oracle fixes their drivers to
  do the right thing from an ODBC perspective, it's going to
- be tough to fix the issue.
+ be tough to fix the issue.  The workaround for Oracle is to
+ bind date types with SQL_TIMESTAMP.
    
  Also note that some tests may be skipped, such as
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
+   
+=item B<DBD::ODBC 0.35>
+
+ Fixed (finally) multiple result sets with differing
+ numbers of columns.  The final fix was to call
+ SQLFreeStmt(SQL_UNBIND) before repreparing
+ the statement for the next query.
+
+ Added more to the multi-statement tests to ensure
+ the data retrieved was what was expected.
+
+ Now, DBD::ODBC overrides DBI's do to call SQLExecDirect
+ for simple statements (those without parameters).
+ Please advise if you run into problems.  Hopefully,
+ this will provide some small speed improvement for
+ simple "do" statements.  You can also call
+ $dbh->func($stmt, ExecDirect).  I'm not sure this has
+ great value unless you need to ensure SQLExecDirect
+ is being called.  Patches thanks to Merijn Broeren.
+ Thanks Merijn!
    
 =item B<DBD::ODBC 0.34>
  

@@ -83,10 +83,10 @@ $sql = "select $test_colnames[0],$test_colnames[1]  from $ODBCTEST::table_name o
 @expected_result_cols = (2, 1);
 Test(RunMultiTest($sql, \@expected_result_cols));
 
-$sql = "select " . join(", ", @test_colnames) . " from $ODBCTEST::table_name order by $test_colnames[0]
+$sql = "select " . join(", ", grep {/COL_[ABC]/} @test_colnames) . " from $ODBCTEST::table_name order by $test_colnames[0]
         select $test_colnames[0] from $ODBCTEST::table_name order by $test_colnames[0]";
 
-@expected_result_cols = ($#test_colnames+1, 1);
+@expected_result_cols = ($#test_colnames, 1);
 Test(RunMultiTest($sql, \@expected_result_cols));
 
 
@@ -109,6 +109,8 @@ sub RunMultiTest {
 
    do {
 
+      # $#expected_result_cols is the array of number of result cols
+      # and the count/array size represents the number of result sets...
       if ($result_sets > $#expected_result_cols) {
 	 print "Number of result sets not correct in test $result_sets is more than the expected $#expected_result_cols.\n";
 	 $test_pass = 0;
@@ -118,9 +120,24 @@ sub RunMultiTest {
 	    $test_pass = 0;
 	 }
       }
-      print join(", ", @{$sth->{NAME}}), "\n";
+      # print join(", ", @{$sth->{NAME}}), "\n";
+      my $i = 0;
       while ( my $ref = $sth->fetchrow_arrayref ) {
-	 # print join(":", @$ref), "\n";
+	 if ($] > 5.005) {
+	    no warnings;
+	    # print join(":", @$ref), "\n";
+	 }
+	 my $row = $ODBCTEST::tab_insert_values[$i];
+	 
+	 my $j;
+	 for ($j = 0; $j < $sth->{NUM_OF_FIELDS}; $j++) {
+	    if ($row->[$j] ne $ref->[$j]) {
+	       print "Data mismatch, result set $result_sets, row $i, col $j ($row->[$j] != $ref->[$j])\n";
+	       $test_pass = 0;
+	    }
+	 }
+
+	 $i++;
       }
       $result_sets++;
    } while ( $sth->{odbc_more_results}  ) ;

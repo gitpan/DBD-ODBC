@@ -101,6 +101,47 @@ imp_drh_t *imp_drh;
 }
 
 
+/* error : <=(-2), ok row count : >=0, unknown count : (-1)   */
+int dbd_db_execdirect( SV *dbh,
+	       char *statement )
+{
+   D_imp_dbh(dbh);
+   SQLRETURN ret;
+   SQLINTEGER rows;
+   SQLHSTMT stmt;
+
+   ret = SQLAllocHandle( SQL_HANDLE_STMT, imp_dbh->hdbc, &stmt );
+   if (!SQL_ok(ret)) {
+      dbd_error( dbh, ret, "Statement allocation error" );
+      return(-2);
+   }
+
+   if (DBIS->debug >= 2)
+      PerlIO_printf(DBILOGFP, "    SQLExecDirect sql %s\n",
+		    statement);
+
+   ret = SQLExecDirect(stmt, (SQLCHAR *)statement, SQL_NTS);
+   if (!SQL_ok(ret)) {
+      dbd_error( dbh, ret, "Execute immediate failed" );
+      if (ret < 0) 
+	 rows = -2;
+      else {
+	 ret = SQLRowCount(stmt, &rows);
+	 if (!SQL_ok(ret)) {
+	    dbd_error( dbh, ret, "SQLRowCount failed" );
+	    if (ret < 0)
+	       rows = -1;
+	 }
+      }
+   }
+   ret = SQLFreeHandle( SQL_HANDLE_STMT, stmt );
+   if (!SQL_ok(ret)) {
+      dbd_error( dbh, ret, "Statement destruction error" );
+   }
+
+   return (int)rows;
+} 
+
 void
    dbd_db_destroy(dbh, imp_dbh)
    SV *dbh;
@@ -863,6 +904,7 @@ imp_sth_t *imp_sth;
 	dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
 	return 0;
     }
+
     imp_sth->done_desc = 1;	/* assume ok from here on */
 
     DBIc_NUM_FIELDS(imp_sth) = num_fields;
@@ -1314,8 +1356,18 @@ imp_sth_t *imp_sth;
 		 imp_sth->ColNames  = NULL;
 		 imp_sth->RowBuffer = NULL;
 		 imp_sth->done_desc = 0;
+
+		 /* tell the odbc driver that we need to unbind the
+		  * bound columns.  Fix bug for 0.35 (2/8/02) */
+		 rc = SQLFreeStmt(imp_sth->hstmt, SQL_UNBIND);
+		 if (!SQL_ok(rc)) {
+		    AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
+				  (DBIS->debug > 0));
+		 }
+
 		 if (!dbd_describe(sth, imp_sth))
 		    return Nullav; /* dbd_describe already called dbd_error() */
+
 		 
 		 /* set moreResults so we'll know we can keep fetching */
 		 imp_sth->moreResults = 1;
