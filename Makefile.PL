@@ -10,6 +10,7 @@ use Config;
 use ExtUtils::MakeMaker 5.16, qw(&WriteMakefile $Verbose);
 use File::Basename;
 use Getopt::Long;
+use File::Spec;
 
 use DBI 1.201;		# must be installed first
 use DBI::DBD;
@@ -364,7 +365,23 @@ print "Warning: DBI_DSN ($ENV{DBI_DSN}) doesn't start with 'dbi:ODBC:'\n"
 	if ($ENV{DBI_DSN} && $ENV{DBI_DSN} !~ m/^dbi:ODBC:/);
 print "\n";
 
+sub MY::post_constants {
+   my ($self) = shift;
 
+   '
+# make Changes file available as installed pod docs "perldoc DBI::Changes"
+inst_libdbdodbc = ' . File::Spec->catdir($self->{INST_LIB}, 'DBD/ODBC') . '
+changes_pm = ' . File::Spec->catfile($self->{INST_LIB}, 'DBD/ODBC', 'Changes.pm') . '
+
+config :: $(changes_pm)
+
+$(changes_pm): Changes
+	$(NOECHO) $(MKPATH) $(inst_libdbdodbc)
+	$(NOECHO) $(RM_F) $(changes_pm)
+	$(CP) Changes $(changes_pm)
+';
+   
+}
 sub MY::postamble {
     return dbd_postamble(@_);
 }

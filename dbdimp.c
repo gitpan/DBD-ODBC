@@ -278,7 +278,7 @@ SV   *attr;
 #endif
 
     if (!imp_drh->connects) {
-	rc = SQLAllocEnv(&imp_drh->henv);		/* TBD: 3.0 update */
+	rc = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &imp_drh->henv);		
 	dbd_error(dbh, rc, "db_login/SQLAllocEnv");
 	if (!SQL_ok(rc))
 	    return 0;
@@ -297,6 +297,17 @@ SV   *attr;
 		}
 		return 0;
 	    }
+	} else {
+	   /* make sure we request a 3.0 version */
+	   rc = SQLSetEnvAttr(imp_drh->henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, SQL_IS_INTEGER);
+	   if (!SQL_ok(rc)) {
+	      dbd_error(dbh, rc, "db_login/SQLSetEnvAttr");
+	      if (imp_drh->connects == 0) {
+		 SQLFreeEnv(imp_drh->henv);/* TBD: 3.0 update */
+		 imp_drh->henv = SQL_NULL_HENV;
+	      }
+	      return 0;
+	   }
 	}
     }
     imp_dbh->henv = imp_drh->henv;	/* needed for dbd_error */
