@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.33_1';
+$DBD::ODBC::VERSION = '0.33_2';
 
 {
     package DBD::ODBC;
@@ -288,6 +288,24 @@ See L<DBI> for more information.
 
 =over 4
 
+=item B<DBD::ODBC 0.33_2>
+
+ Finally tested new binding techniques with SQL Server 2000,
+ but there is a nice little bug in their MDAC and ODBC
+ drivers according to the knowledge base article # Q273813, titled
+
+   "FIX: "Incorrect Syntax near the Keyword 'by' "
+   Error Message with Column Names of "C", "CA" or "CAS" (Q273813)
+
+ DBD::ODBC now does not name any of the columns A, B, C, or D they are now
+ COL_A, COL_B, COL_C, COL_D.
+
+ *** NOTE: *** I AM STRONGLY CONSIDERING MAKING THE NEW BINDING the default
+   for future versions.  I do not believe it will break much existing code
+   as anyone binding to non VARCHAR (without the ODBC driver doing a
+   good conversion from the VARCHAR) will have a problem.
+   Please comment soon...
+   
 =item B<DBD::ODBC 0.33_1>
 
 *** WARNING: ***
@@ -296,7 +314,19 @@ See L<DBI> for more information.
  to determine if the type of column being bound.  This is
  experimental and activated by setting
  
-  $dbh->{odbc_default_bind_type} = 0; before creating the query...
+  $dbh->{odbc_default_bind_type} = 0; # before creating the query...
+
+ Currently the default value of odbc_default_bind_type = SQL_VARCHAR
+ which mimicks the current behavior.  If you set
+ odbc_default_bind_type to 0, then SQLDescribeParam will be
+ called to determine the columen type.  Not ALL databases
+ handle this correctly.  For example, Oracle returns
+ SQL_VARCHAR for all types and attempts to convert to the
+ correct type for us.  However, if you use the ODBC escaped
+ date/time format such as: {ts '1998-05-13 00:01:00'} then
+ Oracle complains.  If you bind this with a SQL_TIMESTAMP type,
+ however, Oracle's ODBC driver will parse the time/date correctly.
+ Use at your own risk!
 
  Fix to dbdimp.c to allow quoted identifiers to begin/end
  with either " or '.

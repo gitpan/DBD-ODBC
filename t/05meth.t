@@ -40,7 +40,7 @@ $sth->finish();
 print "ok 4\n";
 
 my ($a, $b);
-$sth = $dbh->prepare('SELECT A,B FROM PERL_DBD_TEST');
+$sth = $dbh->prepare('SELECT COL_A, COL_B FROM PERL_DBD_TEST');
 $sth->execute();
 while (@row = $sth->fetchrow())
     {

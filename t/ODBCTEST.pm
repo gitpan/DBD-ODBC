@@ -25,11 +25,16 @@ require 5.004;
     $VERSION = '0.01';
     $table_name = "PERL_DBD_TEST";
 
+    # really dumb work around:
+    # MS SQL Server 2000 (MDAC 2.5 and ODBC driver 2000.080.0194.00) have a bug if
+    # the column is named C, CA, or CAS and there is a call to SQLDescribeParam...
+    # there is an error, referring to a syntax error near keyword 'by'
+    # I figured it's just best to rename the columns.
     %TestFieldInfo = (
-		      'A' => [SQL_SMALLINT,SQL_BIGINT, SQL_TINYINT, SQL_NUMERIC, SQL_DECIMAL, SQL_FLOAT, SQL_REAL],
-		      'B' => [SQL_VARCHAR, SQL_CHAR],
-		      'C' => [SQL_LONGVARCHAR],
-		      'D' => [SQL_DATE, SQL_TIMESTAMP, SQL_TYPE_DATE],
+		      'COL_A' => [SQL_SMALLINT,SQL_BIGINT, SQL_TINYINT, SQL_NUMERIC, SQL_DECIMAL, SQL_FLOAT, SQL_REAL],
+		      'COL_B' => [SQL_VARCHAR, SQL_CHAR],
+		      'COL_C' => [SQL_LONGVARCHAR],
+		      'COL_D' => [SQL_DATE, SQL_TIMESTAMP, SQL_TYPE_DATE],
 		     );
 
     sub get_type_for_column {

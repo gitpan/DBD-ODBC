@@ -57,7 +57,7 @@ print "not " if ($rc);
 print "ok 8\n";
 
 print " Test 9: test ColAttributes\n";
-$sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY A");
+$sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY COL_A");
 
 if ($sth) {
 	$sth->execute();
@@ -93,7 +93,7 @@ print "not " if (length($DBI::err) < 1);
 print "ok 10\n";
 
 print " Test 11: test date values\n";
-$sth = $dbh->prepare("SELECT D FROM $ODBCTEST::table_name WHERE D > {d '1998-05-13'}");
+$sth = $dbh->prepare("SELECT COL_D FROM $ODBCTEST::table_name WHERE COL_D > {d '1998-05-13'}");
 $sth->execute();
 my $count = 0;
 while (@row = $sth->fetchrow) {
@@ -104,7 +104,7 @@ print "not " if $count != 1;
 print "ok 11\n";
 
 print " Test 12: test group by queries\n";
-$sth = $dbh->prepare("SELECT A, COUNT(*) FROM $ODBCTEST::table_name GROUP BY A");
+$sth = $dbh->prepare("SELECT COL_A, COUNT(*) FROM $ODBCTEST::table_name GROUP BY COL_A");
 $sth->execute();
 $count = 0;
 while (@row = $sth->fetchrow) {
@@ -148,7 +148,7 @@ sub tab_select
 
     $dbh->{LongReadLen} = 1000;
 
-    my $sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY A")
+    my $sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY COL_A")
 		or return undef;
     $sth->execute();
     while (@row = $sth->fetchrow())	{
@@ -162,7 +162,7 @@ sub tab_select
     }
     $sth->finish();
     
-    $sth = $dbh->prepare("SELECT A,C FROM $ODBCTEST::table_name WHERE A>=4")
+    $sth = $dbh->prepare("SELECT COL_A,COL_C FROM $ODBCTEST::table_name WHERE COL_A>=4")
 	   or return undef;
     $sth->execute();
     while (@row = $sth->fetchrow()) {
@@ -197,20 +197,20 @@ sub tab_insert {
     my $dbh = shift;
 
     # qeDBF needs a space after the table name!
-    my $stmt = "INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES ("
+    my $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
 	    . join(", ", 3, $dbh->quote("bletch"), $dbh->quote("bletch varchar"), 
 			"{d '1998-05-10'}"). ")";
     my $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
     $sth->execute || die "execute: $stmt: $DBI::errstr";
     $sth->finish;
 
-    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
-    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
-    $stmt = "INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES ("
+    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (1, 'foo', 'foo varchar', \{d '1998-05-11'\})});
+    $dbh->do(qq{INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES (2, 'bar', 'bar varchar', \{d '1998-05-12'\})});
+    $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
 	    . join(", ", 4, $dbh->quote("80char"), $dbh->quote($longstr), "{d '1998-05-13'}"). ")";
     $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
     $sth->execute || die "execute: $stmt: $DBI::errstr";
-    $stmt = "INSERT INTO $ODBCTEST::table_name (A, B, C, D) VALUES ("
+    $stmt = "INSERT INTO $ODBCTEST::table_name (COL_A, COL_B, COL_C, COL_D) VALUES ("
 	    . join(", ", 5, $dbh->quote("gt250char"), $dbh->quote($longstr2), "{d '1998-05-14'}"). ")";
     $sth = $dbh->prepare($stmt) || die "prepare: $stmt: $DBI::errstr";
     $sth->execute || die "execute: $stmt: $DBI::errstr";
@@ -225,7 +225,7 @@ sub select_long
 	my $rc = undef;
 	
 	$dbh->{RaiseError} = 1;
-	$sth = $dbh->prepare("SELECT A,C FROM $ODBCTEST::table_name WHERE A=4");
+	$sth = $dbh->prepare("SELECT COL_A,COL_C FROM $ODBCTEST::table_name WHERE COL_A=4");
 	if ($sth) {
 		$sth->execute();
 		eval {

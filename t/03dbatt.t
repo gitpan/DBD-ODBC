@@ -57,7 +57,7 @@ sub commitTest {
     my $rc = -1;
     my $sth;
 
-    $dbh->do("DELETE FROM $ODBCTEST::table_name WHERE A = 100") or return undef;
+    $dbh->do("DELETE FROM $ODBCTEST::table_name WHERE COL_A = 100") or return undef;
 
     { # suppress the "commit ineffective" warning
       local($SIG{__WARN__}) = sub { };
@@ -69,7 +69,7 @@ sub commitTest {
 	  local($SIG{__WARN__}) = sub { };
       $dbh->rollback();
     }
-    $sth = $dbh->prepare("SELECT A FROM $ODBCTEST::table_name WHERE A = 100");
+    $sth = $dbh->prepare("SELECT COL_A FROM $ODBCTEST::table_name WHERE COL_A = 100");
     $sth->execute();
     if (@row = $sth->fetchrow()) {
         $rc = 1;
