@@ -30,10 +30,13 @@ struct imp_dbh_st {
     HENV henv;			/* copy from imp_drh for speed		*/
     HDBC hdbc;
     char odbc_ver[20];  /* ODBC compat. version for driver */
+    char odbc_dbname[64];
     int  odbc_ignore_named_placeholders;	/* flag to ignore named parameters */
     int  odbc_default_bind_type;	/* flag to set default binding type (experimental) */
     int  odbc_sqldescribeparam_supported; /* flag to see if SQLDescribeParam is supported */
     int  odbc_sqlmoreresults_supported; /* flag to see if SQLMoreResults is supported */
+    int	 odbc_defer_binding; /* flag to work around SQLServer bug and defer binding until */
+			    /* last possible moment */
     int  odbc_async_exec; /* flag to set asynchronous execution */
     SQLUINTEGER odbc_async_type; /* flag to store the type of asynchronous
                                   * execution the driver supports */
@@ -82,6 +85,7 @@ struct imp_sth_st {
 
 
 struct imp_fbh_st { 	/* field buffer EXPERIMENTAL */
+   char szDummyBuffer[1024];
    imp_sth_t *imp_sth;	/* 'parent' statement */
     /* field description - SQLDescribeCol() */
     UCHAR *ColName;		/* zero-terminated column name */

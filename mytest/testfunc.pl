@@ -52,7 +52,8 @@ foreach $SQLInfo (sort keys %InfoTests) {
    print "$SQLInfo ($InfoTests{$SQLInfo}):\t$ret\n";
 }
 
-print "\nGetfunctions: ", join(",", $dbh->func(0, GetFunctions)), "\n\n";
+print "\nGetfunctions   : ", join(",", $dbh->func(0, GetFunctions)), "\n\n";
+print "\nGetfunctions v3: ", join(",", $dbh->func(999, GetFunctions)), "\n\n";
 
 foreach $SQLInfo (sort keys %TypeTests) {
    print "Listing all $SQLInfo types\n";

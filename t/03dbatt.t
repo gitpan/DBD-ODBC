@@ -28,6 +28,7 @@ my @row;
 Test(1);	# loaded DBI ok.
 
 my $dbh = DBI->connect() || die "Connect failed: $DBI::errstr\n";
+my $dbname = $dbh->{odbc_SQL_DBMS_NAME};
 Test(1);	 # connected ok
 
 #### testing set/get of connection attributes
@@ -36,14 +37,16 @@ $dbh->{'AutoCommit'} = 1;
 $rc = commitTest($dbh);
 print " ", $DBI->errstr, "" if ($rc < 0);
 Test($rc == 1); # print "not " unless ($rc == 1);
-
+Test($dbname eq $dbh->{odbc_SQL_DBMS_NAME});
 
 Test($dbh->{AutoCommit});
+Test($dbname eq $dbh->{odbc_SQL_DBMS_NAME});
 
 $dbh->{'AutoCommit'} = 0;
 $rc = commitTest($dbh);
 print $DBI->errstr, "\n" if ($rc < 0);
 Test($rc == 0);
+Test($dbname eq $dbh->{odbc_SQL_DBMS_NAME});
 
 $dbh->{'AutoCommit'} = 1;
 
@@ -58,12 +61,14 @@ if ($sth = $dbh->table_info()) {
     $sth->finish();
 }
 Test($rows > 0);
+Test($dbname eq $dbh->{odbc_SQL_DBMS_NAME});
 
 $rows = 0;
 $dbh->{PrintError} = 0;
 my @tables = $dbh->tables;
 
 Test($#tables > 0); # 7
+Test($dbname eq $dbh->{odbc_SQL_DBMS_NAME});
 $rows = 0;
 if ($sth = $dbh->column_info(undef, undef, $ODBCTEST::table_name, undef)) {
     while (@row = $sth->fetchrow()) {
@@ -72,6 +77,7 @@ if ($sth = $dbh->column_info(undef, undef, $ODBCTEST::table_name, undef)) {
     $sth->finish();
 }
 Test($rows > 0);
+Test($dbname eq $dbh->{odbc_SQL_DBMS_NAME});
 
 $rows = 0;
 
@@ -81,15 +87,19 @@ if ($sth = $dbh->primary_key_info(undef, undef, $ODBCTEST::table_name, undef)) {
     }
     $sth->finish();
 }
-my $dbname = $dbh->get_info(17); # DBI::SQL_DBMS_NAME
+# my $dbname = $dbh->get_info(17); # DBI::SQL_DBMS_NAME
 if ($dbname =~ /Access/i) {
    Test(1, " # Skipped: Known to fail using MS Access through 2000");
 } else {
    Test($rows > 0);
 }
+Test($dbname eq $dbh->{odbc_SQL_DBMS_NAME});
 
-BEGIN { $tests = 9; }
-$dbh->disconnect();
+BEGIN { $tests = 16; }
+# for now, force the clearing of the sth before the DBH destroy.
+$sth = undef;
+$dbh->disconnect;
+# print STDERR $dbh->{odbc_SQL_DRIVER_ODBC_VER}, "\n";
 
 # ------------------------------------------------------------
 # returns true when a row remains inserted after a rollback.

@@ -64,7 +64,7 @@ if ($^O eq 'MSWin32') {
     $opts{LIBS} = ["ODBC32.LIB"];
     $opts{macro}->{EXTRALIB} = 'ODBC32.LIB';
     print SQLH "#include <windows.h>\n";
-    print SQLH "#include <sql.h> \n#include <sqlext.h>\n";
+    print SQLH "#include <sql.h>\n#include <sqltypes.h>\n#include <sqlext.h>\n";
 }
 else {
 
@@ -158,6 +158,7 @@ else {
 	$opts{LIBS} = "-L/usr/lib/w32api -lodbc32";
         print SQLH "#include <windows.h>\n";
         print SQLH "#include <sql.h>\n";
+        print SQLH "#include <sqltypes.h>\n";
         print SQLH "#include <sqlext.h>\n";
         print SQLH "#undef WIN32\n";
         $opts{dynamic_lib} = {OTHERLDFLAGS => "-lodbc32"};
@@ -195,6 +196,7 @@ else {
 	#print SQLH qq{#include <iodbc.h>\n};
 	print SQLH qq{#include <isqlext.h>\n};
 	print SQLH qq{#include <sql.h>\n};
+	print SQLH qq{#include <sqltypes.h>\n};
 	#print SQLH qq{#include "fixup_t.h"\n};
     }
     elsif ($myodbc eq 'unixodbc') {
@@ -219,6 +221,7 @@ else {
 		unless $ENV{LD_LIBRARY_PATH} =~ /\Q$odbchome\/lib/;
 	}
 	print SQLH qq{#include <sql.h>\n};
+	print SQLH qq{#include <sqltypes.h>\n};
 	print SQLH qq{#include <sqlext.h>\n};
     }
     elsif ($myodbc eq 'esodbc') {
@@ -262,6 +265,7 @@ else {
 	print SQLH qq{#define FAR \n#define EXPORT \n#define CALLBACK \n};
 	print SQLH qq{#include <sqlext.h>\n};
 	print SQLH qq{#include <sql.h>\n};
+	print SQLH qq{#include <sqltypes.h>\n};
     }    
     elsif ($myodbc eq 'intersolve') {
 	$opts{DEFINE}  = "";
@@ -269,7 +273,7 @@ else {
 	if (-f "$odbchome/include/sql.h") {
 	    print "You seem to have the official header files.\n";
 	    $opts{INC} .= " -I$odbchome/include";
-	    print SQLH qq{#include <sql.h> \n#include <sqlext.h>\n};
+	    print SQLH qq{#include <sql.h>\n#include <sqltypes.h>\n#include <sqlext.h>\n};
 	}
 	else {
 	    # This is common on Solaris

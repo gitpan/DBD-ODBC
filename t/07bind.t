@@ -94,9 +94,9 @@ Test($rc);
 $rc = ODBCTEST::tab_delete($dbh);
 
 # test param values!
-my $sth = $dbh->prepare("insert into $ODBCTEST::table_name (COL_A, COL_B) values (?, ?)");
+my $sth = $dbh->prepare("insert into $ODBCTEST::table_name (COL_A, COL_C) values (?, ?)");
 $sth->bind_param(1, 1, SQL_INTEGER);
-$sth->bind_param(2, "test", SQL_VARCHAR);
+$sth->bind_param(2, "test", SQL_LONGVARCHAR);
 my $ref = $sth->{ParamValues};
 my $key;
 foreach $key (keys %$ref) {
@@ -104,6 +104,9 @@ foreach $key (keys %$ref) {
 }
 Test($ref->{1} == 1 && $ref->{2} eq "test");
 
+# how to test "sticky" bind_param?
+# how about setting ODBC default bind_param to some number
+# then 
 # clean up!
 $rc = ODBCTEST::tab_delete($dbh);
 

@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.45_9';
+$DBD::ODBC::VERSION = '0.45_11';
 
 {
     package DBD::ODBC;
@@ -434,6 +434,30 @@ See L<DBI> for more information.
  Also note that some tests may be skipped, such as
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
+
+
+=item B<DBD::ODBC 0.45_11>
+Updated manifest to include more samples.
+Working on checking for leaks on Linux, where I might get more information about
+the process memory.
+
+Working on fixing problems with MS SQL Server binding parameters.  It seems that SQLServer
+gets "confused" if you bind a NULL first.  In "older" (SQLServer 2000 initial release) versions
+of the driver, it would truncate char fields.  In "newer" versions of the SQL Server
+driver, it seems to only truncate dates (actually, round them to the nearest minute).  If you have
+problems in the SQL Server tests, please upgrade your driver to the latest version on
+Microsoft's website (MDAC 2.7 or above) http://www.microsoft.com/data
+
+=item B<DBD::ODBC 0.45_10>
+
+Added database specific tests to ensure things are working.  Some of the tests may
+not work for all people or may not be desirable.  I have tried to keep them as
+safe as possible, but if they don't work, please let me know.
+
+Added support for the internal function GetFunctions to handle ODBC 3's
+SQL_API_ODBC3_ALL_FUNCTIONS.  Would have caused a memory overwrite on the
+stack if it was called. 
+
 
 =item B<DBD::ODBC 0.45_9>
 

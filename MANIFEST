@@ -18,13 +18,19 @@ t/05meth.t
 t/07bind.t
 t/08bind2.t
 t/09multi.t
+t/20SqlServer.t
+t/30Oracle.t
 t/ODBCTEST.pm
 mytest/contest.pl
+mytest/coltest.pl
 mytest/joetest.pl
+mytest/joetest2.pl
+mytest/leakcheck.pl
 mytest/listtabs.pl
 mytest/longbin.pl
 mytest/moreresults.pl
 mytest/randombind.pl
+mytest/sqltmptabs.pl
 mytest/testconn.pl
 mytest/testdatasources.pl
 mytest/testerrhandler.pl
@@ -34,8 +40,13 @@ mytest/testigparams.pl
 mytest/testinout.pl
 mytest/testkeys.pl
 mytest/testmulti.pl
+mytest/testproc.pl
+mytest/testproc2.pl
+mytest/testproc3.pl
 mytest/testspmulti.pl
 mytest/testundef.pl
+mytest/testundef2.pl
+mytest/testundef3.pl
 mytest/testver.pl
 mytest/timetest.pl
 

@@ -22,9 +22,20 @@ DBI::Changes - Log of significant changes to the DBI
  See DBD::ODBC POD for more detail.
 
 =head2 DBD::ODBC 0.45 
-Includes all the updates in the 0.45 developer releases (0.45_1 thru 0.45_7)
+Includes all the updates in the 0.45 developer releases (0.45_1 thru 0.45_11)
 
 Adding support for array binding, but not finished.
+
+Working on fixing problems with MS SQL Server binding parameters. 
+
+Added database specific tests to ensure various things are working.
+
+Added support for the internal function GetFunctions to handle ODBC 3's
+SQL_API_ODBC3_ALL_FUNCTIONS.  Would have caused a memory overwrite on the
+stack if it was called. 
+
+Fixed bug in procedure handling for SQLServer.  Was not re-describing the result sets
+if the SQLMoreResults in the execute needs to be called.
 
 Fixed bug in tracing code when binding an undef parameter which did not
 happen to have a valid buffer with tracing level >= 2
