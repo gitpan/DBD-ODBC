@@ -20,6 +20,11 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
 =head1 CHANGES
 
+=item Changes in DBD::ODBC 0.45_18 September 26, 2002
+
+ Updated MANIFEST to include more of the mytest/* files (examples, tests)
+ Fixed problem when attempting to get NUM_OF_FIELDS after execute returns no rows/columns.
+
 =item Changes in DBD::ODBC 0.45_17 August 26, 2002
 
  More fixes for multiple result sets.  Needed to clear the DBIc_FIELDS_AV

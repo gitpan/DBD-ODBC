@@ -19,18 +19,20 @@ my $dbh = DBI->connect()
 my %InfoTests = (
 		 'SQL_DRIVER_NAME', 6,
 		 'SQL_DRIVER_VER', 7,
+		 'SQL_DRIVER_ODBC_VER', 77,
+		 'SQL_DATABASE_NAME', 16,
+		 'SQL_DBMS_NAME', 17,
+		 'SQL_DBMS_VER', 18,
+		 'SQL_DM_VER', 171,
+		 'SQL_IDENTIFIER_QUOTE_CHAR', 29,
+		 'SQL_CATALOG_NAME_SEPARATOR', 41,
+		 'SQL_CATALOG_LOCATION', 114,
 		 'SQL_CURSOR_COMMIT_BEHAVIOR', 23,
 		 'SQL_ALTER_TABLE', 86,
 		 'SQL_ACCESSIBLE_PROCEDURES', 20,
 		 'SQL_PROCEDURES', 21,
 		 'SQL_MULT_RESULT_SETS', 36,
 		 'SQL_PROCEDURE_TERM', 40,
-		 'SQL_DATABASE_NAME', 16,
-		 'SQL_DBMS_NAME', 17,
-		 'SQL_DBMS_VER', 18,
-		 'SQL_IDENTIFIER_QUOTE_CHAR', 29,
-		 'SQL_CATALOG_NAME_SEPARATOR', 41,
-		 'SQL_CATALOG_LOCATION', 114,
 		);
 
 my %TypeTests = (
@@ -48,7 +50,7 @@ print "\nInformation for DBI_DSN=$ENV{'DBI_DSN'}\n\n";
 my $SQLInfo;
 foreach $SQLInfo (sort keys %InfoTests) {
    $ret = 0;
-   $ret = $dbh->func($InfoTests{$SQLInfo}, GetInfo);
+   $ret = $dbh->get_info($InfoTests{$SQLInfo});
    print "$SQLInfo ($InfoTests{$SQLInfo}):\t$ret\n";
 }
 

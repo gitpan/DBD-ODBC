@@ -1402,8 +1402,11 @@ imp_sth_t *imp_sth;
     while (num_fields == 0 && imp_dbh->odbc_sqlmoreresults_supported == 1) {
        rc = SQLMoreResults(imp_sth->hstmt);
        if (DBIc_DEBUGIV(imp_sth) >= 8) {
-	  PerlIO_printf(DBIc_LOGPIO(imp_dbh), "Numfields == 0, SQLMoreResults == %d\n", rc);
-	  PerlIO_flush(DBIc_LOGPIO(imp_dbh));
+	  PerlIO_printf(DBIc_LOGPIO(imp_sth), "Numfields == 0, SQLMoreResults == %d\n", rc);
+	  PerlIO_flush(DBIc_LOGPIO(imp_sth));
+       }
+       if (rc == SQL_SUCCESS_WITH_INFO) {
+	  AllODBCErrors(imp_sth->henv, imp_sth->hdbc, imp_sth->hstmt, DBIc_DEBUGIV(imp_sth) >= 8, DBIc_LOGPIO(imp_dbh));
        }
        imp_sth->done_desc = 0;	/* reset describe flags, so that we re-describe */
        if (!SQL_ok(rc)) break;
@@ -1881,6 +1884,11 @@ imp_sth_t *imp_sth;
 	    PerlIO_printf(DBIc_LOGPIO(imp_dbh),
 			  "    dbd_st_execute got no rows: resetting ACTIVE, moreResults\n");
 	    imp_sth->moreResults = 0;
+	    /* flag that we've done the describe to avoid a problem
+	     * where calling describe after execute returned no rows
+	     * caused SQLServer to provide a description of a query
+	     * that didn't quite apply. */
+	    imp_sth->done_desc = 1; 
 	    DBIc_ACTIVE_off(imp_sth);
 	}
     }
@@ -1957,6 +1965,7 @@ imp_sth_t *imp_sth;
 		 odbc_clear_result_set(imp_sth);
 
        		 imp_sth->odbc_force_rebind = 1; /* force future executes to rebind automatically */
+
 		 /* tell the odbc driver that we need to unbind the
 		  * bound columns.  Fix bug for 0.35 (2/8/02) */
 		 rc = SQLFreeStmt(imp_sth->hstmt, SQL_UNBIND);/* TBD: 3.0 update */

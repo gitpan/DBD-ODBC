@@ -25,14 +25,21 @@ mytest/contest.pl
 mytest/coltest.pl
 mytest/joetest.pl
 mytest/joetest2.pl
+mytest/joetest4.pl
+mytest/joetest5.pl
+mytest/joetest6.pl
+mytest/joetest7.pl
 mytest/leakcheck.pl
 mytest/listtabs.pl
 mytest/longbin.pl
 mytest/moreresults.pl
+mytest/proctest1.pl
+mytest/proctest2.pl
 mytest/randombind.pl
 mytest/sqltmptabs.pl
 mytest/testconn.pl
 mytest/testdatasources.pl
+mytest/testdestruction.pl
 mytest/testerrhandler.pl
 mytest/testfunc.pl
 mytest/testgetinfo.pl
@@ -48,5 +55,6 @@ mytest/testundef.pl
 mytest/testundef2.pl
 mytest/testundef3.pl
 mytest/testver.pl
+mytest/testxml.pl
 mytest/timetest.pl
 
