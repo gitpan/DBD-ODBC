@@ -115,10 +115,12 @@ print "ok 12\n";
 
 $rc = ODBCTEST::tab_delete($dbh);
 
+# Note, this test will fail if no data sources defined or if
+# data_sources is unsupported.
 print " Test 13: test data_sources\n";
 my @data_sources = DBI->data_sources('ODBC');
 print "Data sources:\n\t", join("\n\t",@data_sources),"\n\n";
-print "not " if ($#data_sources == 0);
+print "not " if ($#data_sources < 0);
 print "ok 13\n";
 
 BEGIN {$tests = 13;}

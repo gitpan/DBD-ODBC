@@ -128,7 +128,11 @@ char *pwd;
      * for SQLDriverConnect
      */
     char szConnStrOut[2048];
+#ifdef DBD_SOLID
+	SWORD cbConnStrOut;
+#else
     SQLSMALLINT cbConnStrOut;
+#endif
 
     if (!imp_drh->connects) {
 	rc = SQLAllocEnv(&imp_drh->henv);
@@ -148,9 +152,9 @@ char *pwd;
 	return 0;
     }
 
+#ifndef DBD_ODBC_NO_SQLDRIVERCONNECT
     if (DBIS->debug >= 2)
 		fprintf(DBILOGFP, "Driver connect '%s', '%s', '%s'\n", dbname, uid, pwd);
-
 
     /*
      * SQLDriverConnect handles/maps/fixes db connections and can optionally
@@ -166,13 +170,21 @@ char *pwd;
 			  SQL_DRIVER_NOPROMPT /* no dialog box (for now) */
 			 );
 
-
+#else
+	/* if we are using something that can not handle SQLDriverconnect,
+	 * then set rc to a not OK state
+	 */
+	rc = SQL_ERROR;
+#endif
     /*
      * if SQLDriverConnect fails, then call SQLConnect, just in case
      * perform some tracing at level 4+ (detail of why SQLDriverConnect failed)
      * and level 2+ just to indicate that we are trying SQLConnect.
      */
     if (!SQL_ok(rc)) {
+#ifdef DBD_ODBC_NO_SQLDRIVERCONNECT
+		fprintf(DBILOGFP, "SQLDriverConnect unsupported.\n");
+#else		
 	if (DBIS->debug > 3) {
 	    UCHAR sqlstate[SQL_SQLSTATE_SIZE+1];
 	    /* ErrorMsg must not be greater than SQL_MAX_MESSAGE_LENGTH (says spec) */
@@ -187,7 +199,7 @@ char *pwd;
 	    if (rc == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO)
 		fprintf(DBILOGFP, "SQLDriverConnect failed: %s %s\n", sqlstate, ErrorMsgLen);
 	}
-
+#endif /* DriverConnect supported */
 	if (DBIS->debug >= 2)
 	    fprintf(DBILOGFP, "SQLConnect '%s', '%s', '%s'\n", dbname, uid, pwd);
 
@@ -245,6 +257,7 @@ imp_dbh_t *imp_dbh;
     rc = SQLDisconnect(imp_dbh->hdbc);
     if (!SQL_ok(rc)) {
 	dbd_error(dbh, rc, "db_disconnect/SQLDisconnect");
+	
 	// return 0;	/* XXX if disconnect fails, fall through... */
     }
 
@@ -367,6 +380,12 @@ char *what;
 	    sv_catpv(errstr, sqlstate);
 	    sv_catpv(errstr, ")");
 
+	    /* maybe bad way to add hint about invalid transaction
+	     * state upon disconnect...
+	     */
+	    if (what && !strcmp(sqlstate, "25000") && !strcmp(what, "db_disconnect/SQLDisconnect")) {
+		sv_catpv(errstr, " You need to commit before disconnecting! ");
+	    }
 	    if (DBIS->debug >= 3)
 		fprintf(DBILOGFP, 
 			"dbd_error: SQL-%s (native %d): %s\n",
@@ -643,6 +662,8 @@ static const char *
 	case SQL_REAL:	return "REAL";
 	case SQL_DOUBLE:	return "DOUBLE";
 	case SQL_VARCHAR:	return "VARCHAR";
+	case SQL_WVARCHAR:	return "UNICODE VARCHAR"; /* added for SQLServer 7 ntext type 2/24/2000 */
+	case SQL_WLONGVARCHAR: return "UNICODE LONG VARCHAR";
 	case SQL_DATE:	return "DATE";
 	case SQL_TIME:	return "TIME";
 	case SQL_TIMESTAMP:	return "TIMESTAMP";
@@ -793,6 +814,7 @@ imp_sth_t *imp_sth;
 		fbh->ftype = SQL_C_BINARY;
 		fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth);
 		break;
+	    case SQL_WLONGVARCHAR:	/* added for SQLServer 7 ntext type */
 	    case SQL_LONGVARCHAR:
 		fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
 		break;
@@ -1250,7 +1272,7 @@ int maxlen;
 		    "    SQLDescribeParam %s: SqlType=%s, ColDef=%d\n",
 		    phs->name, S_SqlTypeToString(fSqlType), dp_cbColDef);
 
-	phs->sql_type = fSqlType;
+	   phs->sql_type = fSqlType;
     }
 
     fParamType = SQL_PARAM_INPUT;
@@ -1269,6 +1291,7 @@ int maxlen;
 	    case SQL_VARBINARY:
 		fCType = SQL_C_BINARY;
 		break;
+	    case SQL_WLONGVARCHAR:	/* added for SQLServer 7 ntext type */
 	    case SQL_LONGVARCHAR:
 		break;
 	    case SQL_TIMESTAMP:
@@ -1280,6 +1303,27 @@ int maxlen;
 		break;
 	}
     }
+    /* per patch from Paul G. Weiss, who was experiencing re-preparing
+     * of queries when the size of the bound string's were increasing
+     * for example select * from tabtest where name = ?
+     * then executing with 'paul' and then 'thomas' would cause
+     * SQLServer to prepare the query twice, but if we ran 'thomas'
+     * then 'paul', it would not
+     */
+    if (phs->sql_type == SQL_VARCHAR) {
+	ibScale = 0;
+	/* default to at least 80 if this is the first time through */
+	if (phs->biggestparam == 0) {
+	    phs->biggestparam = (value_len > 80) ? value_len : 80;
+	} else {
+	    /* bump up max, if needed */
+	    if (value_len > phs->biggestparam) {
+		phs->biggestparam = value_len;
+	    }
+	}
+	cbColDef = phs->biggestparam;
+    }
+
     if (!SvOK(phs->sv)) {
 	rgbValue = NULL;
 	phs->cbValue = SQL_NULL_DATA;

@@ -49,7 +49,7 @@ sub tab_select {
     my @data = @{$dref};
     my @row;
 
-    my $sth = $dbh->prepare("SELECT A,B,C,D FROM $ODBCTEST::table_name WHERE a = ?")
+    my $sth = $dbh->prepare("SELECT A,B,C,D FROM $ODBCTEST::table_name WHERE A = ?")
 		or return undef;
 	my @bind_vals = (1, 3);
 	my $bind_val;

@@ -135,7 +135,10 @@ else {
     		if ($myodbc eq '' && <$odbchome/lib/libudbc.a>);
 
     $myodbc = 'easysoft'
-		if ($myodbc eq '' && -f "$odbchome/lib/libesoobclient.so");
+	      if ($myodbc eq '' && -f "$odbchome/lib/libesoobclient.so");
+
+    $myodbc = 'solid'
+	      if ($myodbc eq '' && -f "$odbchome/lib/libsolcli.so");
 
     warn "\nUmm, this looks like a $myodbc type of driver manager.\n";
 
@@ -169,8 +172,11 @@ else {
 	    # remove lib prefix and .so suffix so "-l" style link can be used
 	    $ilibname =~ s/^lib(iodbc.*?)\.\w+$/$1/;
 	    $opts{LIBS} = "-L$ilibdir -l$ilibname";
+
+	    # changed /\Q$ilibpath/ to /\Q$ilibdir/ per recommendation
+	    # by Ron Savage
 	    warn "Warning: LD_LIBRARY_PATH doesn't include $odbchome/lib\n"
-		unless $ENV{LD_LIBRARY_PATH} =~ /\Q$ilibpath/;
+		unless $ENV{LD_LIBRARY_PATH} =~ /\Q$ilibdir/;
 	}
 	#print SQLH qq{#define FAR \n#define EXPORT \n#define CALLBACK \n};
 	#print SQLH qq{#include <iodbc.h>\n};
@@ -271,7 +277,16 @@ else {
         $opts{INC} .= " -I$odbchome/include";
         $opts{LIBS} = "-L$odbchome/lib -lesoobclient";
         print SQLH qq{#include <sql.h>\n#include <sqlext.h>\n};
-   }
+    }
+    elsif ($myodbc eq 'solid') {
+        $opts{INC} .= " -I$odbchome/include";
+        $opts{LIBS} = "-L$odbchome/lib -lsolcli";
+	# Solid does not support DataSources
+	print SQLH qq{#define DBD_ODBC_NO_DATASOURCES\n};
+	# Solid does not support DataSources
+	print SQLH qq{#define DBD_ODBC_NO_SQLDRIVERCONNECT\n};
+        print SQLH qq{#include <cli0cli.h>\n};
+    }
     else {
 	print "\n*** WARNING ***\a\n";
 	print "Unknown driver manager. Using default build process.\n";

@@ -144,11 +144,17 @@ MODULE = DBD::ODBC    PACKAGE = DBD::ODBC::dr
 
 void
 data_sources(drh, attr = NULL)
-    SV* drh;
+	SV* drh;
     SV* attr;
   PROTOTYPE: $;$
   PPCODE:
     {
+#ifdef DBD_ODBC_NO_DATASOURCES
+		/*	D_imp_drh(drh);
+			imp_drh->henv = SQL_NULL_HENV;
+			dbd_error(drh, (RETCODE) SQL_ERROR, "data_sources: SOLID doesn't implement SQLDataSources()");*/
+		XSRETURN(0);
+#else
 	int numDataSources = 0;
 	UWORD fDirection = SQL_FETCH_FIRST;
 	RETCODE rc;
@@ -194,5 +200,6 @@ data_sources(drh, attr = NULL)
 	    imp_drh->henv = SQL_NULL_HENV;
 	}
 	XSRETURN(numDataSources);
+#endif /* no data sources */
     }
 

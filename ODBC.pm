@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.22';
+$DBD::ODBC::VERSION = '0.24';
 
 {
     package DBD::ODBC;
@@ -149,6 +149,7 @@ $DBD::ODBC::VERSION = '0.22';
 	}
 	return 1 if $state eq 'S0002';	# Base table not found
 	return 1 if $state eq 'S0022';	# Column not found
+	return 1 if $state eq '37000';  # statement could not be prepared (19991011, JLU)
 	# We assume that any other error means the database
 	# is no longer connected.
 	# Some special cases may need to be added to the code above.
@@ -257,6 +258,24 @@ See L<DBI> for more information.
 
 =head2 Recent Updates
 
+=item B<DBD::ODBC 0.24>
+
+Fixed Test #13 in 02simple.t.  Would fail, improperly, if there was only one data source defined.
+
+Fixed (hopefully) SQL Server 7 and ntext type "Out of Memory!" errors via patch from Thomas Lowery.  Thanks Thomas!
+
+Added more support for Solid to handle the fact that it does not support data_sources nor SQLDriverConnect.
+ Patch supplied by Samuli Karkkainen [skarkkai@woods.iki.fi].  Thanks!  It's untested by me, however.
+
+Added some information from Adam Curtin about a bug in iodbc 2.50.3's data_sources.  See
+   iodbcsrc\readme.txt.
+
+Added information in this pod from Stephen Arehart regarding DSNLess connections.
+
+Added fix for sp_prepare/sp_execute bug reported by Paul G. Weiss.
+
+Added some code for handling a hint on disconnect where the user gets an error for not committing.
+ 
 =item B<DBD::ODBC 0.22>
 
 Fixed for threaded perl builds.  Note that this was tested only on Win32, with no threads in use and using DBI 1.13.
@@ -523,6 +542,24 @@ HKEY_LOCAL_USERS\SOFTWARE\ODBC\"YOUR DSN" You will see a few settings
 which are typically driver specific.  The important value to change for
 the Access driver, for example, is the DBQ value.  That's actually the
 file name of the Access database.
+
+=item Connect without DSN
+The ability to connect without a full DSN is introduced in version 0.21.
+
+Example (using MS Access):
+	my $DSN = 'driver=Microsoft Access Driver
+(*.mdb);dbq=\\\\cheese\\g$\\perltest.mdb';
+	my $dbh = DBI->connect("dbi:ODBC:$DSN", '','') 
+		or die "$DBI::errstr\n";
+
+The above sample uses Microsoft's UNC naming convention to point to the MSAccess
+file (\\\\cheese\\g$\\perltest.mdb).  The dbq parameter tells the access driver
+which file to use for the database.
+   
+Example (using MSSQL Server):
+      my $DSN = 'driver={SQL Server};Server=server_name;
+      database=database_name;uid=user;pwd=password;';
+      my $dbh  = DBI->connect("dbi:ODBC:$DSN") or die "$DBI::errstr\n";
 
 =head2 Random Links
 

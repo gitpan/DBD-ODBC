@@ -88,6 +88,7 @@ struct phs_st {  	/* scalar placeholder EXPERIMENTAL	*/
 
     SV  *sv;            /* the scalar holding the value         */
     int sv_type;        /* original sv type at time of bind     */
+	int biggestparam;    /* if sv_type is VARCHAR, size of biggest so far */
     bool is_inout;
     IV  maxlen;         /* max possible len (=allocated buffer) */
     char *sv_buf;	/* pointer to sv's data buffer		*/
