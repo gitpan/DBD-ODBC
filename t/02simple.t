@@ -1,5 +1,5 @@
 #!/usr/bin/perl -I./t
-# $Id: 02simple.t 94 2004-02-21 16:10:16Z jurl $
+# $Id: 02simple.t 522 2004-10-26 19:10:34Z jurl $
 
 $| = 1;
 
@@ -178,6 +178,7 @@ $sth->execute;
 $sth->fetch;
 Test($sth->execute);
 
+#DBI->trace(9, "c:/trace.txt");
 my $connstr = $ENV{DBI_DSN};
 if (!($connstr =~ /DSN=/i || $connstr =~ /DRIVER=/i)) {
    $connstr =~ s/ODBC:/ODBC:DSN=/;

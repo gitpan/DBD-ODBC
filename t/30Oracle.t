@@ -1,5 +1,5 @@
 #!/usr/bin/perl -I./t
-# $Id: 30Oracle.t 94 2004-02-21 16:10:16Z jurl $
+# $Id: 30Oracle.t 522 2004-10-26 19:10:34Z jurl $
 
 $| = 1;
 
@@ -35,7 +35,6 @@ unless ($dbname =~ /Oracle/i) {
 
 print "1..$tests\n";
 Test(1);
-# $dbh->trace(9, "c:/trace.txt");
 $dbh->do("create or replace function PERL_DBD_TESTFUNC(a in integer, b in integer) return integer is c integer; begin if b is null then c := 0; else c := b; end if; return a * c + 1; end;");
 my $sth = $dbh->prepare("{ ? = call PERL_DBD_TESTFUNC(?, ?) }");
 my $value = undef;
@@ -55,5 +54,4 @@ $sth->execute;
 $value += 0;
 Test($value == 1);
 
-   
 $dbh->disconnect;

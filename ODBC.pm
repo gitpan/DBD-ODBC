@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 484 2004-10-11 19:20:51Z jurl $
+# $Id: ODBC.pm 522 2004-10-26 19:10:34Z jurl $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '1.11';
+$DBD::ODBC::VERSION = '1.12';
 
 {
     package DBD::ODBC;
@@ -20,7 +20,7 @@ $DBD::ODBC::VERSION = '1.11';
     
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 484 2004-10-11 19:20:51Z jurl $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 522 2004-10-26 19:10:34Z jurl $, 13,2);
 
     require_version DBI 1.21;
 
@@ -270,7 +270,6 @@ $DBD::ODBC::VERSION = '1.11';
     sub do {
         my($dbh, $statement, $attr, @params) = @_;
         my $rows = 0;
-
         if( -1 == $#params )
         {
           # No parameters, use execute immediate
@@ -623,9 +622,11 @@ See t/20SqlServer.t for an example.
 
 =item odbc_query_timeout 
 
-This allows the end user to set a timeout for queries on the ODBC side.  In your connect, add
-{ odbc_timeout => 30 } or set on the dbh before executing the statement.  The default is 0, no timeout.
+This allows the end user to set a timeout for queries on the ODBC side.  After your connect, add
+{ odbc_query_timeout => 30 } or set on the dbh before executing the statement.  The default is 0, no timeout.
 Note that some drivers may not support this attribute.
+
+See t/20SqlServer.t for an example.
 
    
 =item odbc_version (applies to connect only!)
