@@ -21,8 +21,10 @@ static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output);
 /* for sanity/ease of use with potentially null strings */
 #define XXSAFECHAR(p) ((p) ? (p) : "(null)")
 
-/* unique value for db attrib */
+/* unique value for db attrib that won't conflict with SQL types */
 #define ODBC_IGNORE_NAMED_PLACEHOLDERS 0x8332
+#define ODBC_DEFAULT_BIND_TYPE		0x8333
+#define ODBC_DEFAULT_BIND_TYPE_VALUE	SQL_VARCHAR
 
 void dbd_error _((SV *h, RETCODE err_rc, char *what));
 
@@ -245,6 +247,9 @@ char *pwd;
 
     /* default ignoring named parameters to false */
     imp_dbh->odbc_ignore_named_placeholders = 0;
+    /* default behaviour for bind_types */
+    imp_dbh->odbc_default_bind_type = ODBC_DEFAULT_BIND_TYPE_VALUE;
+    
     DBIc_set(imp_dbh,DBIcf_AutoCommit, 1);
 
     imp_drh->connects++;
@@ -483,6 +488,7 @@ char *statement;
     char name[256];
     SV **svpp;
     char ch;
+    char literal_ch = '\0';
 
     /* allocate room for copy of statement with spare capacity	*/
     imp_sth->statement = (char*)safemalloc(strlen(statement)+1);
@@ -500,9 +506,20 @@ char *statement;
     while(*src) {
 	/*
 	 * JLU 10/6/2000 fixed to make the literal a " instead of '
+	 * JLU 1/28/2001 fixed to make literals either " or ', but deal
+	 * with ' "foo" ' or " foo's " correctly (just to be safe).
+	 * 
 	 */
-	if (*src == '"')
-	    in_literal = ~in_literal;
+	if (*src == '"' || *src == '\'') {
+	    if (!in_literal) {
+		literal_ch = *src;
+		in_literal = 1;
+	    } else {
+		if (*src == literal_ch) {
+		    in_literal = 0;
+		}
+	    }
+	}
 	if ((*src != ':' && *src != '?') || in_literal) {
 	    *dest++ = *src++;
 	    continue;
@@ -642,7 +659,7 @@ SV *attribs;
     imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
     imp_sth->hdbc = imp_dbh->hdbc;
     imp_sth->odbc_ignore_named_placeholders = imp_dbh->odbc_ignore_named_placeholders;
-    
+    imp_sth->odbc_default_bind_type = imp_dbh->odbc_default_bind_type;
     rc = SQLAllocStmt(imp_dbh->hdbc, &imp_sth->hstmt);
     if (!SQL_ok(rc)) {
 	dbd_error(sth, rc, "st_prepare/SQLAllocStmt");
@@ -1381,7 +1398,12 @@ imp_sth_t *imp_sth;
      * when the db was disconnected before perl ending.
      */
     if (imp_dbh->hdbc != SQL_NULL_HDBC) {
+
 	rc = SQLFreeStmt(imp_sth->hstmt, SQL_DROP);
+
+	if (DBIS->debug >= 5)
+	    PerlIO_printf(DBILOGFP, "   SQLFreeStmt called, returned %d.\n", rc);
+
 	if (!SQL_ok(rc)) {
 	    dbd_error(sth, rc, "st_destroy/SQLFreeStmt(SQL_DROP)");
 	    /* return 0; */
@@ -1503,19 +1525,31 @@ int maxlen;
 	SWORD fNullable;
 	SWORD ibScale;
 	UDWORD dp_cbColDef;
-	rc = SQLDescribeParam(imp_sth->hstmt,
-			      phs->idx, &fSqlType, &dp_cbColDef, &ibScale, &fNullable
-			     );
-	if (!SQL_ok(rc)) {
-	    dbd_error(sth, rc, "_rebind_ph/SQLDescribeParam");
-	    return 0;
-	}
-	if (DBIS->debug >=2)
-	    PerlIO_printf(DBILOGFP,
-			  "    SQLDescribeParam %s: SqlType=%s, ColDef=%d\n",
-			  phs->name, S_SqlTypeToString(fSqlType), dp_cbColDef);
+	UWORD supported;
+	
+	rc = SQLGetFunctions(imp_sth->hdbc, SQL_API_SQLDESCRIBEPARAM,
+			     &supported);
 
-	phs->sql_type = fSqlType;
+	if (supported) {
+	   rc = SQLDescribeParam(imp_sth->hstmt,
+				 phs->idx, &fSqlType, &dp_cbColDef, &ibScale, &fNullable
+				);
+	   if (!SQL_ok(rc)) {
+	      dbd_error(sth, rc, "_rebind_ph/SQLDescribeParam"); 
+	      return 0;
+	   } else {
+	      if (DBIS->debug >=2) 
+		 PerlIO_printf(DBILOGFP,
+			       "    SQLDescribeParam %s: SqlType=%s, ColDef=%d\n",
+			       phs->name, S_SqlTypeToString(fSqlType), dp_cbColDef);
+	   
+	   phs->sql_type = fSqlType;
+	   }
+	} else {
+	   /* SQLDescribeParam is unsupported */
+	   phs->sql_type = ODBC_DEFAULT_BIND_TYPE_VALUE;
+
+	}
     }
 
     /*
@@ -1684,7 +1718,14 @@ IV maxlen;			/* ??? */
 
     if (phs->sv == &sv_undef) { /* first bind for this placeholder      */
 	phs->ftype    = SQL_C_CHAR;     /* our default type VARCHAR2    */
-	phs->sql_type = (sql_type) ? sql_type : SQL_VARCHAR;
+
+	/* JLU: 1/29/2001: change to allow detection of column type
+	 * instead of assuming sql_varchar.  IF the user sets the
+	 * private attribute.
+	 */
+	phs->sql_type = (sql_type) ? sql_type : imp_sth->odbc_default_bind_type;
+
+
 	phs->maxlen   = maxlen;         /* 0 if not inout               */
 	phs->is_inout = is_inout;
 	if (is_inout) {
@@ -1821,6 +1862,7 @@ static db_params S_db_storeOptions[] =  {
 #endif
     { "odbc_SQL_ROWSET_SIZE", SQL_ROWSET_SIZE },
     { "odbc_ignore_named_placeholders", ODBC_IGNORE_NAMED_PLACEHOLDERS },
+    { "odbc_default_bind_type", ODBC_DEFAULT_BIND_TYPE },
     { NULL },
 };
 
@@ -1856,10 +1898,12 @@ SV *valuesv;
     int on;
     UDWORD vParam;
     const db_params *pars;
-
+    int bSetSQLConnectionOption;
+    
     if ((pars = S_dbOption(S_db_storeOptions, key, kl)) == NULL)
 	return FALSE;
 
+    bSetSQLConnectionOption = TRUE;
     switch(pars->fOption)
     {
 	case SQL_LOGIN_TIMEOUT:
@@ -1873,28 +1917,39 @@ SV *valuesv;
 	    vParam = (UDWORD) SvPV(valuesv, plen);
 	    break;
 
+	case ODBC_IGNORE_NAMED_PLACEHOLDERS:
+	   bSetSQLConnectionOption = FALSE;
+	   /*
+	    * set value to ignore placeholders.  Will affect all
+	    * statements from here on.
+	    */
+	   imp_dbh->odbc_ignore_named_placeholders = SvTRUE(valuesv);
+	   break;
+
+	case ODBC_DEFAULT_BIND_TYPE:
+	   bSetSQLConnectionOption = FALSE;
+	   /*
+	    * set value of default bind type.  Default is SQL_VARCHAR,
+	    * but setting to 0 will cause SQLDescribeParam to be used.
+	    */
+	   imp_dbh->odbc_default_bind_type = SvIV(valuesv);
+
+	   break;
+	   
 	default:
 	    on = SvTRUE(valuesv);
 	    vParam = on ? pars->true : pars->false;
 	    break;
     }
 
-    if (ODBC_IGNORE_NAMED_PLACEHOLDERS == pars->fOption) {
-	
-	/*
-	 * set value to ignore placeholders.  Will affect all
-	 * statements from here on.
-	 */
-	imp_dbh->odbc_ignore_named_placeholders = on;
-    } else {
-	
-	rc = SQLSetConnectOption(imp_dbh->hdbc, pars->fOption, vParam);
-	if (!SQL_ok(rc)) {
+      if (bSetSQLConnectionOption) {
+	 rc = SQLSetConnectOption(imp_dbh->hdbc, pars->fOption, vParam);
+	 if (!SQL_ok(rc)) {
 	    dbd_error(dbh, rc, "db_STORE/SQLSetConnectOption");
 	    return FALSE;
-	}
-	/* keep our flags in sync */
-	if (kl == 10 && strEQ(key, "AutoCommit"))
+	 }
+	 /* keep our flags in sync */
+	 if (kl == 10 && strEQ(key, "AutoCommit"))
 	    DBIc_set(imp_dbh, DBIcf_AutoCommit, SvTRUE(valuesv));
     }
     return TRUE;
@@ -1914,6 +1969,7 @@ static db_params S_db_fetchOptions[] =  {
     { "odbc_SQL_ROWSET_SIZE", SQL_ROWSET_SIZE },
     { "odbc_SQL_DRIVER_ODBC_VER", SQL_DRIVER_ODBC_VER },
     { "odbc_ignore_named_placeholders", ODBC_IGNORE_NAMED_PLACEHOLDERS },
+    { "odbc_default_bind_type", ODBC_DEFAULT_BIND_TYPE },
     { NULL }
 };
 
@@ -1944,46 +2000,57 @@ SV *keysv;
     if ((pars = S_dbOption(S_db_fetchOptions, key, kl)) == NULL)
 	return Nullsv;
 
-    if (SQL_DRIVER_ODBC_VER == pars->fOption) {
-	retsv = newSVpv(imp_dbh->odbc_ver, 0);
-    } else if (ODBC_IGNORE_NAMED_PLACEHOLDERS == pars->fOption) {
+    switch (pars->fOption) {
+       case SQL_DRIVER_ODBC_VER:
+	  retsv = newSVpv(imp_dbh->odbc_ver, 0);
+	  break;
+       case ODBC_IGNORE_NAMED_PLACEHOLDERS:
 	/*
 	 * fetch current value of named placeholders.
 	 */
 	retsv = newSViv(imp_dbh->odbc_ignore_named_placeholders);
-    } else {
+	break;
 	
+       case ODBC_DEFAULT_BIND_TYPE:
+	/*
+	 * fetch current value of named placeholders.
+	 */
+	  retsv = newSViv(imp_dbh->odbc_default_bind_type);
+	  break;
+
+       default:
 	/*
 	 * readonly, tracefile etc. isn't working yet. only AutoCommit supported.
 	 */
 
-	rc = SQLGetConnectOption(imp_dbh->hdbc, pars->fOption, &vParam);
-	dbd_error(dbh, rc, "db_FETCH/SQLGetConnectOption");
-	if (!SQL_ok(rc)) {
-	    if (DBIS->debug >= 1)
+	  rc = SQLGetConnectOption(imp_dbh->hdbc, pars->fOption, &vParam);
+	  dbd_error(dbh, rc, "db_FETCH/SQLGetConnectOption");
+	  if (!SQL_ok(rc)) {
+	     if (DBIS->debug >= 1)
 		PerlIO_printf(DBILOGFP,
 			      "SQLGetConnectOption returned %d in dbd_db_FETCH\n", rc);
-	    return Nullsv;
-	}
-	switch(pars->fOption) {
-	    case SQL_LOGIN_TIMEOUT:
-	    case SQL_TXN_ISOLATION:
+	     return Nullsv;
+	  }
+	  switch(pars->fOption) {
+	     case SQL_LOGIN_TIMEOUT:
+	     case SQL_TXN_ISOLATION:
 		retsv = newSViv(vParam);
 		break;
-	    case SQL_ROWSET_SIZE:
+	     case SQL_ROWSET_SIZE:
 		retsv = newSViv(vParam);
 		break;
-	    case SQL_OPT_TRACEFILE:
+	     case SQL_OPT_TRACEFILE:
 		retsv = newSVpv((char *)vParam, 0);
 		break;
-	    default:
+	     default:
 		if (vParam == pars->true)
-		    retsv = newSViv(1);
+		   retsv = newSViv(1);
 		else
-		    retsv = newSViv(0);
+		   retsv = newSViv(0);
 		break;
-	} /* switch */
-    }
+	  } /* inner switch */
+    } /* outer switch */
+
     return sv_2mortal(retsv);
 }
 
@@ -2010,12 +2077,15 @@ static T_st_params S_st_fetch_params[] =
     s_A("odbc_more_results"),	/* 10 */
     s_A("LongReadLen"),		/* 11 */
     s_A("odbc_ignore_named_placeholders"),	/* 12 */
+    s_A("odbc_default_bind_type"),	/* 13 */
     s_A(""),			/* END */
 };
 
 static T_st_params S_st_store_params[] = 
 {
-    s_A(""),			/* END */
+   s_A("odbc_ignore_named_placeholders"),	/* 0 */
+   s_A("odbc_default_bind_type"),	/* 1 */
+   s_A(""),			/* END */
 };
 #undef s_A
 
@@ -2133,6 +2203,9 @@ SV *keysv;
 	case 12:
 	    retsv = newSViv(imp_sth->odbc_ignore_named_placeholders);
 	    break;
+	case 13:
+	   retsv = newSViv(imp_sth->odbc_default_bind_type);
+	   break;
 	default:
 	    return Nullsv;
     }
@@ -2166,8 +2239,16 @@ SV *valuesv;
 
     switch(par - S_st_store_params)
     {
-	case 0:/*  */
-	    return TRUE;
+	case 0:
+	   imp_sth->odbc_ignore_named_placeholders = SvTRUE(valuesv);
+	   return TRUE;
+
+	case 1:
+	   imp_sth->odbc_default_bind_type = SvIV(valuesv);
+	   break;
+
+	case 2:/*  */
+	   return TRUE;
     }
     return FALSE;
 }

@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.32';
+$DBD::ODBC::VERSION = '0.33_1';
 
 {
     package DBD::ODBC;
@@ -288,13 +288,39 @@ See L<DBI> for more information.
 
 =over 4
 
+=item B<DBD::ODBC 0.33_1>
+
+*** WARNING: ***
+ 
+ Changes to the binding code to allow the use of SQLDescribeParam
+ to determine if the type of column being bound.  This is
+ experimental and activated by setting
+ 
+  $dbh->{odbc_default_bind_type} = 0; before creating the query...
+
+ Fix to dbdimp.c to allow quoted identifiers to begin/end
+ with either " or '.
+ The following will not be treated as if they have a bind placeholder:
+   "isEstimated?"
+   '01-JAN-1987 00:00:00'
+   'Does anyone insert a ?'
+
+				    
+=item B<DBD::ODBC 0.32>
+
+ More SAP patches to Makfile.PL to eliminate the call to Data Sources
+
+ A patch to the test (for SAP and potentially others), to allow
+ fallback to SQL_TYPE_DATE in the tests
+ 
 =item B<DBD::ODBC 0.31>
+
  Added SAP patches to build directly against SAP driver instead of
  driver manager thanks to Flemming Frandsen (thanks!)
 
- Added support to fix ping for Oracle8.  May break other databases, so please report
- this as soon as possible.  The downside is that we need to actually execute the
- dummy query.
+ Added support to fix ping for Oracle8.  May break other databases,
+ so please report this as soon as possible.  The downside is that
+ we need to actually execute the dummy query.
  
 
 =item B<DBD::ODBC 0.30>
@@ -311,9 +337,10 @@ See L<DBI> for more information.
  the Driver upon connect.  This internal capture of the version is
  a read-only attributed and is used during array binding of parameters.
  
- Added odbc_ignore_named_placeholders attribute to facilicate creating triggers
- within SAP and Oracle, to name two. The syntax in these DBs is to allow use of
- :old and :new to access column values before and after updates.  Example:
+ Added odbc_ignore_named_placeholders attribute to facilicate
+ creating triggers within SAPDB and Oracle, to name two. The
+ syntax in these DBs is to allow use of :old and :new to
+ access column values before and after updates.  Example:
 
  $dbh->{odbc_ignore_named_placeholders} = 1; # set it for all future statements
 					  # ignores :foo, :new, etc, but not :1 or ?

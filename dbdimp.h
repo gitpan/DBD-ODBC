@@ -31,6 +31,7 @@ struct imp_dbh_st {
     HDBC hdbc;
     char odbc_ver[20];  /* ODBC compat. version for driver */
     int  odbc_ignore_named_placeholders;	/* flag to ignore named parameters */
+    int  odbc_default_bind_type;	/* flag to set default binding type (experimental) */
 };
 
 /* Define sth implementor data structure */
@@ -68,6 +69,7 @@ struct imp_sth_st {
     UDWORD max_rows;			/* max number of rows per fetch for array binding */
     UWORD *row_status;			/* row indicators for array binding */
     int  odbc_ignore_named_placeholders;	/* flag to ignore named parameters */
+    int  odbc_default_bind_type;	/* flag to set default binding type (experimental) */
 };
 #define IMP_STH_EXECUTING	0x0001
 
