@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 135 2004-02-23 05:37:56Z jurl $
+ * $Id: dbdimp.h 484 2004-10-11 19:20:51Z jurl $
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
  * portions Copyright (c) 1994,1995,1996  Tim Bunce
@@ -40,6 +40,7 @@ struct imp_dbh_st {
     int  odbc_force_rebind; /* force rebinding the output columns after each execute to
        /* resolve some issues where certain stored procs can return
        /* multiple result sets */
+    int  odbc_query_timeout;
     int  odbc_async_exec; /* flag to set asynchronous execution */
     int  odbc_exec_direct;		/* flag for executing SQLExecDirect instead of SQLPrepare and SQLExecute.  Magic happens at SQLExecute() */
     SQLUINTEGER odbc_async_type; /* flag to store the type of asynchronous
@@ -88,6 +89,7 @@ struct imp_sth_st {
     int  odbc_force_rebind; /* force rebinding the output columns after each execute to
        /* resolve some issues where certain stored procs can return
        /* multiple result sets */
+    int odbc_query_timeout;
 };
 #define IMP_STH_EXECUTING	0x0001
 

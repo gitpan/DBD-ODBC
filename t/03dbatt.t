@@ -1,5 +1,5 @@
 #!/usr/bin/perl -I./t
-# $Id: 03dbatt.t 125 2004-02-22 15:57:40Z jurl $
+# $Id: 03dbatt.t 484 2004-10-11 19:20:51Z jurl $
 
 my $tests;
 
@@ -131,7 +131,14 @@ Test(@{$sth->{NAME}}==0);
 
 Test($dbname eq $dbh->{odbc_SQL_DBMS_NAME});
 
-BEGIN { $tests = 14 + 5; } # num tests + one for each table_info column (5)
+$dbh->{odbc_query_timeout} = 30;
+Test($dbh->{odbc_query_timeout} == 30);
+
+my $sth_timeout = $dbh->prepare("select COL_A from $ODBCTEST::table_name");
+Test($sth_timeout->{odbc_query_timeout} == 30);
+$sth_timeout->{odbc_query_timeout} = 1;
+Test($sth_timeout->{odbc_query_timeout} == 1);
+BEGIN { $tests = 17 + 5; } # num tests + one for each table_info column (5)
 $dbh->disconnect;
 # print STDERR $dbh->{odbc_SQL_DRIVER_ODBC_VER}, "\n";
 
