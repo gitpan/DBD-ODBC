@@ -1,4 +1,4 @@
-# $Id: ODBC.pm,v 1.5 1997/07/18 16:28:06 timbo Exp $
+# $Id: ODBC.pm,v 1.6 1997/07/25 11:50:07 timbo Exp $
 #
 # Copyright (c) 1994,1995,1996  Tim Bunce
 # portions Copyright (c) 1997  Thomas K. Wenrich
@@ -16,8 +16,8 @@ require 5.004;
 
     @ISA = qw(DynaLoader);
 
-    $VERSION = '0.15';
-    my $Revision = substr(q$Revision: 1.5 $, 10);
+    $VERSION = '0.16';
+    my $Revision = substr(q$Revision: 1.6 $, 10);
 
     require_version DBI 0.86;
 
@@ -56,7 +56,8 @@ require 5.004;
     use strict;
 
     sub connect {
-	my($drh, $dbname, $user, $auth)= @_;
+	my $drh = shift;
+	my($dbname, $user, $auth)= @_;
 
 	# create a 'blank' dbh
 	my $this = DBI::_new_dbh($drh, {
@@ -68,8 +69,7 @@ require 5.004;
 	# Call ODBC logon func in ODBC.xs file
 	# and populate internal handle data.
 
-	DBD::ODBC::db::_login($this, $dbname, $user, $auth)
-	    or return undef;
+	DBD::ODBC::db::_login($this, $dbname, $user, $auth) or return undef;
 
 	$this;
     }

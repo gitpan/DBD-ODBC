@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -sw
 #
-# $Id: Makefile.PL,v 1.5 1997/07/18 16:28:06 timbo Exp $
+# $Id: Makefile.PL,v 1.6 1997/07/25 11:50:07 timbo Exp $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -8,7 +8,7 @@
 BEGIN { require 5.004 }	# 5.004 is required for Win32
 use Config;
 use ExtUtils::MakeMaker 5.16, qw(&WriteMakefile $Verbose);
-use DBI 0.86;		# must be installed first
+use DBI 0.89;		# must be installed first
 use DBI::DBD;
 use strict;
 
@@ -39,10 +39,12 @@ print SQLH "   Any changes made here will be lost. \n*/\n\n";
 print SQLH "#undef WORD /* from perly.y */\n";
 
 if ($^O eq 'MSWin32') {
+	my $extrainc = "";
+	$extrainc = ";$Config{incpath}\\mfc" if $Config{cc} eq 'bcc32';
     $opts{SKIP} = ['processPL'];
     $opts{DEFINE}  = "";
-    $opts{INC}  = "-I\$(INSTALLSITEARCH)/auto/DBI";
-    $opts{dynamic_lib} = { OTHERLDFLAGS => " ODBC32.LIB" };
+    $opts{INC}  = "-I\$(INSTALLSITEARCH)/auto/DBI" . $extrainc;
+    $opts{LIBS} = ["-lODBC32.LIB"];
     $opts{macro}->{EXTRALIB} = 'ODBC32.LIB';
     print SQLH "#include <windows.h>\n";
     print SQLH "#include <sql.h> \n#include <sqlext.h>\n";

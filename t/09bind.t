@@ -2,7 +2,7 @@
 $| = 1;
 print "1..$tests\n";
 
-use DBI;
+use DBI qw(:sql_types);
 
 print "ok 1\n";
 
@@ -49,13 +49,12 @@ sub tab_select
     my $sth = $dbh->prepare("SELECT * FROM perl_dbd_test WHERE a = :1")
     	or return undef;
     $sth->execute(1);
-    while (@row = $sth->fetchrow())
-    	{
+    while (@row = $sth->fetchrow()) {
 	print "$row[0]|$row[1]|$row[2]|\n";
-	}
+    }
     $sth->finish();
     return 1;
-    }
+}
 
 sub tab_insert {
     my $dbh = shift;
@@ -65,36 +64,34 @@ sub tab_insert {
 INSERT INTO perl_dbd_test (a, b, c)
 VALUES (:1, :2, :3)
 /
-    unless ($sth)
-    	{
-	print STDERR $DBI::errstr, "\n";
+    unless ($sth) {
+	warn $DBI::errstr;
 	return 0;
-	}
-
-    foreach (@data)
-        {
-	unless ($sth->execute(@{$_}))
-	    {
-	    print STDERR $DBI::errstr, "\n";
+    }
+    foreach (@data) {
+	$sth->bind_param(1, $_->[0], SQL_FLOAT);
+	$sth->bind_param(2, $_->[1], SQL_VARCHAR);
+	$sth->bind_param(3, $_->[2], SQL_VARCHAR);
+	unless ($sth->execute) {
+	    warn $DBI::errstr;
 	    return 0;
-	    }
+	}
 	$sth->finish();
-	}
-    unless ($dbh->commit())
-        {
-	print STDERR $DBI::errstr, "\n";
+    }
+    unless ($dbh->commit()) {
+	warn $DBI::errstr;
 	return 0;
-	}
-1;
+    }
+    1;
 }
 
 sub tab_create {
-	$dbh->do(<<"/");
+    $dbh->do(<<"/");
 DROP TABLE perl_dbd_test
 /
     my $fields = "A INTEGER, B CHAR(20), C VARCHAR(100)";
     if ($^O eq 'solaris') {	# Assume Dbf driver. Sad and tacky.
-	$fields = "A FLOAT(10,0), B CHAR(20), C GENERAL";
+	$fields = "A FLOAT(10,0), B CHAR(20), C MEMO";
     }
     $dbh->do("CREATE TABLE perl_dbd_test ($fields)");
 }

@@ -9,6 +9,7 @@ print "ok 1\n";
 print " Test 2: connecting to the database\n";
 #DBI->trace(2);
 my $dbh = DBI->connect() || die "Connect failed: $DBI::errstr\n";
+$dbh->{AutoCommit} = 1;
 
 print "ok 2\n";
 
@@ -74,8 +75,6 @@ sub tab_insert {
 
     $dbh->do(q{INSERT INTO perl_dbd_test (a, b, c) VALUES (1, 'foo', 'foo varchar')});
     $dbh->do(q{INSERT INTO perl_dbd_test (a, b, c) VALUES (2, 'bar', 'bar varchar')});
-
-    $dbh->commit;
 }
 
 sub tab_create {
@@ -86,7 +85,7 @@ sub tab_create {
 
     my $fields = "A INTEGER, B CHAR(20), C VARCHAR(100)";
     if ($^O eq 'solaris') {	# Assume Dbf driver. Sad and tacky.
-	$fields = "A FLOAT(10,0), B CHAR(20), C GENERAL";
+	$fields = "A FLOAT(10,0), B CHAR(20), C MEMO";
     }
     $dbh->do("CREATE TABLE perl_dbd_test ($fields)");
 }

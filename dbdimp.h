@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h,v 1.4 1997/07/16 19:26:20 timbo Exp $
+ * $Id: dbdimp.h,v 1.5 1997/07/25 11:50:07 timbo Exp $
  * Copyright (c) 1997 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
  * portions Copyright (c) 1994,1995,1996  Tim Bunce
@@ -43,6 +43,7 @@ struct imp_sth_st {
     char      *statement;	/* sql (see sth_scan)		*/
     HV        *all_params_hv;   /* all params, keyed by name    */
     AV        *out_params_av;   /* quick access to inout params */
+    int     has_inout_params;
 
     UCHAR    *ColNames;		/* holds all column names; is referenced
 				 * by ptrs from within the fbh structures
@@ -82,10 +83,17 @@ struct imp_fbh_st { 	/* field buffer EXPERIMENTAL */
 typedef struct phs_st phs_t;    /* scalar placeholder   */
 
 struct phs_st {  	/* scalar placeholder EXPERIMENTAL	*/
-    SWORD ftype;        /* external field type	       */
     int idx;		/* index number of this param 1, 2, ...	*/
-    SV	*sv;		/* the scalar holding the value		*/
-    int isnull;
+
+    SV  *sv;            /* the scalar holding the value         */
+    int sv_type;        /* original sv type at time of bind     */
+    bool is_inout;
+    IV  maxlen;         /* max possible len (=allocated buffer) */
+    char *sv_buf;	/* pointer to sv's data buffer		*/
+    int alen_incnull;
+
+    SWORD ftype;        /* external field type	       */
+    SWORD sql_type;     /* the sql type the placeholder should have in SQL	*/
     SDWORD cbValue;	/* length of returned value */
                         /* in Input: SQL_NULL_DATA */
     char name[1];	/* struct is malloc'd bigger as needed	*/
