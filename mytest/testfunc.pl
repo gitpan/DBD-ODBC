@@ -90,6 +90,8 @@ foreach $SQLInfo (sort keys %TypeTests) {
    }
 }	
 
+my $SQL_XOPEN_CLI_YEAR = 10000;
+print $dbh->get_info($SQL_XOPEN_CLI_YEAR), "\n";
 $dbh->disconnect();
 
 sub nullif ($) {

@@ -9,7 +9,7 @@
 
 require 5.004;
 
-$DBD::ODBC::VERSION = '0.37';
+$DBD::ODBC::VERSION = '0.38';
 
 {
     package DBD::ODBC;
@@ -211,6 +211,11 @@ $DBD::ODBC::VERSION = '0.37';
     # to support older applications which used this.
     sub get_info {
 	my ($dbh, $item) = @_;
+	# handle SQL_DRIVER_HSTMT, SQL_DRIVER_HLIB and
+	# SQL_DRIVER_HDESC specially
+	if ($item == 5 || $item == 135 || $item == 76) {
+	   return undef;
+	}
 	return _GetInfo($dbh, $item);
     }
 
@@ -259,7 +264,7 @@ $DBD::ODBC::VERSION = '0.37';
     #
     sub GetInfo {
 	my ($dbh, $item) = @_;
-	_GetInfo($dbh, $item);
+	get_info($dbh, $item);
     }
 
     # Call the ODBC function SQLStatistics
@@ -387,6 +392,15 @@ See L<DBI> for more information.
  t/09multi.t, if your driver doesn't seem to support
  returning multiple result sets.
    
+=item B<DBD::ODBC 0.37>
+
+ Patches for get_info where return type is string.  Patches
+ thanks to Steffen Goldner.  Thanks Steffen!
+
+ Patched get_info to NOT attempt to get data for SQL_DRIVER_HSTMT
+ and SQL_DRIVER_HDESC as they expect data in and have limited value
+ (IMHO).
+
 =item B<DBD::ODBC 0.37>
 
  Further fixed build for ODBC 2.x drivers.  The new SQLExecDirect

@@ -73,8 +73,7 @@ require 5.004;
       };
       $dbh->{PrintError} = 1;
 
-	# trying to use ODBC to tell us what type of data to use,
-	# instead of the above.
+      # trying to use ODBC to tell us what type of data to use
       my $fields = undef;
       my $f;
       foreach $f (sort keys %TestFieldInfo) {

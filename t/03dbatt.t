@@ -13,7 +13,7 @@ my $dbh = DBI->connect() || die "Connect failed: $DBI::errstr\n";
 print "ok 2\n";
 
 #### testing set/get of connection attributes
-
+$dbh->{RaiseError} = 0;
 $dbh->{'AutoCommit'} = 1;
 $rc = commitTest($dbh);
 print " ", $DBI->errstr, "" if ($rc < 0);
@@ -26,7 +26,7 @@ print "ok 4\n";
 $dbh->{'AutoCommit'} = 0;
 $rc = commitTest($dbh);
 print $DBI->errstr, "\n" if ($rc < 0);
-print "not" unless ($rc == 0);
+print "not " unless ($rc == 0);
 print "ok 5\n";
 $dbh->{'AutoCommit'} = 1;
 
@@ -77,7 +77,8 @@ sub commitTest {
     else {
 	$rc = 0;
     }
-    $sth->finish();
+    # in case not all rows have been returned..there shouldn't be more than one.
+    $sth->finish(); 
     $rc;
 }
 

@@ -126,13 +126,13 @@ int dbd_db_execdirect( SV *dbh,
       dbd_error2( dbh, ret, "Execute immediate failed", imp_dbh->henv, imp_dbh->hdbc, stmt );
       if (ret < 0) 
 	 rows = -2;
-      else {
-	 ret = SQLRowCount(stmt, &rows);
-	 if (!SQL_ok(ret)) {
-	    dbd_error( dbh, ret, "SQLRowCount failed" );
-	    if (ret < 0)
-	       rows = -1;
-	 }
+   }
+   else {
+      ret = SQLRowCount(stmt, &rows);
+      if (!SQL_ok(ret)) {
+	 dbd_error( dbh, ret, "SQLRowCount failed" );
+	 if (ret < 0)
+	    rows = -1;
       }
    }
    /* changed from SQLFreeHandle to SQLFreeStmt to support older ODBC
@@ -2426,7 +2426,9 @@ int ftype;
 		    rgbInfoValue, sizeof(rgbInfoValue)-1, &cbInfoValue);
     if (!SQL_ok(rc)) {
 	dbd_error(dbh, rc, "odbc_get_info/SQLGetInfo");
-	return Nullsv;
+	/* patched 2/12/02, thanks to Steffen Goldner */
+	return &sv_undef;
+	/* return Nullsv; */
     }
 
     /* Fancy logic here to determine if result is a string or int */
@@ -2434,7 +2436,7 @@ int ftype;
 	retsv = newSViv(*(int *)rgbInfoValue);	/* XXX cast */
     else if (cbInfoValue != 2 && cbInfoValue != 4)	/* must be string */
 	retsv = newSVpv(rgbInfoValue, 0);
-    else if (rgbInfoValue[cbInfoValue+1] == '\0')	/* must be string */
+    else if (rgbInfoValue[cbInfoValue] == '\0')	/* must be string */ /* patch from Steffen Goldner 0.37 2/12/02 */
 	retsv = newSVpv(rgbInfoValue, 0);
     else if (cbInfoValue == 2)			/* short */
 	retsv = newSViv(*(short *)rgbInfoValue);	/* XXX cast */
