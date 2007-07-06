@@ -1,7 +1,8 @@
 #!/usr/bin/perl -I./t
-# $Id: 05meth.t 544 2004-10-29 13:43:22Z jurl $
+# $Id: 05meth.t 858 2005-02-07 16:00:41Z jurl $
 
 ## TBd: these tests don't seem to be terribly useful
+use sigtrap;
 use Test::More;
 
 $| = 1;
@@ -14,7 +15,7 @@ BEGIN {
    if (!defined $ENV{DBI_DSN}) {
       plan skip_all => "DBI_DSN is undefined";
    } else {
-      plan tests => 8;
+      plan tests => 13;
    }
 }
 
@@ -96,7 +97,14 @@ $sth->finish();
 # turn off error warnings.  We expect one here (invalid transaction state)
 $dbh->{RaiseError} = 0;
 $dbh->{PrintError} = 0;
-$dbh->disconnect();
+
+ok( $dbh->{$_}, $_) for 'Active';
+ok( $dbh-> $_ , $_) for 'ping';
+ok( $dbh-> $_ , $_) for 'disconnect';
+ok(!$dbh->{$_}, $_) for 'Active';
+ok(!$dbh-> $_ , $_) for 'ping';;
+
+# $dbh->disconnect(); # already disconnected
 exit 0;
 
 # avoid warning on one use of DBI::errstr

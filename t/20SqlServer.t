@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 20SqlServer.t 568 2004-11-08 15:12:37Z jurl $
+# $Id: 20SqlServer.t 9694 2007-06-29 13:42:15Z mjevans $
 
 use Test::More;
 
@@ -438,7 +438,7 @@ AS
 
    $dbh->{odbc_err_handler} = \&err_handler;
 
-   $sth = $dbh->prepare("dbcc TRACESTATUS(-1)");
+   $sth = $dbh->prepare("dbcc TRACESTATUS(0)");
    $sth->execute;
    cmp_ok($testpass, '>', 0, "dbcc messages being returned");
    $testpass = 0;

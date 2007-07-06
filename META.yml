@@ -1,11 +1,14 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         DBD-ODBC
-version:      1.13
-version_from: ODBC.pm
-installdirs:  site
-requires:
+--- #YAML:1.0
+name:                DBD-ODBC
+version:             1.14_1
+abstract:            ODBC driver for the DBI module.
+license:             ~
+generated_by:        ExtUtils::MakeMaker version 6.36
+distribution_type:   module
+requires:     
     DBI:                           1.21
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.17
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
+    version: 1.2
+author:
+    - Tim Bunce and Jeff Urlwin mailto:dbi-users@perl.org

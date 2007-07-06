@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 484 2004-10-11 19:20:51Z jurl $
+ * $Id: dbdimp.h 9700 2007-07-04 14:12:58Z mjevans $
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
  * portions Copyright (c) 1994,1995,1996  Tim Bunce
@@ -18,17 +18,17 @@ typedef struct imp_fbh_st imp_fbh_t;
  */
 struct imp_drh_st {
     dbih_drc_t com;		/* MUST be first element in structure	*/
-    HENV henv;
+    SQLHENV henv;
     int connects;		/* connect count */
 };
 
-/* Define dbh implementor data structure 
+/* Define dbh implementor data structure
    This holds everything to describe the database connection.
  */
 struct imp_dbh_st {
     dbih_dbc_t com;		/* MUST be first element in structure	*/
-    HENV henv;			/* copy from imp_drh for speed		*/
-    HDBC hdbc;
+    SQLHENV henv;	        /* copy from imp_drh for speed		*/
+    SQLHDBC hdbc;
     char odbc_ver[20];  /* ODBC compat. version for driver */
     char odbc_dbname[64];
     int  odbc_ignore_named_placeholders;	/* flag to ignore named parameters */
@@ -37,10 +37,11 @@ struct imp_dbh_st {
     int  odbc_sqlmoreresults_supported; /* flag to see if SQLMoreResults is supported */
     int	 odbc_defer_binding; /* flag to work around SQLServer bug and defer binding until */
 			    /* last possible moment */
-    int  odbc_force_rebind; /* force rebinding the output columns after each execute to
-       /* resolve some issues where certain stored procs can return
+  int  odbc_force_rebind; /* force rebinding the output columns after each execute to */
+  /* resolve some issues where certain stored procs can return */
        /* multiple result sets */
     int  odbc_query_timeout;
+    int  odbc_has_unicode;
     int  odbc_async_exec; /* flag to set asynchronous execution */
     int  odbc_exec_direct;		/* flag for executing SQLExecDirect instead of SQLPrepare and SQLExecute.  Magic happens at SQLExecute() */
     SQLUINTEGER odbc_async_type; /* flag to store the type of asynchronous
@@ -55,7 +56,7 @@ struct imp_sth_st {
 
     HENV       henv;		/* copy for speed	*/
     HDBC       hdbc;		/* copy for speed	*/
-    HSTMT      hstmt;
+    SQLHSTMT   hstmt;
 
     int        moreResults;	/* are there more results to fetch?	*/
     int        done_desc;	/* have we described this sth yet ?	*/
@@ -86,8 +87,8 @@ struct imp_sth_st {
     int  odbc_ignore_named_placeholders;	/* flag to ignore named parameters */
     int  odbc_default_bind_type;	/* flag to set default binding type (experimental) */
     int  odbc_exec_direct;		/* flag for executing SQLExecDirect instead of SQLPrepare and SQLExecute.  Magic happens at SQLExecute() */
-    int  odbc_force_rebind; /* force rebinding the output columns after each execute to
-       /* resolve some issues where certain stored procs can return
+  int  odbc_force_rebind; /* force rebinding the output columns after each execute to */
+			       /* resolve some issues where certain stored procs can return */
        /* multiple result sets */
     int odbc_query_timeout;
 };
@@ -99,11 +100,11 @@ struct imp_fbh_st { 	/* field buffer EXPERIMENTAL */
    imp_sth_t *imp_sth;	/* 'parent' statement */
     /* field description - SQLDescribeCol() */
     UCHAR *ColName;		/* zero-terminated column name */
-    SWORD ColNameLen;
-    UDWORD ColDef;		/* precision */
-    SWORD ColScale;
-    SWORD ColSqlType;
-    SWORD ColNullable;
+    SQLSMALLINT ColNameLen;
+    SQLUINTEGER ColDef;		/* precision */
+    SQLSMALLINT ColScale;
+    SQLSMALLINT ColSqlType;
+    SQLSMALLINT ColNullable;
     SDWORD ColLength;		/* SqlColAttributes(SQL_COLUMN_LENGTH) */
     SDWORD ColDisplaySize;	/* SqlColAttributes(SQL_COLUMN_DISPLAY_SIZE) */
 
@@ -123,16 +124,16 @@ struct imp_fbh_st { 	/* field buffer EXPERIMENTAL */
 typedef struct phs_st phs_t;    /* scalar placeholder   */
 
 struct phs_st {  	/* scalar placeholder EXPERIMENTAL	*/
-    int idx;		/* index number of this param 1, 2, ...	*/
+    SQLUSMALLINT idx;		/* index number of this param 1, 2, ...	*/
 
     SV  *sv;            /* the scalar holding the value         */
     int sv_type;        /* original sv type at time of bind     */
     int biggestparam;    /* if sv_type is VARCHAR, size of biggest so far */
-    int scale;
+    int scale;                                  /* MJE NEVER USED */
     bool is_inout;
     IV  maxlen;         /* max possible len (=allocated buffer) */
     char *sv_buf;	/* pointer to sv's data buffer		*/
-    int alen_incnull;
+    int alen_incnull;                           /* MJE NEVER USED */
 
     SWORD ftype;			/* external field type	       */
     SWORD sql_type;			/* the sql type the placeholder should have in SQL	*/
