@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 9700 2007-07-04 14:12:58Z mjevans $
+ * $Id: dbdimp.h 10151 2007-11-02 16:25:14Z mjevans $
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
  * portions Copyright (c) 1994,1995,1996  Tim Bunce
@@ -30,9 +30,10 @@ struct imp_dbh_st {
     SQLHENV henv;	        /* copy from imp_drh for speed		*/
     SQLHDBC hdbc;
     char odbc_ver[20];  /* ODBC compat. version for driver */
+    SQLSMALLINT max_column_name_len;
     char odbc_dbname[64];
     int  odbc_ignore_named_placeholders;	/* flag to ignore named parameters */
-    int  odbc_default_bind_type;	/* flag to set default binding type (experimental) */
+    SQLSMALLINT  odbc_default_bind_type;	/* flag to set default binding type (experimental) */
     int  odbc_sqldescribeparam_supported; /* flag to see if SQLDescribeParam is supported */
     int  odbc_sqlmoreresults_supported; /* flag to see if SQLMoreResults is supported */
     int	 odbc_defer_binding; /* flag to work around SQLServer bug and defer binding until */
@@ -40,7 +41,7 @@ struct imp_dbh_st {
   int  odbc_force_rebind; /* force rebinding the output columns after each execute to */
   /* resolve some issues where certain stored procs can return */
        /* multiple result sets */
-    int  odbc_query_timeout;
+    SQLINTEGER  odbc_query_timeout;
     int  odbc_has_unicode;
     int  odbc_async_exec; /* flag to set asynchronous execution */
     int  odbc_exec_direct;		/* flag for executing SQLExecDirect instead of SQLPrepare and SQLExecute.  Magic happens at SQLExecute() */
@@ -73,7 +74,7 @@ struct imp_sth_st {
     UCHAR    *RowBuffer;	/* holds row data; referenced from fbh */
     imp_fbh_t *fbh;		/* array of imp_fbh_t structs	*/
 
-    SDWORD   RowCount;		/* Rows affected by insert, update, delete
+    SQLLEN   RowCount;		/* Rows affected by insert, update, delete
 				 * (unreliable for SELECT)
 				 */
     int eod;			/* End of data seen */
@@ -85,12 +86,12 @@ struct imp_sth_st {
     UDWORD max_rows;			/* max number of rows per fetch for array binding */
     UWORD *row_status;			/* row indicators for array binding */
     int  odbc_ignore_named_placeholders;	/* flag to ignore named parameters */
-    int  odbc_default_bind_type;	/* flag to set default binding type (experimental) */
+    SQLSMALLINT odbc_default_bind_type;	/* flag to set default binding type (experimental) */
     int  odbc_exec_direct;		/* flag for executing SQLExecDirect instead of SQLPrepare and SQLExecute.  Magic happens at SQLExecute() */
   int  odbc_force_rebind; /* force rebinding the output columns after each execute to */
 			       /* resolve some issues where certain stored procs can return */
        /* multiple result sets */
-    int odbc_query_timeout;
+    SQLINTEGER odbc_query_timeout;
 };
 #define IMP_STH_EXECUTING	0x0001
 
@@ -101,19 +102,19 @@ struct imp_fbh_st { 	/* field buffer EXPERIMENTAL */
     /* field description - SQLDescribeCol() */
     UCHAR *ColName;		/* zero-terminated column name */
     SQLSMALLINT ColNameLen;
-    SQLUINTEGER ColDef;		/* precision */
+    SQLULEN ColDef;		/* precision */
     SQLSMALLINT ColScale;
     SQLSMALLINT ColSqlType;
     SQLSMALLINT ColNullable;
-    SDWORD ColLength;		/* SqlColAttributes(SQL_COLUMN_LENGTH) */
-    SDWORD ColDisplaySize;	/* SqlColAttributes(SQL_COLUMN_DISPLAY_SIZE) */
+    SQLLEN ColLength;		/* SqlColAttributes(SQL_COLUMN_LENGTH) */
+    SQLLEN ColDisplaySize;	/* SqlColAttributes(SQL_COLUMN_DISPLAY_SIZE) */
 
     /* Our storage space for the field data as it's fetched	*/
     SWORD ftype;		/* external datatype we wish to get.
 				 * Used as parameter to SQLBindCol().
 				 */
     UCHAR *data;		/* points into sth->RowBuffer */
-    SDWORD datalen;		/* length returned from fetch for single row. */
+    SQLLEN datalen;		/* length returned from fetch for single row. */
     UDWORD maxcnt;		/* max num of rows to return per fetch */
     SV *colary;			/* ref to array to recv output data */
     SDWORD *col_indics;	/* individual column length/NULL indicators for array binding */
@@ -139,7 +140,7 @@ struct phs_st {  	/* scalar placeholder EXPERIMENTAL	*/
     SWORD sql_type;			/* the sql type the placeholder should have in SQL	*/
     SWORD tgt_sql_type;			/* the PH SQL type the stmt expects     */
     SDWORD tgt_len;			/* size or precision the stmt expects */
-    SDWORD cbValue;			/* length of returned value OR SQL_NULL_DATA */
+    SQLLEN cbValue;			/* length of returned value OR SQL_NULL_DATA */
     SDWORD *indics;			/* ptr to indicator array for param arrays */
     int is_array;			/* TRUE => parameter array */
 
