@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 20SqlServer.t 9941 2007-09-13 09:08:35Z mjevans $
+# $Id: 20SqlServer.t 10166 2007-11-06 14:04:25Z mjevans $
 
 use Test::More;
 
