@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $Date$ $Revision: 10236 $)
+(As of $Date$ $Revision: 10381 $)
 
 =cut
 
@@ -22,6 +22,36 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
  Try to produce a Module::Install build.
 
 =head1 CHANGES
+
+=head2 Changes in DBD::ODBC 1.15 January 29, 2008
+
+1.15 final release.
+
+Fixed bug reported by Toni Salomaki where DBD::ODBC may call
+SQLNumResultCols after SQLMoreResults returns SQL_NO_DATA. It led to
+the error:
+
+Describe failed during DBI::st=HASH(0x19c2048)->FETCH(NUM_OF_FIELDS,0)
+
+when NUM_OF_FIELDS was referenced in the Perl script.
+
+Updated odbc_exec_direct documentation to describe its requirement
+when creating temporary objects in SQL Server.
+
+Added FAQ on SQL Server temporary tables.
+
+Fixed bug in dbdimp.c which was using SQL_WCHAR without testing it was
+defined - thanks Jergen Dutch.
+
+Fixed use of "our" in UCHelp.pm which fails on older Perls.
+
+Minor changes to 02simple.t and 03dbatt.t to fix diagnostics output
+and help debug DBD which does not handle long data properly.
+
+Further changes to Makefile.PL to avoid change in behavior of
+ExtUtils::MakeMaker wrt order of execution of PREREQ_PM and CONFIGURE.
+Now if DBI::DBD is not installed we just warn and exit 0 to avoid a
+cpan-testers failure.
 
 =head2 Changes in DBD::ODBC 1.15_2 November 14, 2007
 
@@ -57,9 +87,6 @@ Changed Makefile.PL so if an ODBC driver manager is not found then we
 issue warning and exit cleanly but not generating a Makefile. This
 should stop cpan-testers from flagging a fail because they haven't got
 an ODBC driver manager.
-
-Fix bug introduced in recent checkin where if odbchome is not defined we
-still output a msg using $odbchome.
 
 Changed Makefile.PL so it no longer "use"s DBI/DBI::DBD because this
 makes cpan-testers log a fail if DBI is not installed. Changed to put

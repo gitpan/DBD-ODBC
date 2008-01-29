@@ -1,9 +1,9 @@
 --- #YAML:1.0
 name:                DBD-ODBC
-version:             1.15_2
+version:             1.15
 abstract:            ODBC driver for the DBI module.
 license:             ~
-generated_by:        ExtUtils::MakeMaker version 6.36
+generated_by:        ExtUtils::MakeMaker version 6.33
 distribution_type:   module
 requires:     
     DBI:                           1.21

@@ -1,5 +1,5 @@
 #!perl -w -I./t
-# $Id: 03dbatt.t 9747 2007-07-16 14:08:02Z mjevans $
+# $Id: 03dbatt.t 10351 2007-12-03 16:57:46Z mjevans $
 
 use Test::More;
 
@@ -78,7 +78,7 @@ SKIP:  {
     skip "table_info returned undef sth", 7 unless $sth;
     my $cols = $sth->{NAME};
     isa_ok($cols, 'ARRAY', "sth {NAME} returns ref to array");
-    diag("\nN.B. Some drivers (postgres) may return ODBC 2.0 column names for the SQLTables result-set e.g. TABLE_QUALIFIER instead of TABLE_CAT");
+    diag("\nN.B. Some drivers (postgres/cache) may return ODBC 2.0 column names for the SQLTables result-set e.g. TABLE_QUALIFIER instead of TABLE_CAT");
     for (my $i = 0; $i < @$cols; $i++) {
        # print ${$cols}[$i], ": ", $sth->func($i+1, 3, ColAttributes),
        # "\n";
