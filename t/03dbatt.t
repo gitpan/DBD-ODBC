@@ -1,5 +1,5 @@
 #!perl -w -I./t
-# $Id: 03dbatt.t 10351 2007-12-03 16:57:46Z mjevans $
+# $Id: 03dbatt.t 10999 2008-03-25 14:46:57Z mjevans $
 
 use Test::More;
 
@@ -14,7 +14,7 @@ BEGIN {
       plan skip_all => "DBI_DSN is undefined";
    } else {
       # num tests + one for each table_info column (5)
-      plan tests => 19 + 5;
+      plan tests => 21 + 5;
    }
 }
 
@@ -135,10 +135,16 @@ SKIP: {
     is(@{$sth->{NAME}}, 0, "update statement has 0 columns returned 2");
 };
 
+is($dbh->{odbc_query_timeout}, 0, 'verify default dbh odbc_query_timeout = 0');
+my $sth_timeout = $dbh->prepare("select COL_A from $ODBCTEST::table_name");
+is($sth_timeout->{odbc_query_timeout}, 0,
+   'verify default sth odbc_query_timeout = 0');
+$sth_timeout = undef;
+
 $dbh->{odbc_query_timeout} = 30;
 is($dbh->{odbc_query_timeout}, 30, "Verify odbc_query_timeout set ok");
 
-my $sth_timeout = $dbh->prepare("select COL_A from $ODBCTEST::table_name");
+$sth_timeout = $dbh->prepare("select COL_A from $ODBCTEST::table_name");
 is($sth_timeout->{odbc_query_timeout}, 30, "verify dbh setting for query_timeout passed to sth");
 $sth_timeout->{odbc_query_timeout} = 1;
 is($sth_timeout->{odbc_query_timeout}, 1, "verify sth query_timeout can be overridden");

@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 20SqlServer.t 10262 2007-11-16 15:10:11Z mjevans $
+# $Id: 20SqlServer.t 11265 2008-05-14 12:10:27Z mjevans $
 
 use Test::More;
 
@@ -14,7 +14,7 @@ use_ok('Data::Dumper');
 my $tests;
 # to help ActiveState's build process along by behaving (somewhat) if a dsn is not provided
 BEGIN {
-   $tests = 37;
+   $tests = 38;
    if (!defined $ENV{DBI_DSN}) {
       plan skip_all => "DBI_DSN is undefined";
    } else {
@@ -22,8 +22,8 @@ BEGIN {
    }
 }
 
-sub Multiple_concurrent_stmts($) {
-   my $dbh = shift;
+sub Multiple_concurrent_stmts {
+   my ($dbh, $expect) = @_;
    my $sth = $dbh->prepare("select * from PERL_DBD_TABLE1");
    $dbh->{RaiseError} = 1;
    $sth->execute;
@@ -37,10 +37,13 @@ sub Multiple_concurrent_stmts($) {
 	 }
       }
    };
-   
+
    if ($@) {
-      return 0;
+       diag($@) if (defined($expect) && ($expect == 1));
+       return 0;
    }
+   diag("Expected fail of MARS and it worked!")
+       if (defined($expect) && ($expect == 0));
    return 1;
 }
 
@@ -50,11 +53,15 @@ unless($dbh) {
    exit 0;
 }
 
+my $dbversion = $dbh->get_info(18); # SQL_DBMS_VER
+my $m_dbversion = $dbversion;
+$m_dbversion =~ s/^(\d+).*/$1/;
+
 my $dbname = $dbh->get_info(17); # DBI::SQL_DBMS_NAME
 SKIP: {
    skip "Microsoft SQL Server tests not supported using $dbname", $tests-2 unless ($dbname =~ /Microsoft SQL Server/i);
 
-   
+
    # the times chosen below are VERY specific to NOT cause rounding errors, but may cause different
    # errors on different versions of SQL Server.
    #
@@ -86,7 +93,7 @@ SKIP: {
 	 last if @row;
       } else {
        # warn "Unable to get type for type $type\n";
-      }	
+      }
    }
    BAILOUT("Unable to find a suitable test type for date field\n")
 	 unless @row;
@@ -175,7 +182,7 @@ SKIP: {
 
    eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
    eval {$dbh->do("CREATE PROCEDURE PERL_DBD_PROC1 \@inputval int AS ".
-		  "INSERT INTO PERL_DBD_TABLE1 VALUES (\@inputval); " .   
+		  "INSERT INTO PERL_DBD_TABLE1 VALUES (\@inputval); " .
 		  "	return \@inputval;");};
 
 
@@ -196,7 +203,7 @@ SKIP: {
       # print "\n";
       $i++;
    }
-      
+
    is($iErrCount, 0, "bind param in out with insert result set");
    $iErrCount = 0;
    eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
@@ -241,7 +248,7 @@ SKIP: {
    $sth->execute();
    $sth->bind_param (1, undef, SQL_TYPE_TIMESTAMP);
    $sth->execute();
-      
+
    $iErrCount = 0;
    $sth2 = $dbh->prepare("select * from PERL_DBD_TABLE1 where d is not null");
    $sth2->execute;
@@ -391,7 +398,7 @@ AS
    $sth->bind_param(2, $queryInputParameter1, { TYPE => DBI::SQL_INTEGER });
 
    $sth->execute();
-   
+
    do {
       for(my $rowRef; $rowRef = $sth->fetchrow_hashref('NAME'); )  {
 	 my %outputData = %$rowRef;
@@ -412,13 +419,13 @@ AS
    is($queryOutputParameter, $queryInputParameter1 + 1, "valid output data");
 
    # test a procedure with no parameters
-   eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");}; 
-   eval {$dbh->do("CREATE PROCEDURE PERL_DBD_PROC1 AS return 1;");}; 
+   eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
+   eval {$dbh->do("CREATE PROCEDURE PERL_DBD_PROC1 AS return 1;");};
 
-   $sth1 = $dbh->prepare ("{ ? = call PERL_DBD_PROC1 }"); 
-   $output = undef; 
-   $iErrCount = 0; 
-   $sth1->bind_param_inout(1, \$output, 50, DBI::SQL_INTEGER); 
+   $sth1 = $dbh->prepare ("{ ? = call PERL_DBD_PROC1 }");
+   $output = undef;
+   $iErrCount = 0;
+   $sth1->bind_param_inout(1, \$output, 50, DBI::SQL_INTEGER);
 
    $sth1->execute();
    is($output, 1, "test procedure with no input params");
@@ -452,7 +459,7 @@ AS
    $testpass = 0;
    $dbh->{odbc_async_exec} = 0;
    is($dbh->{odbc_async_exec}, 0, "reset async exec");
-   
+
    # DBI->trace(9);
    $dbh->{odbc_exec_direct} = 1;
    is($dbh->{odbc_exec_direct}, 1, "test setting odbc_exec_direct");
@@ -463,7 +470,7 @@ AS
 	 is($row[0], 1, "Valid select results with print statements");
       }
    } while ($sth2->{odbc_more_results});
-   
+
    is($testpass,2, "ensure 2 error messages from two print statements");
    is($lastmsg, 'END', "validate error messages being retrieved");
 
@@ -476,13 +483,37 @@ AS
    $dbh->do("insert into perl_dbd_table1 (i, j) values (1, 2)");
    $dbh->do("insert into perl_dbd_table1 (i, j) values (3, 4)");
 
-   ok(!&Multiple_concurrent_stmts($dbh), "Multiple concurrent statements should fail");
-
    $dbh->disconnect;
-   $dbh = DBI->connect($ENV{DBI_DSN}, $ENV{DBI_USER}, $ENV{DBI_PASS}, { odbc_cursortype => 2 });
-   # $dbh->{odbc_err_handler} = \&err_handler;
-   ok(&Multiple_concurrent_stmts($dbh), "Multiple concurrent statements succeed (odbc_cursortype set)");
+   my $dsn = $ENV{DBI_DSN};
+   if ($dsn !~ /^DSN=/) {
+       my @a = split(q/:/, $ENV{DBI_DSN});
+       $dsn = join(q/:/, @a[0..($#a - 1)]) . ":DSN=" . $a[-1];
+   }
+   my $base_dsn = $dsn;
+   $dsn .= ";MARS_Connection=no;";
+   $dbh = DBI->connect($dsn, $ENV{DBI_USER}, $ENV{DBI_PASS}, {PrintError => 0});
+   ok(!&Multiple_concurrent_stmts($dbh, 0), "Multiple concurrent statements should fail");
+   $dbh->disconnect;
 
+   $dbh = DBI->connect($dsn, $ENV{DBI_USER}, $ENV{DBI_PASS}, { odbc_cursortype => 2, PrintError => 0 });
+   # $dbh->{odbc_err_handler} = \&err_handler;
+   ok(&Multiple_concurrent_stmts($dbh, 1), "Multiple concurrent statements succeed (odbc_cursortype set)");
+
+ SKIP: {
+       skip "MS SQL Server version < 9", 1 if ($m_dbversion < 9);
+       $dbh->disconnect; # throw away non-mars connection
+       $dsn = "$base_dsn;MARS_Connection=yes;";
+       $dbh = DBI->connect($dsn, $ENV{DBI_USER}, $ENV{DBI_PASS}, {PrintError => 0});
+       my $tst = "Multiple concurrent statements succeed with MARS";
+       if (&Multiple_concurrent_stmts($dbh,1)) {
+           pass($tst);
+       } else {
+           diag("DSN=$dsn\n");
+           fail($tst);
+       }
+       $dbh->disconnect; # throw away mars connection
+       $dbh = DBI->connect;
+   }
 
    # clean up test table and procedure
    # reset err handler
@@ -515,7 +546,7 @@ AS
 };
 
    $dbh->disconnect;
-      
+
 
 exit 0;
 # get rid of use once warnings

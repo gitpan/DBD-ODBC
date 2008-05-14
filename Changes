@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $Date$ $Revision: 10381 $)
+(As of $LastChangedDate: 2008-05-12 15:20:24 +0100 (Mon, 12 May 2008) $ $Revision: 10667 $)
 
 =cut
 
@@ -18,10 +18,106 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
  Add support for $sth->more_results based on DBD::ODBC-specific attribute
  Use odbcinst (if it exists to point people at the ini files they need to use)
  Use odbc_config (if it exists to find out about unixODBC).
+ There is a Columns private ODBC method which is not documented.
 
  Try to produce a Module::Install build.
 
 =head1 CHANGES
+
+=head2 Changes in DBD::ODBC 1.16 May 13, 2008
+
+=head3 Test Changes
+
+Small change to the last test in 10handler.t to cope with the prepare
+failing instead of the execute failing - spotted by Andrei Kovalevski
+with the ODBCng Postgres driver.
+
+Changed the 20SqlServer.t test to specifically disable MARS for the
+test to check multiple active statements and added a new test to check
+that when MARS_Connection is enabled multiple active statements are
+allowed.
+
+Changed the 09multi.t test to use ; as a SQL statement seperator
+instead of a newline.
+
+A few minor "use of unitialised" fixes in tests when a test fails.
+
+In 02simple.t Output DBMS_NAME/VER, DRIVER_NAME/VER as useful
+debugging aid when cpan testers report a fail.
+
+2 new tests for odbc_query_timeout added to 03dbatt.t.
+
+Changed 02simple.t test which did not work for Oracle due to a "select
+1" in the test. Test changed to do "select 1 from dual" for Oracle.
+
+=head3 Documentation Changes
+
+Added references to DBD::ODBC ohloh listing and markmail archives.
+
+Added Tracing sections.
+
+Added "Deviations from the DBI specification" section.
+
+Moved the FAQ entries from ODBC.pm to new FAQ document. You can view
+the FAQ with perldoc DBD::ODBC::FAQ.
+
+Added provisional README.windows document.
+
+Rewrote pod for odbc_query_timeout.
+
+Added a README.osx.
+
+=head3 Internal Changes
+
+More tracing in dbdimp.c for named parameters.
+
+#ifdeffed out odbc_get_primary_keys in dbdimp.c as it is no longer
+used.  $h->func($catalog, $schema, $table, 'GetPrimaryKeys') ends up
+in dbdimp.c/dbd_st_primary_keys now.
+
+Reformatted dbdimp.c to avoid going over 80 columns.
+
+Tracing changed. Levels reviewed and changed in many cases avoiding levels 1
+and 2 which are reserved for DBI. Now using DBIc_TRACE macro internally.
+
+=head3 Build Changes
+
+Changes to Makefile.PL to fix a newly introduced bug with 'tr', remove
+easysoft OOB detection and to try and use odbc_config and odbcinst if
+we find them to aid automatic configuration. This latter change also
+adds "odbc_config --cflags" to the CC line when building DBD::ODBC.
+
+Avoid warning when testing ExtUtils::MakeMaker version and it is a
+test release with an underscore in the version.
+
+=head3 Functionality Changes
+
+Added support for parse_trace_flag and parse_trace_flags methods and
+defined a DBD::ODBC private flag 'odbcdev' as a test case.
+
+Add support for the 'SQL' trace type. Added private trace type odbcdev
+as an experimental start.
+
+Change odbc_query_timeout attribute handling so if it is set to 0
+after having set it to a non-zero value the default of no time out is
+restored.
+
+Added support for DBI's statistics_info method.
+
+=head3 Bug Fixes
+
+Fix bug in support for named placeholders leading to error "Can't
+rebind placeholder" when there is more than one named placeholder.
+
+Guard against scripts attempting to use a named placeholder more than
+once in a single SQL statement.
+
+If you called some methods after disconnecting (e.g., prepare/do and
+any of the DBD::ODBC specific methods via "func") then no error was
+generated.
+
+Fixed issue with use of true/false as fields names in structure on MAC
+OS X 10.5 (Leopard) thanks to Hayden Stainsby.
 
 =head2 Changes in DBD::ODBC 1.15 January 29, 2008
 
