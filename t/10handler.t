@@ -1,27 +1,33 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 10handler.t 11256 2008-05-12 14:20:24Z mjevans $
+# $Id: 10handler.t 11680 2008-08-28 08:23:27Z mjevans $
 
 use Test::More;
-
+use strict;
 $| = 1;
+
+my $has_test_nowarnings = 1;
+eval "require Test::NoWarnings";
+$has_test_nowarnings = undef if $@;
+my $tests = 11;
+$tests += 1 if $has_test_nowarnings;
+plan tests => $tests;
 
 use_ok('ODBCTEST');
 use_ok('Data::Dumper');
 
-my $tests;
-# to help ActiveState's build process along by behaving (somewhat) if a dsn is not provided
 BEGIN {
-   $tests = 11;
    if (!defined $ENV{DBI_DSN}) {
       plan skip_all => "DBI_DSN is undefined";
-   } else {
-      plan tests => $tests;
    }
+}
+END {
+    Test::NoWarnings::had_no_warnings()
+          if ($has_test_nowarnings);
 }
 
 my $dbh = DBI->connect();
 unless($dbh) {
-   BAILOUT("Unable to connect to the database $DBI::errstr\nTests skipped.\n");
+   BAIL_OUT("Unable to connect to the database $DBI::errstr\nTests skipped.\n");
    exit 0;
 }
 $dbh->{PrintError} = 0;

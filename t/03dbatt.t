@@ -1,29 +1,37 @@
 #!perl -w -I./t
-# $Id: 03dbatt.t 10999 2008-03-25 14:46:57Z mjevans $
+# $Id: 03dbatt.t 11680 2008-08-28 08:23:27Z mjevans $
 
 use Test::More;
+use strict;
+
+my $has_test_nowarnings = 1;
+eval "require Test::NoWarnings";
+$has_test_nowarnings = undef if $@;
+my $tests = 22 + 4;
+
+$tests += 1 if $has_test_nowarnings;
+plan tests => $tests;
 
 $|=1;
 
 use_ok('DBI', qw(:sql_types));
 use_ok('ODBCTEST');
 
-# to help ActiveState's build process along by behaving (somewhat) if a dsn is not provided
 BEGIN {
    if (!defined $ENV{DBI_DSN}) {
       plan skip_all => "DBI_DSN is undefined";
-   } else {
-      # num tests + one for each table_info column (5)
-      plan tests => 21 + 5;
    }
 }
-
+END {
+    Test::NoWarnings::had_no_warnings()
+          if ($has_test_nowarnings);
+}
 
 my @row;
 
 my $dbh = DBI->connect();
 unless($dbh) {
-   BAILOUT("Unable to connect to the database $DBI::errstr\nTests skipped.\n");
+   BAIL_OUT("Unable to connect to the database $DBI::errstr\nTests skipped.\n");
    exit 0;
 }
 
@@ -155,6 +163,7 @@ exit 0;
 print $DBI::errstr;
 # print STDERR $dbh->{odbc_SQL_DRIVER_ODBC_VER}, "\n";
 
+
 # ------------------------------------------------------------
 # returns true when a row remains inserted after a rollback.
 # this means that autocommit is ON. 
@@ -204,6 +213,7 @@ sub commitTest {
     $sth->finish(); 
     $rc;
 }
+
 
 # ------------------------------------------------------------
 

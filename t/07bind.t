@@ -1,32 +1,40 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 07bind.t 548 2004-10-31 12:30:39Z jurl $
+# $Id: 07bind.t 11680 2008-08-28 08:23:27Z mjevans $
 
 use Test::More;
 
 $| = 1;
+my $has_test_nowarnings = 1;
+eval "require Test::NoWarnings";
+$has_test_nowarnings = undef if $@;
+my $tests = 15;
+$tests += 1 if $has_test_nowarnings;
+plan tests => $tests;
+
 
 # use_ok('DBI', qw(:sql_types));
 # can't seem to get the imports right this way
 use DBI qw(:sql_types);
 use_ok('ODBCTEST');
 
-# to help ActiveState's build process along by behaving (somewhat) if a dsn is not provided
 BEGIN {
    if (!defined $ENV{DBI_DSN}) {
       plan skip_all => "DBI_DSN is undefined";
-   } else {
-      plan tests => 11;
    }
+}
+END {
+    Test::NoWarnings::had_no_warnings()
+          if ($has_test_nowarnings);
 }
 
 my $dbh = DBI->connect();
 unless($dbh) {
-   BAILOUT("Unable to connect to the database $DBI::errstr\nTests skipped.\n");
+   BAIL_OUT("Unable to connect to the database $DBI::errstr\nTests skipped.\n");
    exit 0;
 }
-   
 
-$rc = 
+
+$rc =
 ok(ODBCTEST::tab_create($dbh), "Create tables");
 
 my @data = (
@@ -95,9 +103,37 @@ my $key;
 is($ref->{1}, 1, "ParamValues test integer");
 is($ref->{2}, "test", "Paramvalues test string");
 
+# test numbered parameters
+eval {
+    $dbh->do("delete from $ODBCTEST::table_name");
+    $sth = $dbh->prepare(
+        "insert into $ODBCTEST::table_name(COL_A, COL_C) values (:1, :2)");
+    $sth->bind_param("1", 1);
+    $sth->bind_param("2", 2);
+    $sth->execute;
+};
+my $ev = $@;
+diag($ev) if $ev;
+ok(!$ev, 'insert with numbered placeholders');
+is($sth->rows, 1, '...inserted one row');
+
+# test named parameters
+eval {
+    $dbh->do("delete from $ODBCTEST::table_name");
+    $sth = $dbh->prepare(
+        "insert into $ODBCTEST::table_name(COL_A, COL_C) values (:three, :four)");
+    $sth->bind_param("three", 3);
+    $sth->bind_param("four", 4);
+    $sth->execute;
+};
+$ev = $@;
+diag($ev) if $ev;
+ok(!$ev, 'insert with named placeholders');
+is($sth->rows, 1, '...inserted one row');
+
 # how to test "sticky" bind_param?
 # how about setting ODBC default bind_param to some number
-# then 
+# then
 # clean up!
 $rc = ODBCTEST::tab_delete($dbh);
 
@@ -141,7 +177,7 @@ sub tab_select {
 	}
     }
     return 1;
-}	
+}
 
 sub tab_update_long {
     my $dbh = shift;
