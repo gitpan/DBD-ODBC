@@ -1,5 +1,5 @@
 #!/usr/bin/perl -I./t -w
-# $Id: 30Oracle.t 11680 2008-08-28 08:23:27Z mjevans $
+# $Id: 30Oracle.t 11714 2008-09-01 19:24:09Z mjevans $
 
 use Test::More;
 $| = 1;
@@ -36,7 +36,7 @@ unless($dbh) {
 my $dbname = $dbh->get_info(17); # DBI::SQL_DBMS_NAME
 SKIP:
 {
-   skip "Oracle tests not supported using " . $dbname, $tests-3 unless ($dbname =~ /Oracle/i);
+   skip "Oracle tests not supported using " . $dbname, 3 unless ($dbname =~ /Oracle/i);
 
 
    $dbh->do("create or replace function PERL_DBD_TESTFUNC(a in integer, b in integer) return integer is c integer; begin if b is null then c := 0; else c := b; end if; return a * c + 1; end;");

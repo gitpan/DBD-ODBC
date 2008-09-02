@@ -7,7 +7,8 @@ use UChelp;
 
 use Test::More;
 use DBI qw(:sql_types);
-use Test::NoWarnings;
+
+my $has_test_nowarnings;
 
 $|=1;
 
@@ -20,8 +21,7 @@ BEGIN {
 		plan skip_all => "Old Perl lacking unicode support";
 	} elsif (!defined $ENV{DBI_DSN}) {
 		plan skip_all => "DBI_DSN is undefined";
-	}
-
+        }
 	@data=(
 		"hello ASCII: the quick brown fox jumps over the yellow dog",
 		"Hello Unicode: german umlauts (\x{00C4}\x{00D6}\x{00DC}\x{00E4}\x{00F6}\x{00FC}\x{00DF}) smile (\x{263A}) hebrew shalom (\x{05E9}\x{05DC}\x{05D5}\x{05DD})",
@@ -37,9 +37,19 @@ BEGIN {
 	my @plaindata=grep { !utf8::is_utf8($_) } @data;
 	@plaindata or die "OOPS";
 
-	$tests=1+2+6*@data+6*@plaindata;
+	$tests=2+6*@data+6*@plaindata;
 
+	eval "require Test::NoWarnings";
+	if (!$@) {
+	    $has_test_nowarnings = 1;
+	}
+	$tests += 1 if $has_test_nowarnings;
         plan tests => $tests;
+}
+
+END {
+    Test::NoWarnings::had_no_warnings()
+          if ($has_test_nowarnings);
 }
 
 my $dbh=DBI->connect();
@@ -48,6 +58,10 @@ ok(defined($dbh),"DBI connect");
 SKIP: {
     if (!$dbh->{odbc_has_unicode}) {
         skip "Unicode-specific tests disabled - not a unicode build", $tests-2;
+    }
+
+    if (DBI::neat($dbh->get_info(6)) =~ 'SQORA32') {
+        skip "Oracle ODBC driver does not work with these tests", $tests-2;
     }
 
 my $dbname=$dbh->get_info(17); # DBI::SQL_DBMS_NAME

@@ -1,5 +1,5 @@
 /*
- * $Id: unicode_helper.h 9700 2007-07-04 14:12:58Z mjevans $
+ * $Id: unicode_helper.h 11710 2008-09-01 16:53:29Z mjevans $
  */
 #ifdef WITH_UNICODE
 
@@ -12,6 +12,7 @@ UTF16 * WValloc(char * s);
 void WVfree(UTF16 * wp);
 
 void sv_setwvn(SV * sv, UTF16 * wp, STRLEN len);
+SV *sv_newwvn(UTF16 * wp, STRLEN len);
 
 
 char * PVallocW(UTF16 * wp);
