@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 11680 2008-08-28 08:23:27Z mjevans $
+# $Id: Makefile.PL 11738 2008-09-04 08:54:58Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -183,7 +183,8 @@ else {
             # unixODBC - would have liked to use odbc_config but it did not
             # exist until 2.2.11 and it was broken wrt --cflags in 2.2.11/2.2.12
             # i.e. --cflags did not include -I/xxx/yyy
-            if (`odbc_config --version 2>&1` =~ /^(\d\.)+/) {
+            my $odbc_config_v = `odbc_config --version 2>&1`;
+            if ($odbc_config_v && ($odbc_config_v =~ /^(\d\.)+/)) {
                 $odbchome = `odbc_config --prefix 2>&1`;
                 chomp $odbchome;
                 if ((-e $odbchome) && (-e "$odbchome/include") &&
@@ -237,6 +238,18 @@ EOT
     die "ODBCHOME environment variable ($odbchome) does not refer to a directory.\n"
 	unless -d $odbchome;
     warn "Using ODBC in $odbchome\n";
+
+    if (defined($opt_u) && $opt_u) {
+        if (-e "$odbchome/include/sql.h") {
+            open IN, "$odbchome/include/sql.h";
+            my @lines = <IN>;
+            my @found = grep(/iODBC driver manager/i, @lines);
+            if (scalar(@found)) {
+                die "\n\nDBD::ODBC does not support unicode on darwin with iODBC and this looks like iODBC. The iODBC driver manager expects wide characters to be 4 bytes long and DBD::ODBC wants wide characters to be UTF16.\nEither\no) Rerun without the -u switch\no) complain to the producer of your ODBC driver manager\no) get another ODBC driver manager (like unixODBC).\n\n";
+            }
+        }
+    }
+
     $opts{INC}  = "-I.";
 
     # cygwin patch
@@ -249,7 +262,6 @@ EOT
     my $lib_d2 = "$odbchome/dlls";
     my $libs   = "odbc";
     $opts{LIBS} = " -L$lib_d1 -R$lib_d1 -L$lib_d2 -R$lib_d2 -l$libs";
-
 
     my $myodbc ='';
     my $myodbc_version = -1;
@@ -549,6 +561,11 @@ print SQLH qq{\n};
 close(SQLH);
 
 print "\n";
+
+if ($^O eq 'darwin') {
+    $opts{LD} = $Config{ld} . ' -framework CoreFoundation';
+}
+
 
 my $rv = WriteMakefile(%opts);
 

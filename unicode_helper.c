@@ -1,5 +1,5 @@
 /*
- * $Id: unicode_helper.c 11710 2008-09-01 16:53:29Z mjevans $
+ * $Id: unicode_helper.c 11733 2008-09-03 15:30:58Z mjevans $
  */
 #ifdef WITH_UNICODE
 
@@ -188,7 +188,7 @@ UTF16 * WValloc(char * s)
         UTF16 *target_start, *target_end;
 
         slen = strlen(s);
-        /*fprintf(stderr, "utf8 string \\%s\\ is %ld bytes long\n", s, strlen(s));*/
+        /*printf("utf8 string \\%s\\ is %ld bytes long\n", s, strlen(s));*/
 
         source_start = s;
         source_end = s + slen + 1;              /* include NUL terminator */
