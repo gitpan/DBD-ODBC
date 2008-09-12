@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 11738 2008-09-04 08:54:58Z mjevans $
+# $Id: Makefile.PL 11753 2008-09-08 13:36:29Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -564,6 +564,13 @@ print "\n";
 
 if ($^O eq 'darwin') {
     $opts{LD} = $Config{ld} . ' -framework CoreFoundation';
+    # some older versions of darwin had a problem with iODBC which leads to
+    # Symbol not found: _SQLGetPrivateProfileString
+    # SQLGetPrivateProfileString is in libiodbcinst.a
+    my $osver = `uname -r`;
+    if ($osver && ($osver =~ /^8/)) {
+        $opts{LIBS} .= ' -L/usr/lib -liodbcinst';
+    }
 }
 
 
