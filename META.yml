@@ -1,7 +1,7 @@
 --- #YAML:1.0
 name: DBD-ODBC
 abstract: ODBC DBD for Perl DBI
-version: 1.17
+version: 1.17_1
 version_from: ODBC.pm
 author:
   - Tim Bunce
@@ -33,3 +33,4 @@ meta-spec:
   version: 1.4
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
 generated_by: Martin J. Evans
+# ensure there is a newline at the end of this file or pause objects

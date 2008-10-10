@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 11753 2008-09-08 13:36:29Z mjevans $
+# $Id: Makefile.PL 11946 2008-10-07 18:44:43Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -19,6 +19,55 @@ use strict;
 
 $| = 1;
 $^W = 1;
+
+# if INC is set on the command line ExtUtils::MakeMaker will not override it
+# or allow us to add to it so you can never find the DBI header files.
+# It is pointless to continue
+# see http://www.mail-archive.com/makemaker@perl.org/msg02680.html
+# see http://www.nntp.perl.org/group/perl.dbi.users/2008/09/msg33278.html
+# http://www.perlmonks.org/?node_id=714150
+my $INC_argc;
+for (my $n = 0; $n <= $#ARGV; $n++) {
+    if ($ARGV[$n] =~ /^INC=/) {
+        $INC_argc = $n;
+        print "\nCannot generate successful Makefile - " .
+            "INC is set on the command line.\n\n";
+        prompt("Press return to see possible solutions:");
+        print <<"EOT";
+
+INC has been set on the command line as: $ARGV[$n]
+
+and there is no way this Makefile.PL can add the path to the DBI
+header files to INC. If you manually added INC to the command line
+remove it. If you are building from the CPAN shell perhaps your
+makepl_arg is set to include INC (as it is with Strawberry Perl). You
+need to remove INC from makepl_arg with:
+
+cpan> o conf
+
+Look for makepl_arg and set makepl_arg to whatever text it is minus the INC
+setting. You set makepl_arg with:
+
+cpan> o conf makepl_arg 'text of makepl_arg - INC'
+
+Alternatively, if you are using Strawberry perl you can just install
+DBD::ODBC outside of the CPAN shell.
+
+If you cannot remove INC from the command line then you will need to hand
+edit the generated Makefile. Search it for :
+
+ #   MakeMaker 'CONFIGURE' Parameters:
+ #     INC => q[-I. -I/some_path/DBI]
+
+then add the -I/some_path/DBI to INC where it is set later in the
+Makefile.
+
+EOT
+        #exit 0;
+        #$ARGV[$n] .= ' -I. -I/usr/local/lib/perl/5.8.8/auto/DBI';
+        @ARGV = grep (!/^INC/,@ARGV);
+    }
+}
 my %opts =
 (
     NAME	=> 'DBD::ODBC',
@@ -40,6 +89,9 @@ my %opts =
  );
 my $eumm = $ExtUtils::MakeMaker::VERSION;
 $eumm =~ tr/_//d;
+
+$opts{LICENSE} = 'perl' if $eumm >= 6.3002;
+
 if ($eumm >= 5.43) {
     $opts{AUTHOR} = 'Tim Bunce, Jeff Urlwin, Martin J. Evans mailto:dbi-users@perl.org';
     $opts{ABSTRACT} = 'ODBC driver for the DBI module.';

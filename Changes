@@ -2,13 +2,12 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2008-09-12 15:38:35 +0100 (Fri, 12 Sep 2008) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2008-10-10 17:24:25 +0100 (Fri, 10 Oct 2008) $ $Revision: 10667 $)
 
 =cut
 
 =head1 Todo
 
- META.yml no longer seems to parse on pause
  Add array parameter binding (per new DBI Spec)
  Add row caching/multiple row fetches to speed selects
  Better/more tests on multiple statement handles which ensure the
@@ -31,8 +30,44 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
  Try to produce a Module::Install build.
  There is a blob_read method in DBI (undocumented) that DBD:DB2 uses and
    might be useful in DBD::ODBC.
+ The SQL_DRIVER_ODBC_VER attribute should be odbc_SQL_DRIVER_ODBC_VER.
+ Why does level 15 tracing of any DBD::ODBC script show alot of these:
+   !!DBD::ODBC unsupported attribute passed (PrintError)
+   !!DBD::ODBC unsupported attribute passed (Username)
+   !!DBD::ODBC unsupported attribute passed (dbi_connect_closure)
+   !!DBD::ODBC unsupported attribute passed (LongReadLen)
 
 =head1 CHANGES
+
+=head2 Changes in DBD::ODBC 1.17_1 month NN, 2008
+
+Missing newline from end of META.yml upsets cpan
+
+Add code to Makefile.PL to spot command line containing INC, outline
+problem and resolution and not generate Makefile to avoid cpan-testers
+failures.
+
+Loads of pod formatting changes including a section in the wrong place
+
+New kwalitee test
+
+Fix rt 39841. Bug in SQL Server ODBC driver which describes parameters
+by rearranging your SQL to do a select on the columns matching the
+parameters.  Sometimes it gets this wrong and ends up describing the
+wrong column. This can lead to a varchar(10) being described with a
+column-size less than 10 and hence you get data truncation on execute.
+
+Added a test case for rt 39841.
+
+Fix rt 39897. 1.17 added support for varchar(max) in SQL Server
+but it broke support for SQL_VARCHAR columns in that they had LongReadLen
+and LongTruncOk applied to them. This means that in 1.16 you could retrieve
+a SQL_VARCHAR column without worrying about how long it was but in 1.17
+if the same column was greater than 80 characters then you would
+get a truncated error. The only way the around this was to set
+LongTruncOk or LongReadLen.
+
+Added a test case for rt 39897.
 
 =head2 Changes in DBD::ODBC 1.17 September 22, 2008
 
@@ -40,6 +75,9 @@ In the absence of any bug reports since 1.16_4 this is the official
 1.17 release. See below for changes since 1.16.
 
 Minor pod changes.
+
+Added support for ParamTypes (see DBI spec) and notes in DBD::ODBC
+pod.
 
 =head2 Changes in DBD::ODBC 1.16_4 September 12, 2008
 

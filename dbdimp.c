@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 11768 2008-09-12 13:00:28Z mjevans $
+/* $Id: dbdimp.c 11956 2008-10-10 16:24:25Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -2056,11 +2056,12 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
         if (DBIc_TRACE(imp_sth, 0, 0, 8))
             PerlIO_printf(DBIc_LOGPIO(imp_dbh),
                           "   DescribeCol column = %d, name = %s, "
-                          "len = %d, type = %s, "
+                          "len = %d, type = %s(%d), "
                           "precision = %ld, scale = %d, nullable = %d\n",
                           i+1, fbh->ColName,
                           fbh->ColNameLen,
                           S_SqlTypeToString(fbh->ColSqlType),
+                          fbh->ColSqlType,
                           fbh->ColDef, fbh->ColScale, fbh->ColNullable);
         rc = SQLColAttributes(imp_sth->hstmt,
                               (SQLSMALLINT)(i+1),SQL_COLUMN_DISPLAY_SIZE,
@@ -2167,8 +2168,12 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
             break;
 # endif	/* WITH_UNICODE */
 #endif
-          case SQL_LONGVARCHAR:
           case SQL_VARCHAR:
+            if (fbh->ColDef == 0) {
+                fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
+            }
+            break;
+          case SQL_LONGVARCHAR:
 	    fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
 	    break;
 #ifdef TIMESTAMP_STRUCT	/* XXX! */
@@ -3322,6 +3327,18 @@ static int rebind_param(
        phs->strlen_or_ind = SQL_LEN_DATA_AT_EXEC(0);
        buffer_length = 0;
    }
+   /*
+    * workaround bug in SQL Server ODBC driver where it can describe some
+    * parameters (especially in SQL using sub selects) the wrong way.
+    * If this is a varchar then the column_size must be at least as big
+    * as the buffer size but if SQL Server associated the wrong column with
+    * our parameter it could get a totally different size. Without this
+    * a varchar(10) column can be desribed as a varchar(n) where n is less
+    * than 10 and this leads to data truncation errors - see rt 39841.
+    */
+   if ((phs->sql_type == SQL_VARCHAR) && (column_size < buffer_length)) {
+       column_size = buffer_length;
+   }
    rc = SQLBindParameter(imp_sth->hstmt,
 			 phs->idx, param_type, value_type, phs->sql_type,
 			 column_size, d_digits,
@@ -4053,7 +4070,7 @@ static T_st_params S_st_fetch_params[] =
    s_A("sol_length",1),         /* 8 */
    s_A("CursorName",1),		/* 9 */
    s_A("odbc_more_results",1),	/* 10 */
-   s_A("ParamValues",1),        /* 11 */
+   s_A("ParamValues",0),        /* 11 */
 
    s_A("LongReadLen",0),        /* 12 */
    s_A("odbc_ignore_named_placeholders",0),	/* 13 */
@@ -4061,6 +4078,7 @@ static T_st_params S_st_fetch_params[] =
    s_A("odbc_force_rebind",0),	/* 15 */
    s_A("odbc_query_timeout",0),	/* 16 */
    s_A("odbc_putdata_start",0),	/* 17 */
+   s_A("ParamTypes",0),        /* 18 */
    s_A("",0),			/* END */
 };
 
@@ -4222,7 +4240,7 @@ SV *dbd_st_FETCH_attrib(SV *sth, imp_sth_t *imp_sth, SV *keysv)
 	    dbd_st_finish(sth, imp_sth);
 	 }
 	 break;
-      case 11:
+      case 11:                                  /* ParamValues */
       {
 	 /* not sure if there's a memory leak here. */
 	 HV *paramvalues = newHV();
@@ -4242,21 +4260,21 @@ SV *dbd_st_FETCH_attrib(SV *sth, imp_sth_t *imp_sth, SV *keysv)
 	 }
 	 /* ensure HV is freed when the ref is freed */
 	 retsv = newRV_noinc((SV *)paramvalues);
+         break;
       }
-      break;
-      case 12:
+      case 12: /* LongReadLen */
 	 retsv = newSViv(DBIc_LongReadLen(imp_sth));
 	 break;
-      case 13:
+      case 13: /* odbc_ignore_named_placeholders */
 	 retsv = newSViv(imp_sth->odbc_ignore_named_placeholders);
 	 break;
-      case 14:
+      case 14: /* odbc_default_bind_type */
 	 retsv = newSViv(imp_sth->odbc_default_bind_type);
 	 break;
-      case 15: /* force rebind */
+      case 15: /* odbc_force_rebind */
 	 retsv = newSViv(imp_sth->odbc_force_rebind);
 	 break;
-      case 16: /* query timeout */
+      case 16: /* odbc_query_timeout */
         /*
          * -1 is our internal flag saying odbc_query_timeout has never been
          * set so we map it back to the default for ODBC which is 0
@@ -4270,6 +4288,28 @@ SV *dbd_st_FETCH_attrib(SV *sth, imp_sth_t *imp_sth, SV *keysv)
       case 17: /* odbc_putdata_start */
         retsv = newSViv(imp_sth->odbc_putdata_start);
         break;
+      case 18:                                  /* ParamTypes */
+      {
+	 /* not sure if there's a memory leak here. */
+	 HV *paramtypes = newHV();
+	 if (imp_sth->all_params_hv) {
+	    HV *hv = imp_sth->all_params_hv;
+	    SV *sv;
+	    char *key;
+	    I32 retlen;
+	    hv_iterinit(hv);
+	    while( (sv = hv_iternextsv(hv, &key, &retlen)) != NULL ) {
+	       if (sv != &sv_undef) {
+		  phs_t *phs = (phs_t*)(void*)SvPVX(sv);
+		  hv_store(paramtypes, phs->name, (I32)strlen(phs->name),
+                           newSViv(phs->sql_type), 0);
+	       }
+	    }
+	 }
+	 /* ensure HV is freed when the ref is freed */
+	 retsv = newRV_noinc((SV *)paramtypes);
+         break;
+      }
       default:
 	 return Nullsv;
    }
