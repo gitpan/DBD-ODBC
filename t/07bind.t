@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 07bind.t 11956 2008-10-10 16:24:25Z mjevans $
+# $Id: 07bind.t 11975 2008-10-13 14:27:17Z mjevans $
 
 use Test::More;
 
@@ -7,7 +7,7 @@ $| = 1;
 my $has_test_nowarnings = 1;
 eval "require Test::NoWarnings";
 $has_test_nowarnings = undef if $@;
-my $tests = 21;
+my $tests = 25;
 $tests += 1 if $has_test_nowarnings;
 plan tests => $tests;
 
@@ -106,8 +106,12 @@ $ref = $sth->{ParamTypes};
 is(ref($ref), 'HASH', 'ParamValues returns a hash ref');
 ok(exists($ref->{1}), 'p1 exists');
 ok(exists($ref->{1}), 'p2 exists');
-like($ref->{1}, qr/^-?\d+$/, 'numeric SQL type on p1');
-like($ref->{2}, qr/^-?\d+$/, 'numeric SQL type on p2');
+is(ref($ref->{1}), 'HASH', 'p1 is a hash reference');
+is(ref($ref->{2}), 'HASH', 'p2 is a hash reference');
+ok(exists($ref->{1}->{TYPE}), 'p1 TYPE exists');
+ok(exists($ref->{2}->{TYPE}), 'p2 TYPE exists');
+like($ref->{1}->{TYPE}, qr/^-?\d+$/, 'numeric SQL type on p1');
+like($ref->{2}->{TYPE}, qr/^-?\d+$/, 'numeric SQL type on p2');
 
 # test numbered parameters
 eval {

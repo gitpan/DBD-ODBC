@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2008-10-10 17:24:25 +0100 (Fri, 10 Oct 2008) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2008-10-20 09:49:17 +0100 (Mon, 20 Oct 2008) $ $Revision: 10667 $)
 
 =cut
 
@@ -28,18 +28,41 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
    so anyone binding a lob has to have all of it available before it can
    be bound.
  Try to produce a Module::Install build.
- There is a blob_read method in DBI (undocumented) that DBD:DB2 uses and
-   might be useful in DBD::ODBC.
+ There is a blob_read method in DBI (undocumented) that DBD:DB2 & DBD::Pg
+   use and might be useful in DBD::ODBC.
  The SQL_DRIVER_ODBC_VER attribute should be odbc_SQL_DRIVER_ODBC_VER.
  Why does level 15 tracing of any DBD::ODBC script show alot of these:
    !!DBD::ODBC unsupported attribute passed (PrintError)
    !!DBD::ODBC unsupported attribute passed (Username)
    !!DBD::ODBC unsupported attribute passed (dbi_connect_closure)
    !!DBD::ODBC unsupported attribute passed (LongReadLen)
+  strawberry perl build issue:
+    http://groups.google.com/group/perl.dbd.pg.changes/browse_thread/thread/8205bf83b5a48f63/cf43d87fe644798f?hl=en&q=easysoft&pli=1
+    http://www.nntp.perl.org/group/perl.dbi.users/2008/10/msg33322.html
+  Add a perlcritic test - see DBD::Pg
 
 =head1 CHANGES
 
-=head2 Changes in DBD::ODBC 1.17_1 month NN, 2008
+=head2 Changes in DBD::ODBC 1.17_2 November 17, 2008
+
+Changed ParamTypes attribute to be as specification i.e.,
+
+  {
+    parameter_1 => {TYPE => sql_type}
+    parameter_2 => {TYPE => sql_type}
+    ...
+  }
+
+and changed the tests in 07bind.t to reflect this.
+
+A few minor perlcritic changes to ODBC.pm.
+
+Added 99_yaml.t test to check META.yml.
+
+Added patch from Spicy Jack to workaround problems with Strawberry
+Perl setting INC on the command line when running Makefile.PL.
+
+=head2 Changes in DBD::ODBC 1.17_1 October 10, 2008
 
 Missing newline from end of META.yml upsets cpan
 
