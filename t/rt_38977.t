@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_38977.t 11768 2008-09-12 13:00:28Z mjevans $
+# $Id: rt_38977.t 12185 2008-12-19 19:39:22Z mjevans $
 #
 # test varbinary(MAX) and varchar(MAX) types in SQL Server
 #
@@ -10,7 +10,7 @@ $| = 1;
 my $has_test_nowarnings = 1;
 eval "require Test::NoWarnings";
 $has_test_nowarnings = undef if $@;
-my $tests = 9;
+my $tests = 11;
 $tests += 1 if $has_test_nowarnings;
 plan tests => $tests;
 
@@ -43,11 +43,16 @@ unless($dbh) {
    BAIL_OUT("Unable to connect to the database $DBI::errstr\nTests skipped.\n");
    exit 0;
 }
+$dbh->{RaiseError} = 1;
 
 my $dbms_name = $dbh->get_info(17);
 ok($dbms_name, "got DBMS name: $dbms_name");
 my $dbms_version = $dbh->get_info(18);
 ok($dbms_version, "got DBMS version: $dbms_version");
+my $driver_name = $dbh->get_info(6);
+ok($driver_name, "got DRIVER name: $driver_name");
+my $driver_version = $dbh->get_info(7);
+ok($driver_version, "got DRIVER version $driver_version");
 
 my ($ev, $sth);
 
@@ -80,10 +85,22 @@ SKIP: {
       SKIP: {
             skip "Failed to prepare", 1 if ($ev);
             my $x = 'x' x 500000;
-            ok($sth->execute($x), "execute insert");
+            eval {
+                $sth->execute($x);
+            };
+            $ev = $@;
+            ok(!$ev, "execute insert");
+            if ($ev) {
+                diag("Execute for insert into varchar(max) failed with $ev");
+                diag(q/Some SQL Server drivers such as the native client 09.00.1399 / .
+                     q/driver fail this test with a HY104, "Invalid precision error". / .
+                     qq/You have driver $driver_name at version $driver_version. / .
+                     q/There is a free upgrade from Microsoft of the native client driver /.
+                     q/to 10.00.1600 which you will need if you intend to insert / .
+                     q/into varchar(max) columns./);
+            }
         };
     };
-
     eval {
         local $dbh->{PrintWarn} = 0;
         local $dbh->{PrintError} = 0;

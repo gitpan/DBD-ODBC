@@ -1,5 +1,5 @@
 #!perl -w -I./t
-# $Id: 02simple.t 11731 2008-09-03 13:00:05Z mjevans $
+# $Id: 02simple.t 12168 2008-12-16 09:48:08Z mjevans $
 
 use Test::More;
 use strict;
@@ -71,7 +71,7 @@ SKIP: {
 SKIP: {
     skip "DBI too old for private_attribute_info", 3
 	if ($DBI::VERSION < 1.54);
-	
+
     my $sql;
     my $drv = $dbh->get_info(17);
     if ($drv =~ /Oracle/i) {

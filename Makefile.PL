@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 11946 2008-10-07 18:44:43Z mjevans $
+# $Id: Makefile.PL 12080 2008-11-17 14:31:09Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -705,6 +705,8 @@ sub constants {
     my $self = shift;
     require DBI::DBD;
 
+    # The problem with stawberry perl is it sets INC on the command line
+    # and that overrides INC in this Makefile unless we set it here.
     my $old_constants = $self->SUPER::constants();
     my $new_constants;
     foreach my $line ( split(/\n/, $old_constants) ) {

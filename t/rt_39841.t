@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_39841.t 11951 2008-10-10 12:40:40Z mjevans $
+# $Id: rt_39841.t 12185 2008-12-19 19:39:22Z mjevans $
 #
 # Test fix for rt 39841 - problem with SQLDecribeParam in MS SQL Server
 #
@@ -57,7 +57,7 @@ ok($dbms_version, "got DBMS version: $dbms_version");
 my ($ev, $sth);
 
 SKIP: {
-    skip "not SQL Server", 11 if $dbms_name !~ /Microsoft SQL Server/;
+    skip "not SQL Server", 25 if $dbms_name !~ /Microsoft SQL Server/;
     my $major_version = $dbms_version;
 
     eval {
@@ -68,7 +68,7 @@ SKIP: {
     };
 
     test_1($dbh);       # 16 tests
-    test_2($dbh);       # 4 tests
+    test_2($dbh);       # 9 tests
 };
 
 #
@@ -126,10 +126,9 @@ sub test_1
                 diag($dbh->errstr);
 		diag($dbh->state);
 		if ($dbh->state eq '22018') {
-		    diag("\nNOTE: Your SQL Server ODBC driver has a bug " .
-			 "which can describe parameters in SQL using sub " .
-			 "selects incorrectly. In this case a VARCHAR(8) " .
-			 "parameter is described as an INTEGER\n\n");
+                    diag("\nNOTE: Your SQL Server ODBC driver has a bug which can describe parameters\n");
+                    diag("in SQL using sub selects incorrectly. In this case a VARCHAR(8) parameter\n");
+                    diag("is described as an INTEGER\n\n");
 		    skip 'test_1 execute failed - bug in SQL Server ODBC Driver', 5;
 		} else {
 		    skip 'test_1 execute failed with unexpected error', 5;
@@ -232,32 +231,32 @@ sub test_2
     #1
     ok(!$ev, 'create test tables');
 
-  SKIP: {
-        skip "Failed to create test table", 10 if ($ev);
+  SKIP: {                       # 8
+        skip "Failed to create test table", 8 if ($ev);
         eval {
             $dbh->do(q/insert into PERL_DBD_39841a values(1, 'aaaaaaaaaa')/);
             $dbh->do(q/insert into PERL_DBD_39841b values('aaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbb')/);
         };
         $ev = $@;
-        #2
+        #1 1
         ok(!$ev, "populate tables");
 
         eval {
             $sth = $dbh->prepare(q/select b1, ( select a2 from PERL_DBD_39841a where a2 = b1 ) from PERL_DBD_39841b where b2 = ?/);
         };
         $ev = $@;
-        #3
+        #1 2
         ok(!$ev, 'prepare select');
 
-      SKIP: {			# 5
-	  skip 'cannot prepare SQL for test', 5 if $ev;
+      SKIP: {			# 6
+	  skip 'cannot prepare SQL for test', 6 if $ev;
 	  eval {
 	      local $sth->{PrintError} = 0;
 	      $sth->execute('bbbbbbbbbbbbbbbbbbbb');
 	  };
 	  my $ev = $@;
 
-        SKIP: {			# 5
+        SKIP: {			# 5 + 1
 	    if ($ev) {
                 diag($dbh->errstr);
 		diag($dbh->state);
@@ -292,7 +291,7 @@ sub test_2
 	    ok(!$ev, "fetchrow_array");
 	    #5
 	    ok(defined($count), "rows returned");
-	  SKIP: {
+	  SKIP: {               # 1
 	      skip "no rows returned", 1 if !defined($count);
 	      # 6
 	      is($count, 1, 'correct number of rows returned');

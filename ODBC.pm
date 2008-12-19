@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 11975 2008-10-13 14:27:17Z mjevans $
+# $Id: ODBC.pm 12168 2008-12-16 09:48:08Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -12,7 +12,7 @@
 
 require 5.006;
 
-$DBD::ODBC::VERSION = '1.17_2';
+$DBD::ODBC::VERSION = '1.17_3';
 
 {
     package DBD::ODBC;
@@ -23,7 +23,7 @@ $DBD::ODBC::VERSION = '1.17_2';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 11975 2008-10-13 14:27:17Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 12168 2008-12-16 09:48:08Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -126,7 +126,8 @@ $DBD::ODBC::VERSION = '1.17_2';
                 odbc_out_connect_string => undef,
                 odbc_version => undef,
                 odbc_err_handler => undef,
-                odbc_putdata_start => undef # sth and dbh
+                odbc_putdata_start => undef, # sth and dbh
+                odbc_column_display_size => undef # sth and dbh
                };
     }
 
@@ -458,7 +459,8 @@ $DBD::ODBC::VERSION = '1.17_2';
                 odbc_force_rebind => undef, # sth & dbh
                 odbc_async_exec => undef, # sth and dbh
                 odbc_query_timeout => undef, # sth and dbh
-                odbc_putdata_start => undef # sth and dbh
+                odbc_putdata_start => undef, # sth and dbh
+                odbc_column_display_size => undef # sth and dbh
                };
     }
 
@@ -715,6 +717,17 @@ reason for anyone to change it currently.
 
 The default for odbc_putdata_start is 32768 because this value was
 hard-coded in DBD::ODBC until 1.16_1.
+
+=head3 odbc_column_display_size
+
+If you ODBC driver does not support the SQL_COLUMN_DISPLAY_SIZE and
+SQL_COLUMN_LENGTH attributes to SQLColAtrributes then DBD::ODBC does
+not know how big the column might be. odbc_column_display_size sets
+the default value for the column size when retrieving column data
+where the size cannot be determined.
+
+The default for odbc_column_display_size is 2001 because this value was
+hard-coded in DBD::ODBC until 1.17_3.
 
 =head2 Private connection attributes
 
