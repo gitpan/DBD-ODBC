@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 12168 2008-12-16 09:48:08Z mjevans $
+# $Id: ODBC.pm 12450 2009-01-16 18:47:37Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -12,7 +12,7 @@
 
 require 5.006;
 
-$DBD::ODBC::VERSION = '1.17_3';
+$DBD::ODBC::VERSION = '1.18';
 
 {
     package DBD::ODBC;
@@ -23,7 +23,7 @@ $DBD::ODBC::VERSION = '1.17_3';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 12168 2008-12-16 09:48:08Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 12450 2009-01-16 18:47:37Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
