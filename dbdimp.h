@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 12168 2008-12-16 09:48:08Z mjevans $
+ * $Id: dbdimp.h 12606 2009-03-13 13:14:20Z mjevans $
  * portions Copyright (c) 2007-2008 Martin J. Evans
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
@@ -152,7 +152,7 @@ struct imp_fbh_st { 	/* field buffer EXPERIMENTAL */
 
 typedef struct phs_st phs_t;    /* scalar placeholder   */
 
-struct phs_st {  	/* scalar placeholder EXPERIMENTAL	*/
+struct phs_st {             /* scalar placeholder */
     SQLUSMALLINT idx;       /* index number of this param 1, 2, ...	*/
     SV *sv;                 /* the scalar holding the value */
     int sv_type;            /* original sv type at time of bind */

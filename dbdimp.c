@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 12590 2009-03-09 10:36:10Z mjevans $
+/* $Id: dbdimp.c 12606 2009-03-13 13:14:20Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -5394,6 +5394,10 @@ static SQLSMALLINT default_parameter_type(imp_sth_t *imp_sth, phs_t *phs)
     if (imp_sth->odbc_default_bind_type != 0) {
         return imp_sth->odbc_default_bind_type;
     } else {
+        /* MS Access can return an invalid precision error in the 12blob
+           test unless the large valud is bound as an SQL_LONGVARCHAR
+           or SQL_WLONGVARCHAR. Who knows what large is, but for now it is
+           4000 */
         if (!SvOK(phs->sv)) {
             return ODBC_BACKUP_BIND_TYPE_VALUE;
         } else if (SvCUR(phs->sv) > 4000) {

@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 08bind2.t 11680 2008-08-28 08:23:27Z mjevans $
+# $Id: 08bind2.t 12606 2009-03-13 13:14:20Z mjevans $
 
 use Test::More;
 use strict;
