@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_39897.t 12575 2009-03-06 17:41:16Z mjevans $
+# $Id: rt_39897.t 12603 2009-03-12 11:28:12Z mjevans $
 #
 # test for rt 39897. DBD::ODBC 1.17 was accidentally changed to apply
 # LongReadLen to SQL_VARCHAR columns. 1.16 and earlier only use LongTruncOk
@@ -61,7 +61,7 @@ eval {
 };
 
 eval {
-    $dbh->do('create table PERL_DBD_39897 (a VARCHAR(100))');
+    $dbh->do('create table PERL_DBD_rt_39897 (a VARCHAR(100))');
 };
 $ev = $@;
 #2
@@ -71,7 +71,7 @@ ok(!$ev, 'create test table with varchar');
 SKIP: {
     skip "Failed to create test table", 1 if ($ev);
     eval {
-        $sth = $dbh->prepare('INSERT into PERL_DBD_39897 VALUES (?)');
+        $sth = $dbh->prepare('INSERT into PERL_DBD_rt_39897 VALUES (?)');
     };
     $ev = $@;
     diag($ev) if $ev;
@@ -92,7 +92,7 @@ SKIP: {
     skip "Failed to execute", 2 if ($ev);
 
     eval {
-        $sth = $dbh->prepare(q/select a from PERL_DBD_39897/);
+        $sth = $dbh->prepare(q/select a from PERL_DBD_rt_39897/);
         $sth->execute;
     };
     $ev = $@;
