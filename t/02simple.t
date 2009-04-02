@@ -1,5 +1,5 @@
 #!perl -w -I./t
-# $Id: 02simple.t 12168 2008-12-16 09:48:08Z mjevans $
+# $Id: 02simple.t 12667 2009-04-02 10:54:56Z mjevans $
 
 use Test::More;
 use strict;
@@ -9,7 +9,7 @@ $| = 1;
 my $has_test_nowarnings = 1;
 eval "require Test::NoWarnings";
 $has_test_nowarnings = undef if $@;
-my $tests = 63;
+my $tests = 65;
 $tests += 1 if $has_test_nowarnings;
 plan tests => $tests;
 
@@ -34,13 +34,16 @@ unless($dbh) {
    BAIL_OUT("Unable to connect to the database ($DBI::errstr)\nTests skipped.\n");
    exit 0;
 }
+my $driver_name;
 # Output DBMS which is useful when debugging cpan-testers output
 {
     diag("\n");
     diag("Using DBMS_NAME " . DBI::neat($dbh->get_info(17)) . "\n");
     diag("Using DBMS_VER " . DBI::neat($dbh->get_info(18)) . "\n");
-    diag("Using DRIVER_NAME " . DBI::neat($dbh->get_info(6)) . "\n");
+    $driver_name = DBI::neat($dbh->get_info(6));
+    diag("Using DRIVER_NAME $driver_name\n");
     diag("Using DRIVER_VER " . DBI::neat($dbh->get_info(7)) . "\n");
+    diag("odbc_has_unicode " . $dbh->{odbc_has_unicode} . "\n");
 }
 
 # ReadOnly
@@ -151,10 +154,17 @@ ok($max_col_len <= 51, 'Truncated column to LongReadLen');
 # now force an error and ensure we get a long truncated event.
 $dbh->{LongTruncOk} = 0;
 is($dbh->{LongTruncOk}, '', "Set Long TruncOk 0");
-ok(!select_long($dbh, \$max_col_len, 0), "Select Long Data failure");
+# Following test fails with FreeTDS 0.63 and 0.64 because FreeTDS does not
+# report a data truncation error and hence no error is raised and there
+# err, errstr and state are not set.
+$rc = select_long($dbh, \$max_col_len, 0);
+ok(!$rc, "Select Long Data failure");
 ok($dbh->err, 'error set on truncated handle');
 ok($dbh->errstr, 'errstr set on truncated handle');
 ok($dbh->state, 'state set on truncated handle');
+if ($rc && ($driver_name =~ /tdsodbc/)) {
+    diag(qq/\nNOTE:\nFreeTDS fails the previous 4 tests because when you select a column greater\nthan 80 characters with LongTruncOk it does not generate a\n01004, "String data, right truncation error\n"/);
+}
 
 my $sth = $dbh->prepare("SELECT * FROM $ODBCTEST::table_name ORDER BY COL_A");
 ok(defined($sth), "prepare select from table");
@@ -198,8 +208,14 @@ is($dbh->{PrintError}, '', "Set PrintError 0");
 #
 $sth = $dbh->prepare("SELECT XXNOTCOLUMN FROM $ODBCTEST::table_name");
 $sth->execute() if $sth;
-cmp_ok(length($DBI::errstr), '>', 0, "Error reported on bad query");
-
+if (!defined($DBI::errstr) || (length($DBI::errstr) == 0)) {
+    fail("Error reported on bad query");
+    if ($driver_name =~ /tdsodbc/) {
+        diag(qq/NOTE:\nfreeTDS 0.63 at least, fails the previous test because no error is returned\nfrom SQLPrepare or SQLExecute when you enter a\n"select non_existent_table_name from table" query.\nVersion 0.82 seems to have fixed this./);
+    }
+} else {
+    pass("Error reported on bad query");
+}
 my @row = ODBCTEST::get_type_for_column($dbh, 'COL_D');
 
 my $dateval;
@@ -276,7 +292,9 @@ SKIP: {
    ok(defined($dbh3), "Connection with DSN=$connstr");
    $dbh3->disconnect if (defined($dbh3));
 
-   my $cs = $connstr . ";UID=$ENV{DBI_USER};PWD=$ENV{DBI_PASS}";
+   my $cs = $connstr;
+   $cs .= ";UID=$ENV{DBI_USER}" if exists($ENV{DBI_USER});
+   $cs .= ";PWD=$ENV{DBI_PASS}" if exists($ENV{DBI_PASS});
    $dbh3 = DBI->connect($cs,undef,undef, {RaiseError=>0, PrintError=>0});
    ok(defined($dbh3),
       "Connection with DSN=$connstr and UID and PWD are set") or diag($cs);
@@ -323,20 +341,17 @@ sub tab_select
     $sth->execute();
     while (@row = $sth->fetchrow()) {
 	if ($row[0] == 4) {
-	    if ($row[1] eq $ODBCTEST::longstr) {
-	       # print "retrieved ", length($ODBCTEST::longstr), " byte string OK\n";
-	    } else {
-	       diag("Basic retrieval of longer rows not working!\nRetrieved value = $row[1] vs $ODBCTEST::longstr\n");
-		return 0;
-	    }
-	} elsif ($row[0] == 5) {
-	    if ($row[1] eq $ODBCTEST::longstr2) {
-	       # print "retrieved ", length($ODBCTEST::longstr2), " byte string OK\n";
-	    } else {
-	       diag(print "Basic retrieval of row longer than 255 chars not working!" .
-						"\nRetrieved ", length($row[1]), " bytes instead of " .
-						length($ODBCTEST::longstr2) . "\nRetrieved value = $row[1]\n");
-		return 0;
+            if (!is($row[1], $ODBCTEST::longstr, "long strings compare")) {
+                diag("Basic retrieval of longer rows not working\n" .
+                    DBI::data_diff($row[1], $ODBCTEST::longstr));
+                return 0;
+            }
+ 	} elsif ($row[0] == 5) {
+	    if (!is($row[1], $ODBCTEST::longstr2, "long strings compare 255")) {
+                diag("Basic retrieval of row longer than 255 chars" .
+                         " not working!\n" .
+                             DBI::data_diff($row[1], $ODBCTEST::longstr2));
+                return 0;
 	    }
 	}
     }
@@ -356,7 +371,10 @@ sub select_long
     my $rc = 0;
     my $longest = undef;
 
-    $dbh->{RaiseError} = 1;
+    local $dbh->{RaiseError} = 1;
+    local $dbh->{PrintError} = 0;
+    local $dbh->{PrintWarn} = 0;
+
     $sth = $dbh->prepare("SELECT COL_A,COL_C FROM $ODBCTEST::table_name WHERE COL_A=4");
     if ($sth) {
         $sth->execute();

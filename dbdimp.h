@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 12606 2009-03-13 13:14:20Z mjevans $
+ * $Id: dbdimp.h 12667 2009-04-02 10:54:56Z mjevans $
  * portions Copyright (c) 2007-2008 Martin J. Evans
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
@@ -74,6 +74,17 @@ struct imp_dbh_st {
      * SQLColAttributes for these attributes fails we fallback on a default
      * value. */
     SQLLEN odbc_column_display_size;
+    /*
+     *  We need special workarounds for the following drivers. To avoid
+     *  strcmping their names every time we do it once and store the type here
+     */
+    enum {
+        DT_DONT_CARE,
+        DT_SQL_SERVER,                          /* SQLSRV32.DLL */
+        DT_SQL_SERVER_NATIVE_CLIENT,    /* sqlncli10.dll | SQLNCLI.DLL */
+        DT_MS_ACCESS_JET,                          /* odbcjt32.dll */
+        DT_MS_ACCESS_ACE                           /* ACEODBC.DLL */
+    } driver_type;
     char odbc_driver_name[80];
     char odbc_driver_version[20];
 };

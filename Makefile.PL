@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 12572 2009-03-06 16:49:19Z mjevans $
+# $Id: Makefile.PL 12667 2009-04-02 10:54:56Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -133,8 +133,8 @@ if (($ENV{LANG} || '') =~ m/utf-?8/i) {
 
 Your LANG environment variable is set to "$ENV{LANG}"\a
 This is known to cause problems in some perl installations - even stopping
-this Makefile.PL to run without errors. If you have problems please try
-re-running with LANG unset or with the utf part of LANG removed.
+this Makefile.PL from running without errors. If you have problems please
+try re-running with LANG unset or with the utf part of LANG removed.
 
 EOT
     sleep 4;
@@ -142,7 +142,7 @@ EOT
 
 if ($Config{useithreads}) {
     print <<'EOT';
-You are using a Perl configured with threading enabled\a.
+You are using a Perl configured with threading enabled.
 Please read the warnings in DBI about this.
 
 EOT
@@ -249,7 +249,7 @@ else {
                         (-f "$odbchome/include/sql.h") &&
                             (-f "$odbchome/include/sqlext.h") &&
                                 (-f "$odbchome/include/sqltypes.h")) {
-                    print "Set ODBC HOME to $odbchome from odbc_config\n";
+                    print "Set ODBCHOME to $odbchome from odbc_config\n";
                 } else {
                     $odbchome = '';
                 }

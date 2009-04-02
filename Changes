@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2009-03-13 13:14:20 +0000 (Fri, 13 Mar 2009) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2009-04-02 11:54:56 +0100 (Thu, 02 Apr 2009) $ $Revision: 10667 $)
 
 =cut
 
@@ -42,6 +42,47 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
   Add a perlcritic test - see DBD::Pg
 
 =head1 CHANGES
+
+=head2 Changes in DBD::ODBC 1.19 April 2, 2009
+
+Some minor diagnostic output during tests when running against freeTDS
+to show we know of issues in freeTDS.
+
+Fixed issue in 20SqlServer.t where the connection string got set with
+two consecutive semi-colons. Most drivers don't mind this but freeTDS
+ignores everything after that point in the connection string.
+
+Quieten some delete table output during tests.
+
+Handle connect failures in 20SqlServer.t in the multiple active
+statement tests.
+
+In 02simple.t cope with ODBC drivers or databases that do not need a
+username or password (MS Access).
+
+In 20SqlServer.t fix skip count and an erroneouse assignement for
+driver_name.
+
+Changes some if tests to Test::More->is tests in 02simple.t.
+
+Fix "invalid precision" error during tests with the new ACEODBC.DLL MS
+Access driver. Same workaround applied for the old MS Access driver
+(ODBCJT32.DLL) some time ago.
+
+Fix out of memory error during tests against the new MS Access driver
+(ACEODBC.DLL). The problem appears to be that the new Access driver
+reports ridiculously large parameter sizes for "select ?" queries and
+there are some of these in the unicode round trip test.
+
+Fixed minor typo in Makefile.PL - diagnostic message mentioned "ODBC
+HOME" instead of ODBCHOME.
+
+12blob.t test somehow got lost from MANIFEST - replaced. Also changed
+algorithm to get a long char type column as some MS Access drivers
+only show SQL_WLONGVARCHAR type in unicode.
+
+Added diagnostic output to 02simple.t to show the state of
+odbc_has_unicode.
 
 =head2 Changes in DBD::ODBC 1.18_4 March 13, 2009
 

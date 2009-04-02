@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 12603 2009-03-12 11:28:12Z mjevans $
+# $Id: ODBC.pm 12667 2009-04-02 10:54:56Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -12,7 +12,7 @@
 
 require 5.006;
 
-$DBD::ODBC::VERSION = '1.18_4';
+$DBD::ODBC::VERSION = '1.19';
 
 {
     package DBD::ODBC;
@@ -23,7 +23,7 @@ $DBD::ODBC::VERSION = '1.18_4';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 12603 2009-03-12 11:28:12Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 12667 2009-04-02 10:54:56Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -36,7 +36,6 @@ $DBD::ODBC::VERSION = '1.18_4';
 
     sub parse_trace_flag {
         my ($class, $name) = @_;
-        #return 0x02000000 if name eq 'this_is_spare_use_me';
         return 0x02000000 if $name eq 'odbcunicode';
         return 0x04000000 if $name eq 'odbcconnection';
         return DBI::parse_trace_flag($class, $name);

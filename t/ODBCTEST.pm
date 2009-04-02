@@ -29,15 +29,15 @@ require 5.004;
    $longstr = "THIS IS A STRING LONGER THAN 80 CHARS.  THIS SHOULD BE CHECKED FOR TRUNCATION AND COMPARED WITH ITSELF.";
    $longstr2 = $longstr . "  " . $longstr . "  " . $longstr . "  " . $longstr;
 
-    # really dumb work around:
-    # MS SQL Server 2000 (MDAC 2.5 and ODBC driver 2000.080.0194.00) have a bug if
-    # the column is named C, CA, or CAS and there is a call to SQLDescribeParam...
-    # there is an error, referring to a syntax error near keyword 'by'
-    # I figured it's just best to rename the columns.
-    # changed SQL_BIGINT below to -5, as DBI has removed that constant.
-    # ODBC's value is -5.
+   # really dumb work around:
+   # MS SQL Server 2000 (MDAC 2.5 and ODBC driver 2000.080.0194.00) have a
+   # bug if the column is named C, CA, or CAS and there is a call to
+   # SQLDescribeParam... there is an error, referring to a syntax error near
+   # keyword 'by' I figured it's just best to rename the columns.
+   # changed SQL_BIGINT below to -5, as DBI has removed that constant.
+   # ODBC's value is -5.
    %TestFieldInfo = (
-		     'COL_A' => [SQL_SMALLINT,-5, SQL_TINYINT, SQL_NUMERIC, SQL_DECIMAL, SQL_FLOAT, SQL_REAL],
+		     'COL_A' => [SQL_SMALLINT,-5, SQL_TINYINT, SQL_NUMERIC, SQL_DECIMAL, SQL_FLOAT, SQL_REAL, SQL_INTEGER],
 		     'COL_B' => [SQL_VARCHAR, SQL_CHAR, SQL_WVARCHAR, SQL_WCHAR],
 		     'COL_C' => [SQL_LONGVARCHAR, -1, SQL_WLONGVARCHAR],
 		     'COL_D' => [SQL_TYPE_TIMESTAMP, SQL_TYPE_DATE, SQL_DATE, SQL_TIMESTAMP ],
