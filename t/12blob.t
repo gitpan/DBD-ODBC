@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 12blob.t 12667 2009-04-02 10:54:56Z mjevans $
+# $Id: 12blob.t 12710 2009-04-20 15:21:32Z mjevans $
 #
 # blob tests
 # currently tests you can insert a clob with various odbc_putdata_start settings
@@ -15,28 +15,42 @@ my $tests = 21;
 $tests += 1 if $has_test_nowarnings;
 plan tests => $tests;
 
+my $dbh;
+
 # can't seem to get the imports right this way
 use DBI qw(:sql_types);
 use_ok('ODBCTEST');
 
-# to help ActiveState's build process along by behaving (somewhat) if a dsn is not provided
+sub tidyup {
+    if ($dbh) {
+        #diag "Tidying up\n";
+        eval {
+            local $dbh->{PrintWarn} = 0;
+            local $dbh->{PrintError} = 0;
+            $dbh->do(q/drop table DBD_ODBC_drop_me/);
+        };
+    }
+}
+
 BEGIN {
    if (!defined $ENV{DBI_DSN}) {
       plan skip_all => "DBI_DSN is undefined";
    }
 }
 END {
+    tidyup();
     Test::NoWarnings::had_no_warnings()
           if ($has_test_nowarnings);
 }
 
 my $ev;
 
-my $dbh = DBI->connect();
+$dbh = DBI->connect();
 unless($dbh) {
    BAIL_OUT("Unable to connect to the database $DBI::errstr\nTests skipped.\n");
    exit 0;
 }
+tidyup();
 
 my $putdata_start = $dbh->{odbc_putdata_start};
 is($putdata_start, 32768, 'default putdata_start');
@@ -92,14 +106,19 @@ sub test
 
     $sth = $dbh->prepare(q/insert into DBD_ODBC_drop_me values(?)/);
     ok($sth, "prepare for insert");
-    $rc  = $sth->execute($val);
-    ok($rc, "insert clob");
   SKIP: {
-        skip "insert failed - skipping the retrieval test", 2 unless $rc;
+        skip "prepare failed", 3 unless $sth;
 
-        test_value($dbh, $val);
+        $rc  = $sth->execute($val);
+        ok($rc, "insert clob");
+
+      SKIP: {
+            skip "insert failed - skipping the retrieval test", 2 unless $rc;
+
+            test_value($dbh, $val);
+        };
     };
-
+    $sth = undef;
     eval {$dbh->do(q/delete from DBD_ODBC_drop_me/); };
     $ev = $@;
     diag($ev) if $ev;
@@ -126,11 +145,3 @@ sub test_value
 
     return;
 }
-
-END {
-    if ($dbh) {
-        local $dbh->{PrintError} = 0;
-        local $dbh->{PrintWarn} = 0;
-        eval {$dbh->do(q/drop table DBD_ODBC_drop_me/);};
-    };
-};

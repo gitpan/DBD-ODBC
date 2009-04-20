@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 12667 2009-04-02 10:54:56Z mjevans $
+ * $Id: dbdimp.h 12710 2009-04-20 15:21:32Z mjevans $
  * portions Copyright (c) 2007-2008 Martin J. Evans
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
@@ -83,7 +83,8 @@ struct imp_dbh_st {
         DT_SQL_SERVER,                          /* SQLSRV32.DLL */
         DT_SQL_SERVER_NATIVE_CLIENT,    /* sqlncli10.dll | SQLNCLI.DLL */
         DT_MS_ACCESS_JET,                          /* odbcjt32.dll */
-        DT_MS_ACCESS_ACE                           /* ACEODBC.DLL */
+        DT_MS_ACCESS_ACE,                          /* ACEODBC.DLL */
+        DT_ES_OOB                                  /* Easysoft OOB */
     } driver_type;
     char odbc_driver_name[80];
     char odbc_driver_version[20];

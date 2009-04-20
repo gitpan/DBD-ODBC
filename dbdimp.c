@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 12667 2009-04-02 10:54:56Z mjevans $
+/* $Id: dbdimp.c 12710 2009-04-20 15:21:32Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -1942,7 +1942,7 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
         dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
         return 0;
     } else if (DBIc_TRACE(imp_sth, 0, 0, 4))
-        TRACE1(imp_sth, "    dbd_describe SQLNumResultCols=0 (rows=%d)\n",
+        TRACE1(imp_sth, "    dbd_describe SQLNumResultCols=0 (columns=%d)\n",
                num_fields);
 
     /*
@@ -2043,8 +2043,9 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
                             (SQLSMALLINT)imp_dbh->max_column_name_len,
                             &fbh->ColNameLen,
                             &fbh->ColSqlType,
+                            /* column size or precision depending on type */
                             &fbh->ColDef,
-                            &fbh->ColScale,
+                            &fbh->ColScale,     /* decimal digits */
                             &fbh->ColNullable);
 #endif /* WITH_UNICODE */
         if (!SQL_SUCCEEDED(rc)) {	/* should never fail */
@@ -2056,14 +2057,15 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
         cur_col_name += fbh->ColNameLen * sizeof(SQLWCHAR);
 #else
         cur_col_name += fbh->ColNameLen + 1;
-        cur_col_name[fbh->ColNameLen] = '\0';
+        cur_col_name[fbh->ColNameLen] = '\0';   /* should not be necessary */
 #endif
 #ifdef SQL_COLUMN_DISPLAY_SIZE
         if (DBIc_TRACE(imp_sth, 0, 0, 8))
             PerlIO_printf(DBIc_LOGPIO(imp_dbh),
                           "   DescribeCol column = %d, name = %s, "
-                          "len = %d, type = %s(%d), "
-                          "column size = %ld, scale = %d, nullable = %d\n",
+                          "namelen = %d, type = %s(%d), "
+                          "precision/column size = %ld, scale = %d, "
+                          "nullable = %d\n",
                           i+1, fbh->ColName,
                           fbh->ColNameLen,
                           S_SqlTypeToString(fbh->ColSqlType),
@@ -2200,9 +2202,11 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
             /* MS SQL returns bytes, Oracle returns characters ... */
             fbh->ColLength*=sizeof(SQLWCHAR);
             fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
-            break;
+# else
+            fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth) + 1;
 # endif	/* WITH_UNICODE */
-#endif
+            break;
+#endif  /* SQL_WLONGVARCHAR */
           case SQL_VARCHAR:
             if (fbh->ColDef == 0) {
                 fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
@@ -2284,6 +2288,11 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
                                     sizeof(int))) % sizeof(int);
 
         /* Bind output column variables */
+        if (DBIc_TRACE(imp_sth, 0, 0, 4))
+            PerlIO_printf(DBIc_LOGPIO(imp_dbh),
+                          "Bind %d: type = %s(%d), buf=%p, buflen=%ld\n",
+                          i+1, S_SqlTypeToString(fbh->ftype), fbh->ftype,
+                          fbh->data, fbh->ColDisplaySize);
         rc = SQLBindCol(imp_sth->hstmt,
                         (SQLSMALLINT)(i+1),
                         fbh->ftype, fbh->data,
@@ -2748,7 +2757,7 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
       if (DBIc_TRACE(imp_sth, 0, 0, 4))
 	 PerlIO_printf(
              DBIc_LOGPIO(imp_dbh), "    fetch col#%d %s datalen=%d displ=%d\n",
-             i, fbh->ColName, fbh->datalen, fbh->ColDisplaySize);
+             i+1, fbh->ColName, fbh->datalen, fbh->ColDisplaySize);
 
       if (fbh->datalen == SQL_NULL_DATA) {	/* NULL value		*/
 	 SvOK_off(sv);
@@ -5211,6 +5220,8 @@ static int post_connect(
            imp_dbh->driver_type = DT_MS_ACCESS_JET;
        } else if (strcmp(imp_dbh->odbc_driver_name, "ACEODBC.DLL") == 0) {
            imp_dbh->driver_type = DT_MS_ACCESS_ACE;
+       } else if (strcmp(imp_dbh->odbc_driver_name, "esoobclient") == 0) {
+           imp_dbh->driver_type = DT_ES_OOB;
        } else {
            imp_dbh->driver_type = DT_DONT_CARE;
        }
@@ -5236,16 +5247,22 @@ static int post_connect(
    if (!SQL_SUCCEEDED(rc)) {
       dbd_error(dbh, rc, "post_connect/SQLGetInfo(MAX_COLUMN_NAME_LEN)");
       imp_dbh->max_column_name_len = 256;
+   } else if (imp_dbh->max_column_name_len == 0) {
+      imp_dbh->max_column_name_len = 256;
    } else {
        if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
            TRACE1(imp_dbh, "MAX_COLUMN_NAME_LEN = %d\n",
                   imp_dbh->max_column_name_len);
    }
-   if (imp_dbh->max_column_name_len > 256) {
-       imp_dbh->max_column_name_len = 256;
+#ifdef WITH_UNICODE
+   imp_dbh->max_column_name_len = imp_dbh->max_column_name_len *
+       sizeof(SQLWCHAR) + 2;
+#endif
+   if (imp_dbh->max_column_name_len > 512) {
+       imp_dbh->max_column_name_len = 512;
        DBIh_SET_ERR_CHAR(
            dbh, (imp_xxh_t*)imp_drh, "0", 1,
-           "Max column name length pegged at 256", Nullch, Nullch);
+           "Max column name length pegged at 512", Nullch, Nullch);
    }
 
    /* default ignoring named parameters to false */

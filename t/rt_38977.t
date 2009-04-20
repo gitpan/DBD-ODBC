@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_38977.t 12185 2008-12-19 19:39:22Z mjevans $
+# $Id: rt_38977.t 12710 2009-04-20 15:21:32Z mjevans $
 #
 # test varbinary(MAX) and varchar(MAX) types in SQL Server
 #
@@ -58,6 +58,7 @@ my ($ev, $sth);
 
 SKIP: {
     skip "not SQL Server", 6 if $dbms_name !~ /Microsoft SQL Server/;
+    skip "Easysoft OOB", 6 if $driver_name =~ /esoobclient/;
     my $major_version = $dbms_version;
     $major_version =~ s/^(\d+)\..*$/$1/;
     #diag("Major Version: $major_version\n");
