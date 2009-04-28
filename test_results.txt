@@ -1,0 +1,51 @@
+======================================================================
+t/01base................ok
+t/02simple..............ok 1/65#
+# Perl v5.9.5 built for MSWin32-x64-multi-thread
+# Using DBI 1.59
+# Using DBD::ODBC 1.20
+# Using DBMS_NAME 'Microsoft SQL Server'
+# Using DBMS_VER '09.00.3042'
+# Using DRIVER_NAME 'sqlncli10.dll'
+# Using DRIVER_VER '10.00.1049'
+# odbc_has_unicode 1
+t/02simple..............ok
+t/03dbatt...............ok 1/29#
+# N.B. Some drivers (postgres/cache) may return ODBC 2.0 column names for the SQ
+LTables result-set e.g. TABLE_QUALIFIER instead of TABLE_CAT
+t/03dbatt...............ok
+t/05meth................ok
+t/07bind................ok
+t/08bind2...............ok
+t/09multi...............ok
+t/10handler.............ok
+t/12blob................ok
+t/20SqlServer...........ok
+t/30Oracle..............ok
+        3/5 skipped: various reasons
+t/40UnicodeRoundTrip....ok
+t/41Unicode.............ok
+t/pod-coverage..........ok 1/1# Test::Pod::Coverage 1.04 required for testing PO
+D coverage
+t/pod-coverage..........ok
+t/pod...................ok
+        3/3 skipped: various reasons
+t/rt_38977..............ok
+t/rt_39841..............ok 1/28# [Microsoft][SQL Server Native Client 10.0]Inval
+id character value for cast specification (SQL-22018)
+# 22018
+#
+# NOTE: Your SQL Server ODBC driver has a bug which can describe parameters
+# in SQL using sub selects incorrectly. In this case a VARCHAR(8) parameter
+# is described as an INTEGER
+#
+# Checking you can work around bug in SQL Server ODBC Driver
+# Yes you can
+t/rt_39841..............ok
+        5/28 skipped: various reasons
+t/rt_39897..............ok
+t/rt_43384..............ok
+        7/9 skipped: various reasons
+All tests successful, 18 subtests skipped.
+Files=19, Tests=427, 11 wallclock secs ( 0.00 cusr +  0.00 csys =  0.00 CPU)
+======================================================================
