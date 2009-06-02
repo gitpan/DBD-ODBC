@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 12674 2009-04-07 09:04:09Z mjevans $
+# $Id: ODBC.pm 12806 2009-06-02 15:56:56Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -12,7 +12,7 @@
 
 require 5.006;
 
-$DBD::ODBC::VERSION = '1.21';
+$DBD::ODBC::VERSION = '1.21_1';
 
 {
     package DBD::ODBC;
@@ -23,7 +23,7 @@ $DBD::ODBC::VERSION = '1.21';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 12674 2009-04-07 09:04:09Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 12806 2009-06-02 15:56:56Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -1215,6 +1215,29 @@ In the above example you must use:
 In discussion on the dbi-dev list is was suggested that the ':' could
 be made optional and there were no basic objections but it has not
 made it's way into the pod yet.
+
+=head3 Sticky Parameter Types
+
+The DBI specification post 1.608 says in bind_param:
+
+  The data type is 'sticky' in that bind values passed to execute()
+  are bound with the data type specified by earlier bind_param()
+  calls, if any.  Portable applications should not rely on being able
+  to change the data type after the first C<bind_param> call.
+
+DBD::ODBC does allow a parameter to be rebound with another data type as
+ODBC inherently allows this. Therefore you can do:
+
+  # parameter 1 set as a SQL_LONGVARCHAR
+  $sth->bind_param(1, $data, DBI::SQL_LONGVARCHAR);
+  # without the bind above the $data parameter would be either a DBD::ODBC
+  # internal default or whatever the ODBC driver said it was but because
+  # parameter types are sticky, the type is still SQL_LONGVARCHAR.
+  $sth->execute($data);
+  # change the bound type to SQL_VARCHAR
+  # some DBDs will ignore the type in the following, DBD::ODBC does not
+  $sth->bind_param(1, $data, DBI::SQL_VARCHAR);
+
 
 =head2 Unicode
 

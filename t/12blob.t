@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 12blob.t 12710 2009-04-20 15:21:32Z mjevans $
+# $Id: 12blob.t 12744 2009-05-05 13:07:46Z mjevans $
 #
 # blob tests
 # currently tests you can insert a clob with various odbc_putdata_start settings
