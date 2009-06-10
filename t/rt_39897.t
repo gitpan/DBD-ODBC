@@ -1,11 +1,11 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_39897.t 12603 2009-03-12 11:28:12Z mjevans $
+# $Id: rt_39897.t 12819 2009-06-10 12:20:40Z mjevans $
 #
 # test for rt 39897. DBD::ODBC 1.17 was accidentally changed to apply
 # LongReadLen to SQL_VARCHAR columns. 1.16 and earlier only use LongTruncOk
 # and LongReadLen on long columns e.g. SQL_LONGVARCHAR. As a result, if you
 # had a table with a varchar(N) where N > 80 (80 being the default for
-# LongReadLen) and moved from 1.16 to 1.17 then yopu'd suddenly get data
+# LongReadLen) and moved from 1.16 to 1.17 then you'd suddenly get data
 # truncated errors for rows where the SQL_VARCHAR was > 80 chrs.
 #
 use Test::More;
