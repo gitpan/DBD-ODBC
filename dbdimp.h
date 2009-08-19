@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 12806 2009-06-02 15:56:56Z mjevans $
+ * $Id: dbdimp.h 13167 2009-08-05 09:32:34Z mjevans $
  * portions Copyright (c) 2007-2008 Martin J. Evans
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
@@ -88,6 +88,8 @@ struct imp_dbh_st {
     } driver_type;
     char odbc_driver_name[80];
     char odbc_driver_version[20];
+    char odbc_dbms_name[80];
+    char odbc_dbms_version[80];
 };
 
 /* Define sth implementor data structure */

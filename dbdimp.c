@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 12819 2009-06-10 12:20:40Z mjevans $
+/* $Id: dbdimp.c 13167 2009-08-05 09:32:34Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -511,14 +511,22 @@ int dsnHasUIDorPWD(char *dsn) {
 
 
 
-/*------------------------------------------------------------
-connecting to a data source.
-Allocates henv and hdbc.
-NOTE: This is the old 5 argument version
-------------------------------------------------------------*/
-int
-   dbd_db_login(dbh, imp_dbh, dbname, uid, pwd)
-   SV *dbh; imp_dbh_t *imp_dbh; char *dbname; char *uid; char *pwd;
+/************************************************************************/
+/*                                                                      */
+/*  dbd_db_login                                                        */
+/*  ============                                                        */
+/*                                                                      */
+/* Connect to a data source.                                            */
+/* Allocates henv and hdbc.                                             */
+/* NOTE: This is the old 5 argument version with no attribs             */
+/*                                                                      */
+/************************************************************************/
+int dbd_db_login(
+    SV *dbh,
+    imp_dbh_t *imp_dbh,
+    char *dbname,
+    char *uid,
+    char *pwd)
 {
    return dbd_db_login6(dbh, imp_dbh, dbname, uid, pwd, Nullsv);
 }
@@ -530,7 +538,7 @@ int
 /*  dbd_db_login6_sv                                                    */
 /*  ================                                                    */
 /*                                                                      */
-/*  This API was introduced to DBI after 1.607 (subversion revision     */
+/*  This API was introduced in DBI after 1.607 (subversion revision     */
 /*  11723) and is the same as dbd_db_login6 except the connection       */
 /*  strings are SVs so we can detect unicode strings and call           */
 /*  SQLDriverConnectW.                                                  */
@@ -547,28 +555,31 @@ int dbd_db_login6_sv(
 #ifndef WITH_UNICODE
    if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
        TRACE0(imp_dbh, "non-Unicode login6\n");
-   return dbd_db_login6(dbh, imp_dbh, SvPV_nolen(dbname), SvPV_nolen(uid),
-                         SvPV_nolen(pwd), attr);
+   return dbd_db_login6(dbh, imp_dbh, SvPV_nolen(dbname),
+                        (SvOK(uid) ? SvPV_nolen(uid) : NULL),
+                        (SvOK(pwd) ? SvPV_nolen(pwd) : NULL), attr);
 #else
 
    D_imp_drh_from_dbh;
    dTHR;
-   RETCODE rc;
-   SV *wconstr;
+   SQLRETURN rc;
+   SV *wconstr;			/* copy of connection string in wide chrs */
+   /* decoded connection string in wide characters and its length to work
+      around an issue in older unixODBCs */
    SQLWCHAR dc_constr[512];
    STRLEN dc_constr_len;
 
    if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0)) {
-       TRACE0(imp_dbh, "Unicode login6 \n");
+       TRACE0(imp_dbh, "Unicode login6\n");
        TRACE2(imp_dbh, "dbname=%s, uid=%s, pwd=xxxxx\n",
-              SvPV_nolen(dbname), SvPV_nolen(uid));
+              SvPV_nolen(dbname), neatsvpv(uid, 0));
    }
 
-   imp_dbh->out_connect_string = NULL;
+   imp_dbh->out_connect_string = Nullsv;
 
    if (!imp_drh->connects) {
       rc = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &imp_drh->henv);
-      dbd_error(dbh, rc, "db_login/SQLAllocHandle(env)");
+      dbd_error(dbh, rc, "db_login6_sv/SQLAllocHandle(env)");
       if (!SQL_SUCCEEDED(rc)) return 0;
 
       if (set_odbc_version(dbh, imp_dbh, attr) != 1) return 0;
@@ -578,7 +589,7 @@ int dbd_db_login6_sv(
 
    rc = SQLAllocHandle(SQL_HANDLE_DBC, imp_drh->henv, &imp_dbh->hdbc);
    if (!SQL_SUCCEEDED(rc)) {
-      dbd_error(dbh, rc, "db_login/SQLAllocHandle(dbc)");
+      dbd_error(dbh, rc, "db_login6_sv/SQLAllocHandle(dbc)");
       if (imp_drh->connects == 0) {
           SQLFreeHandle(SQL_HANDLE_ENV, imp_drh->henv);
           imp_drh->henv = SQL_NULL_HENV;
@@ -591,32 +602,36 @@ int dbd_db_login6_sv(
       contains DSN or DRIVER, we've little choice to but to call
       SQLDriverConnect and need to tag the uid/pwd on the end of the
       connection string (unless they already exist). */
-
    if ((SvCUR(dbname) > SQL_MAX_DSN_LENGTH ||
         dsnHasDriverOrDSN(SvPV_nolen(dbname))) &&
        !dsnHasUIDorPWD(SvPV_nolen(dbname))) {
-       sv_catpvf(dbname, ";UID=%s;PWD=%s;",
-                 SvPV_nolen(uid), SvPV_nolen(pwd));
+
+       if (SvOK(uid)) {
+           sv_catpv(dbname, ";UID=");
+           sv_catsv(dbname, uid);
+       }
+       if (SvOK(pwd)) {
+           sv_catpv(dbname, ";PWD=");
+           sv_catsv(dbname, pwd);
+       }
+       sv_catpv(dbname, ";");
+       /*sv_catpvf(dbname, ";UID=%s;PWD=%s;",
+	 SvPV_nolen(uid), SvPV_nolen(pwd));*/
        if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
            TRACE1(imp_dbh, "Now using dbname = %s\n", SvPV_nolen(dbname));
    }
 
    if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
       TRACE2(imp_dbh, "    SQLDriverConnect '%s', '%s', 'xxxx'\n",
-             SvPV_nolen(dbname), SvPV_nolen(uid));
+             SvPV_nolen(dbname), neatsvpv(uid, 0));
 
    wconstr = sv_mortalcopy(dbname);
-#ifdef sv_utf8_decode
-   sv_utf8_decode(wconstr);
-#else
-   SvUTF8_on(wconstr);
-#endif
-   SV_toWCHAR(wconstr);
+   utf8sv_to_wcharsv(wconstr);
 
    /* The following is to work around a bug in SQLDriverConnectW in unixODBC
       which in at least 2.2.11 (and probably up to 2.2.13 official release
       [not pre-release]) core dumps if the wide connection string does not end
-      in a 0. */
+      in a 0 (even though it should not matter as we pass the length. */
    {
        char *p;
 
@@ -649,16 +664,17 @@ int dbd_db_login6_sv(
 
    if (!SQL_SUCCEEDED(rc)) {
        SV *wuid, *wpwd;
+       SQLWCHAR *wuidp, *wpwdp;
+       SQLSMALLINT uid_len, pwd_len;
+
        if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
-           TRACE0(imp_dbh, "    SQLDriverConnect failed:\n");
+           TRACE0(imp_dbh, "    SQLDriverConnectW failed:\n");
        /*
         * Added code for DBD::ODBC 0.39 to help return a better
         * error code in the case where the user is using a
         * DSN-less connection and the dbname doesn't look like a
         * true DSN.
         */
-       /* wanted to use strncmpi, but couldn't find one on all
-        * platforms.  Sigh. */
        if (SvCUR(dbname) > SQL_MAX_DSN_LENGTH ||
            dsnHasDriverOrDSN(SvPV_nolen(dbname))) {
 
@@ -667,7 +683,7 @@ int dbd_db_login6_sv(
             * error code because the SQLConnect call could hide the
             * real problem.
             */
-           dbd_error(dbh, rc, "db_login/SQLConnect");
+           dbd_error(dbh, rc, "db_login6sv/SQLDriverConnectW");
            SQLFreeHandle(SQL_HANDLE_DBC, imp_dbh->hdbc);
            if (imp_drh->connects == 0) {
                SQLFreeHandle(SQL_HANDLE_ENV, imp_drh->henv);
@@ -686,40 +702,37 @@ int dbd_db_login6_sv(
                   neatsvpv(dbname, 0), neatsvpv(uid, 0));
 
        wconstr = sv_mortalcopy(dbname);
-#ifdef sv_utf8_decode
-       sv_utf8_decode(wconstr);
-#else
-       SvUTF8_on(wconstr);
-#endif
-       SV_toWCHAR(wconstr);
+       utf8sv_to_wcharsv(wconstr);
+       if (SvOK(uid)) {
+           wuid = sv_mortalcopy(uid);
+           utf8sv_to_wcharsv(wuid);
+           wuidp = (SQLWCHAR *)SvPV_nolen(wuid);
+           uid_len = SvCUR(wuid) / sizeof(SQLWCHAR);
+       } else {
+           wuidp = NULL;
+           uid_len = 0;
+       }
 
-       wuid = sv_mortalcopy(uid);
-#ifdef sv_utf8_decode
-       sv_utf8_decode(wuid);
-#else
-       SvUTF8_on(wuid);
-#endif
-       SV_toWCHAR(wuid);
-
-       wpwd = sv_mortalcopy(pwd);
-#ifdef sv_utf8_decode
-       sv_utf8_decode(wpwd);
-#else
-       SvUTF8_on(wpwd);
-#endif
-       SV_toWCHAR(wpwd);
+       if (SvOK(pwd)) {
+           wpwd = sv_mortalcopy(pwd);
+           utf8sv_to_wcharsv(wpwd);
+           wpwdp = (SQLWCHAR *)SvPV_nolen(wpwd);
+           pwd_len = SvCUR(wpwd) / sizeof(SQLWCHAR);
+       } else {
+           wpwdp = NULL;
+           pwd_len = 0;
+       }
 
        rc = SQLConnectW(imp_dbh->hdbc,
                         (SQLWCHAR *)SvPV_nolen(wconstr),
                         (SQLSMALLINT)(SvCUR(wconstr) / sizeof(SQLWCHAR)),
-                        (SQLWCHAR *)SvPV_nolen(wuid),
-                        (SQLSMALLINT)(SvCUR(wuid) / sizeof(SQLWCHAR)),
-                        (SQLWCHAR *)SvPV_nolen(wpwd),
-                        (SQLSMALLINT)(SvCUR(wpwd) / sizeof(SQLWCHAR)));
+                        wuidp, uid_len,
+                        wpwdp, pwd_len);
    }
    if (!SQL_SUCCEEDED(rc)) {
-      dbd_error(dbh, rc, "db_login/SQLConnect");
-      SQLFreeHandle(SQL_HANDLE_DBC, imp_dbh->hdbc);/* TBD: 3.0 update */
+      dbd_error(dbh, rc, "db_login6sv/SQLConnectW");
+      SQLFreeHandle(SQL_HANDLE_DBC, imp_dbh->hdbc);
+      imp_dbh->hdbc = SQL_NULL_HDBC;
       if (imp_drh->connects == 0) {
           SQLFreeHandle(SQL_HANDLE_ENV, imp_drh->henv);
           imp_drh->henv = SQL_NULL_HENV;
@@ -727,11 +740,10 @@ int dbd_db_login6_sv(
       }
       return 0;
    } else if (rc == SQL_SUCCESS_WITH_INFO) {
-       dbd_error(dbh, rc, "db_login/SQLConnect");
+       dbd_error(dbh, rc, "db_login6sv/SQLConnectW");
    }
 
    if (post_connect(dbh, imp_dbh, attr) != 1) return 0;
-
 
    imp_drh->connects++;
    DBIc_IMPSET_on(imp_dbh);	/* imp_dbh set up now			*/
@@ -814,16 +826,29 @@ int dbd_db_login6(
 
    if ((strlen(dbname) > SQL_MAX_DSN_LENGTH ||
         dsnHasDriverOrDSN(dbname)) && !dsnHasUIDorPWD(dbname)) {
-       if ((strlen(dbname) + strlen(uid) + strlen(pwd) + 12) >
+
+       if ((strlen(dbname) +
+            (uid ? strlen(uid) : 0) +
+            (pwd ? strlen(pwd) : 0) +
+            12) >
            sizeof(dbname_local)) {
            croak("Connection string too long");
        }
-       sprintf(dbname_local, "%s;UID=%s;PWD=%s;", dbname, uid, pwd);
+       strcpy(dbname_local, dbname);
+       if (uid) {
+           strcat(dbname_local, ";UID=");
+           strcat(dbname_local, uid);
+       }
+       if (pwd) {
+           strcat(dbname_local, ";PWD=");
+           strcat(dbname_local, pwd);
+       }
        dbname = dbname_local;
    }
 
    if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
-      TRACE2(imp_dbh, "    SQLDriverConnect '%s', '%s', 'xxxx'\n", dbname, uid);
+      TRACE2(imp_dbh, "    SQLDriverConnect '%s', '%s', 'xxxx'\n",
+             dbname, (uid ? uid : ""));
 
 # ifdef WITH_UNICODE
    if (strlen(dbname) > (sizeof(wconstr) / sizeof(wconstr[0]))) {
@@ -898,8 +923,6 @@ int dbd_db_login6(
        * DSN-less connection and the dbname doesn't look like a
        * true DSN.
        */
-      /* wanted to use strncmpi, but couldn't find one on all
-       * platforms.  Sigh. */
       if (strlen(dbname) > SQL_MAX_DSN_LENGTH || dsnHasDriverOrDSN(dbname)) {
 
 	 /* must be DSN= or some "direct" connection attributes,
@@ -923,18 +946,38 @@ int dbd_db_login6(
 #endif /* DriverConnect supported */
 
       if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
-          TRACE2(imp_dbh, "    SQLConnect '%s', '%s'\n", dbname, uid);
+          TRACE2(imp_dbh, "    SQLConnect '%s', '%s'\n",
+                 dbname, (uid ? uid : ""));
 #ifdef WITH_UNICODE
       {
           SQLWCHAR wuid[100], wpwd[100];
-          for (i = 0; i < strlen(uid); i++) {
-              wuid[i] = uid[i];
+          SQLSMALLINT uid_len, pwd_len;
+          SQLWCHAR *wuidp, *wpwdp;
+
+          if (uid) {
+              for (i = 0; i < strlen(uid); i++) {
+                  wuid[i] = uid[i];
+              }
+              wuid[i] = 0;
+              wuidp = wuid;
+              uid_len = strlen(uid);
+          } else {
+              wuidp = NULL;
+              uid_len = 0;
           }
-          wuid[i] = 0;
-          for (i = 0; i < strlen(pwd); i++) {
-              wpwd[i] = pwd[i];
+
+          if (pwd) {
+              for (i = 0; i < strlen(pwd); i++) {
+                  wpwd[i] = pwd[i];
+              }
+              wpwd[i] = 0;
+              wpwdp = wpwd;
+              pwd_len = strlen(pwd);
+          } else {
+              wpwdp = NULL;
+              pwd_len = 0;
           }
-          wpwd[i] = 0;
+
           for (i = 0; i < strlen(dbname); i++) {
               wconstr[i] = dbname[i];
           }
@@ -943,14 +986,14 @@ int dbd_db_login6(
 
           rc = SQLConnectW(imp_dbh->hdbc,
                            wconstr, wconstr_len,
-                          wuid, (SQLSMALLINT)strlen(uid),
-                          wpwd, (SQLSMALLINT)strlen(pwd));
+                           wuidp, uid_len,
+                          wpwdp, pwd_len);
       }
 #else
       rc = SQLConnect(imp_dbh->hdbc,
 		      dbname, (SQLSMALLINT)strlen(dbname),
-		      uid, (SQLSMALLINT)strlen(uid),
-		      pwd, (SQLSMALLINT)strlen(pwd));
+		      uid, (SQLSMALLINT)(uid ? strlen(uid) : 0),
+		      pwd, (SQLSMALLINT)(pwd ? strlen(pwd) : 0));
 #endif
    }
 
@@ -968,7 +1011,6 @@ int dbd_db_login6(
    }
 
    if (post_connect(dbh, imp_dbh, attr) != 1) return 0;
-
 
    imp_drh->connects++;
    DBIc_IMPSET_on(imp_dbh);	/* imp_dbh set up now			*/
@@ -1771,16 +1813,14 @@ int odbc_st_prepare_sv(
            if (DBIc_TRACE(imp_dbh, 0x02000000, 0, 0))
                TRACE0(imp_dbh, "    Processing non-utf8 sql in unicode mode\n");
 
-           rc = SQLPrepare(imp_sth->hstmt, imp_sth->statement,
-                           strlen(imp_sth->statement));
+           rc = SQLPrepare(imp_sth->hstmt, imp_sth->statement, SQL_NTS);
        }
 
 #else
        if (DBIc_TRACE(imp_dbh, 0x02000000, 0, 0))
            TRACE0(imp_dbh, "    Processing sql in non-unicode mode\n");
 
-       rc = SQLPrepare(imp_sth->hstmt, imp_sth->statement,
-                       strlen(imp_sth->statement));
+       rc = SQLPrepare(imp_sth->hstmt, imp_sth->statement, SQL_NTS);
 #endif
        if (DBIc_TRACE(imp_dbh, 0, 0, 3))
            TRACE1(imp_dbh, "    SQLPrepare = %d\n", rc);
@@ -3010,6 +3050,13 @@ static void get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
                              S_SqlTypeToString(phs->described_sql_type),
                              phs->described_sql_type,
                              phs->param_size, ibScale, fNullable);
+/*               printf(
+                             "      SQLDescribeParam %s: SqlType=%s(%d) "
+                             "param_size=%d Scale=%d Nullable=%d\n",
+                             phs->name,
+                             S_SqlTypeToString(phs->described_sql_type),
+                             phs->described_sql_type,
+                             phs->param_size, ibScale, fNullable);*/
 
            /*
             * for non-integral numeric types, let the driver/database handle
@@ -3380,8 +3427,9 @@ static int rebind_param(
     */
    if ((imp_dbh->driver_type == DT_SQL_SERVER) &&
        ((phs->sql_type == SQL_LONGVARCHAR) ||
-        (phs->sql_type == SQL_LONGVARBINARY)) &&
-       (column_size == 2147483647) && (phs->strlen_or_ind < 0) &&
+        (phs->sql_type == SQL_LONGVARBINARY) ||
+        (phs->sql_type == SQL_WLONGVARCHAR)) &&
+       /*(column_size == 2147483647) && (phs->strlen_or_ind < 0) &&*/
        ((-phs->strlen_or_ind + SQL_LEN_DATA_AT_EXEC_OFFSET) >= 409600)) {
        phs->strlen_or_ind = SQL_LEN_DATA_AT_EXEC(0);
        buffer_length = 0;
@@ -3424,18 +3472,45 @@ static int rebind_param(
    }
    /*
     * Yet another workaround for SQL Server native client.
-    * If you have a varbinary(max) or varchar(max) you have to pass 0
-    * for the column_size or you get HY104 "Invalid precision value".
+    * If you have a varbinary(max), varchar(max) or nvarchar(max) you have to
+    * pass 0 for the column_size or you get HY104 "Invalid precision value".
     * See rt_38977.t which causes this.
     * The versions of native client I've seen this with are:
     * 2007.100.1600.22 sqlncli10.dll driver version = ?
     * 2005.90.1399.00 SQLNCLI.DLL driver version = 09.00.1399
+    *
+    * Update, for nvarchar(max) it does not seem to simply be a driver issue
+    * as with the Easysoft SQL Server ODBC Driver going to Microsoft SQL Server
+    * 09.00.1399 we got the following error for all sizes between 4001 and 8000
+    * (inclusive).
+    * [SQL Server]The size (4001) given to the parameter '@P1' exceeds the
+    *   maximum allowed (4000)
+    *
+    * So to sum up for the native client when the parameter size is 0 or
+    * when the database is sql server and wchar and sql type not overwritten
+    * we need to use column size 0. We cannot do this if the requested_type
+    * was specified as if someone specifies a bind type we haven't called
+    * SQLDescribeParam and it looks like param_size = 0 even when it is
+    * not a xxx(max). e.g., the 40UnicodeRoundTrip tests will fail with
+    * MS SQL Server because they override the type.
     */
-   if ((imp_dbh->driver_type == DT_SQL_SERVER_NATIVE_CLIENT) &&
-       (phs->strlen_or_ind < 0) &&
-       (phs->param_size == 0)) {
-       column_size = 0;
+   if (phs->param_size == 0) {
+       if ((imp_dbh->driver_type == DT_SQL_SERVER_NATIVE_CLIENT) ||
+           ((strcmp(imp_dbh->odbc_dbms_name, "Microsoft SQL Server") == 0) &&
+            (phs->sql_type == SQL_WVARCHAR) &&
+            (phs->requested_type == 0))) {
+           column_size = 0;
+       }
    }
+   /* for rt_38977 we get:
+    * sloi = -500100 ps=0 sqlt=12 (SQL_VARCHAR)
+    * sloi = -500100 ps=0 sqlt=-3 (SQL_VARBINARY)
+    * sloi = 4001 ps=0 sqlt=-9 (SQL_WVARCHAR) <--- this one fails without above
+    */
+
+   /*printf("sloi = %d ps=%d sqlt=%d\n", phs->strlen_or_ind, phs->param_size, phs->sql_type);*/
+
+
    if (DBIc_TRACE(imp_sth, 0, 0, 5)) {
       PerlIO_printf(
           DBIc_LOGPIO(imp_dbh),
@@ -4872,7 +4947,7 @@ SV *odbc_col_attributes(SV *sth, int colno, int desctype)
    D_imp_sth(sth);
    RETCODE rc;
    SV *retsv = NULL;
-   char str_attr[256];
+   unsigned char str_attr[512];
    SWORD str_attr_len = 0;
    SQLLEN num_attr = 0;
 
@@ -4894,9 +4969,14 @@ SV *odbc_col_attributes(SV *sth, int colno, int desctype)
       return Nullsv;
    }
 
+   /*
+    *  workaround a problem in unixODBC 2.2.11 which can write off the
+    *  end of the str_attr buffer when built with unicode - lie about
+    *  buffer size - we've got more than we admit to.
+    */
    rc = SQLColAttributes(imp_sth->hstmt, (SQLUSMALLINT)colno,
 			 (SQLUSMALLINT)desctype,
-			 str_attr, sizeof(str_attr),
+			 str_attr, sizeof(str_attr)/2,
 			 &str_attr_len, &num_attr);
 
    if (!SQL_SUCCEEDED(rc)) {
@@ -4905,7 +4985,6 @@ SV *odbc_col_attributes(SV *sth, int colno, int desctype)
    } else if (SQL_SUCCESS_WITH_INFO == rc) {
        warn("SQLColAttributes has truncated returned data");
    }
-
 
    if (DBIc_TRACE(imp_sth, 0, 0, 3)) {
       PerlIO_printf(
@@ -5260,6 +5339,20 @@ static int post_connect(
    }
    if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
        TRACE1(imp_dbh, "DRIVER_VERSION = %s\n", imp_dbh->odbc_driver_version);
+
+   rc = SQLGetInfo(imp_dbh->hdbc, SQL_DBMS_NAME, &imp_dbh->odbc_dbms_name,
+                   (SQLSMALLINT)sizeof(imp_dbh->odbc_dbms_name), &dbvlen);
+   if (!SQL_SUCCEEDED(rc)) {
+       dbd_error(dbh, rc, "post_connect/SQLGetInfo(SQL_DBMS_NAME)");
+       strcpy(imp_dbh->odbc_dbms_name, "unknown");
+   }
+
+   rc = SQLGetInfo(imp_dbh->hdbc, SQL_DBMS_VER, &imp_dbh->odbc_dbms_version,
+                   (SQLSMALLINT)sizeof(imp_dbh->odbc_dbms_version), &dbvlen);
+   if (!SQL_SUCCEEDED(rc)) {
+       dbd_error(dbh, rc, "post_connect/SQLGetInfo(SQL_DBMS_VER)");
+       strcpy(imp_dbh->odbc_dbms_version, "unknown");
+   }
 
    /* find maximum column name length */
    rc = SQLGetInfo(imp_dbh->hdbc, SQL_MAX_COLUMN_NAME_LEN,

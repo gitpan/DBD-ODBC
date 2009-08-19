@@ -1,5 +1,5 @@
 /*
- * $Id: unicode_helper.h 11710 2008-09-01 16:53:29Z mjevans $
+ * $Id: unicode_helper.h 12855 2009-06-17 09:55:33Z mjevans $
  */
 #ifdef WITH_UNICODE
 
@@ -20,6 +20,7 @@ char * PVallocW(UTF16 * wp);
 void PVfreeW(char * s);
 
 void SV_toWCHAR(SV * sv);
+void utf8sv_to_wcharsv(SV *sv);
 
 #endif /* defined unicode_helper_h */
 #endif /* WITH_UNICODE */
