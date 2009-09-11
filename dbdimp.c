@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 13167 2009-08-05 09:32:34Z mjevans $
+/* $Id: dbdimp.c 13205 2009-08-19 08:51:11Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -3050,13 +3050,6 @@ static void get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
                              S_SqlTypeToString(phs->described_sql_type),
                              phs->described_sql_type,
                              phs->param_size, ibScale, fNullable);
-/*               printf(
-                             "      SQLDescribeParam %s: SqlType=%s(%d) "
-                             "param_size=%d Scale=%d Nullable=%d\n",
-                             phs->name,
-                             S_SqlTypeToString(phs->described_sql_type),
-                             phs->described_sql_type,
-                             phs->param_size, ibScale, fNullable);*/
 
            /*
             * for non-integral numeric types, let the driver/database handle
