@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 13167 2009-08-05 09:32:34Z mjevans $
+ * $Id: dbdimp.h 13487 2009-11-12 09:49:38Z mjevans $
  * portions Copyright (c) 2007-2008 Martin J. Evans
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
@@ -74,6 +74,13 @@ struct imp_dbh_st {
      * SQLColAttributes for these attributes fails we fallback on a default
      * value. */
     SQLLEN odbc_column_display_size;
+
+    /* Some databases (like Aster) return all strings UTF-8 encoded.
+     * If this is set (1), SvUTF8_on() will be called on all strings returned
+     * from the driver.
+     */
+    int odbc_utf8_on;
+
     /*
      *  We need special workarounds for the following drivers. To avoid
      *  strcmping their names every time we do it once and store the type here
@@ -135,6 +142,7 @@ struct imp_sth_st {
     SQLINTEGER odbc_query_timeout;
     IV odbc_putdata_start;
     IV odbc_column_display_size;
+    int odbc_utf8_on;
 };
 #define IMP_STH_EXECUTING	0x0001
 

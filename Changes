@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2009-08-19 09:51:11 +0100 (Wed, 19 Aug 2009) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2009-11-12 09:49:38 +0000 (Thu, 12 Nov 2009) $ $Revision: 10667 $)
 
 =cut
 
@@ -20,8 +20,6 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
  Change SQLColAttributes calls (now deprecated) to SQLColAttribute
  Change SQLTransact calls to SQLEndTran calls.
  Add support for $sth->more_results based on DBD::ODBC-specific attribute
- Use odbcinst (if it exists to point people at the ini files they need to use)
- Use odbc_config (if it exists to find out about unixODBC).
  There is a Columns private ODBC method which is not documented.
  Add support for sending lobs in chunks instead of all in one go. Although
    DBD::ODBC uses SQLParamData and SQLPutData internally they are not exposed
@@ -42,9 +40,43 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
   Add a perlcritic test - see DBD::Pg
   Why doesn't http://www.presicient.com/dbidocs/ display DBD::ODBC docs
     properly.
-  ParamTypes attribute not visible until after execute
+
 
 =head1 CHANGES
+
+=head2 Changes in DBD::ODBC  1.23_1 October 21, 2009
+
+makefile.PL changes:
+  some formatting changes to output
+  warn if unixodbc headers are not found that the unixodbc-dev package is not
+    installed
+  use $arext instead of "a"
+  pattern match for pulling libodbc.* changed
+  warn if DBI_DSN etc not defined
+  change odbc_config output for stderr to /dev/null
+  missing / on /usr/local wheb finding find_dm_hdr_files()
+
+New FAQ entries from Oystein Torget for bind parameter bugs in SQL Server.
+
+rt_46597.rt - update on wrong table
+
+Copied dbivport.h from the latest DBI distribution into DBD::ODBC.
+
+Added if_you_are_taking_over_this_code.txt.
+
+Add latest Devel::PPPort ppport.h to DBD::ODBC and followed all
+recommendations for changes to dbdimp.c.
+
+Added change to Makefile.PL provided by Shawn Zong to make
+Windows/Cygwin work again.
+
+Minor change to Makefile.PL to output env vars to help in debugging
+peoples build failures.
+
+Added odbc_utf8_on attribute to dbh and sth handles to mark all
+strings coming from the database as utf8.  This is for Aster (based on
+PostgreSQL) which returns all strings as UTF-8 encoded unicode.
+Thanks to Noel Burton-Krahn.
 
 =head2 Changes in DBD::ODBC 1.23 September 11, 2009
 

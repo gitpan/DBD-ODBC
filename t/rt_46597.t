@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_46597.t 12819 2009-06-10 12:20:40Z mjevans $
+# $Id: rt_46597.t 13407 2009-10-21 20:31:52Z mjevans $
 use Test::More;
 use strict;
 
@@ -65,7 +65,7 @@ SKIP: {
 
 
        my $sth = $dbh->prepare(
-           q{INSERT INTO TestTable values (?)}) || die ($DBI::errstr);
+           q{INSERT INTO PERL_DBD_rt_46597 values (?)}) || die ($DBI::errstr);
        ok($sth, 'insert prepared'); # 5
 
      SKIP: {
