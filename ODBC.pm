@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 13487 2009-11-12 09:49:38Z mjevans $
+# $Id: ODBC.pm 13771 2010-01-26 13:46:22Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -12,7 +12,7 @@
 
 require 5.006;
 
-$DBD::ODBC::VERSION = '1.23_1';
+$DBD::ODBC::VERSION = '1.23_2';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -25,7 +25,7 @@ $DBD::ODBC::VERSION = '1.23_1';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 13487 2009-11-12 09:49:38Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 13771 2010-01-26 13:46:22Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -124,7 +124,8 @@ $DBD::ODBC::VERSION = '1.23_1';
         return {
                 odbc_ignore_named_placeholders => undef, # sth and dbh
                 odbc_default_bind_type => undef, # sth and dbh
-                odbc_force_rebind => undef, # sth & dbh
+                odbc_force_bind_type => undef, # sth and dbh
+                odbc_force_rebind => undef, # sth and dbh
                 odbc_async_exec => undef, # sth and dbh
                 odbc_exec_direct => undef,
                 odbc_SQL_ROWSET_SIZE => undef,
@@ -486,7 +487,8 @@ $DBD::ODBC::VERSION = '1.23_1';
         return {
                 odbc_ignore_named_placeholders => undef, # sth and dbh
                 odbc_default_bind_type => undef, # sth and dbh
-                odbc_force_rebind => undef, # sth & dbh
+                odbc_force_bind_type => undef, # sth and dbh
+                odbc_force_rebind => undef, # sth and dbh
                 odbc_async_exec => undef, # sth and dbh
                 odbc_query_timeout => undef, # sth and dbh
                 odbc_putdata_start => undef, # sth and dbh
@@ -517,7 +519,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.23_1.
+This documentation refers to DBD::ODBC version 1.23_2.
 
 =head1 SYNOPSIS
 
@@ -690,6 +692,34 @@ internal default.
 B<N.B> If you call the C<bind_param> method with a SQL type this
 overrides everything else above.
 
+=head3 odbc_force_bind_type
+
+This value defaults to 0.
+
+If set to anything other than 0 this will force bound parameters to be
+bound as this type and C<SQLDescribeParam> will not be used.
+
+Older versions of DBD::ODBC assumed the parameter binding type was 12
+(C<SQL_VARCHAR>) and newer versions always attempt to call
+C<SQLDescribeParam> to find the parameter types. If your driver
+supports C<SQLDescribeParam> and it succeeds it may still fail to
+describe the parameters accurately (MS SQL Server sometimes does this
+with some SQL like I<select myfunc(?)  where 1 = 1>). Setting
+C<odbc_force_bind_type> to C<SQL_VARCHAR> will force DBD::ODBC to bind
+all the parameters as C<SQL_VARCHAR> and ignore SQLDescribeParam.
+
+Bare in mind that if you are inserting unicode data you probably want
+to use C<SQL_WVARCHAR> and not C<SQL_VARCHAR>.
+
+As this attribute was created to work around buggy ODBC Drivers which
+support SQLDescribeParam but describe the parameters incorrectly you
+are probably better specifying the bind type on the C<bind_param> call
+on a per statement level rather than blindly setting
+C<odbc_force_bind_type> across a whole connection.
+
+B<N.B> If you call the C<bind_param> method with a SQL type this
+overrides everything else above.
+
 =head3 odbc_force_rebind
 
 This is to handle special cases, especially when using multiple result sets.
@@ -709,7 +739,7 @@ Allow asynchronous execution of queries.  This causes a spin-loop
 (i.e., while the ODBC API returns C<SQL_STILL_EXECUTING>).  This is
 useful, however, if you want the error handling and asynchronous
 messages (see the L</odbc_err_handler> and F<t/20SQLServer.t> for an
-example of this.
+example of this).
 
 =head3 odbc_query_timeout
 
@@ -1526,7 +1556,7 @@ let me know and I will include it here.
 =head3 Drivers without SQLDescribeParam
 
 Some drivers do not support the C<SQLDescribeParam> ODBC API (e.g.,
-Microsoft Access).
+Microsoft Access, FreeTDS).
 
 DBD::ODBC uses the C<SQLDescribeParam> API when parameters are bound
 to your SQL to find the types of the parameters. If the ODBC driver
