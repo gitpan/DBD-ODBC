@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_50852.t 13771 2010-01-26 13:46:22Z mjevans $
+# $Id: rt_50852.t 13874 2010-03-24 14:22:58Z mjevans $
 use Test::More;
 use strict;
 
@@ -26,7 +26,7 @@ END {
         eval {
             local $dbh->{PrintWarn} = 0;
             local $dbh->{PrintError} = 0;
-            $dbh->do(q/drop table PERL_DBD_rt_50852/);
+            $dbh->do(q/drop table PERL_DBD_RT_50852/);
         };
         $dbh->disconnect;
     }
@@ -56,7 +56,7 @@ SKIP: {
    eval {
        local $dbh->{PrintWarn} = 0;
        local $dbh->{PrintError} = 0;
-       $dbh->do(q/drop table PERL_DBD_rt_50852/);
+       $dbh->do(q/drop table PERL_DBD_RT_50852/);
    };
    pass('dropped test table');  # 2
 
@@ -71,7 +71,7 @@ SKIP: {
        skip 'Failed to setup test table', 2 if $ev;
 
        $sth = $dbh->prepare(
-           q/select name from PERL_DBD_rt_50852 where charindex(?, name) = 1/);
+           q/select name from PERL_DBD_RT_50852 where charindex(?, name) = 1/);
        ok($sth, 'prepared sql');
      SKIP: {
            skip 'Failed to prepare SQL', 1 unless $sth;

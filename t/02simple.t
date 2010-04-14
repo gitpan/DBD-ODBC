@@ -1,5 +1,5 @@
 #!perl -w -I./t
-# $Id: 02simple.t 13030 2009-07-09 18:56:36Z mjevans $
+# $Id: 02simple.t 13872 2010-03-19 11:15:31Z mjevans $
 
 use Test::More;
 use strict;
@@ -39,7 +39,7 @@ my $driver_name;
 # Output DBMS which is useful when debugging cpan-testers output
 {
     diag("\n");
-    diag("Perl $Config{PERL_REVISION}.$Config{PERL_SUBVERSION}.$Config{PERL_VERSION}\n");
+    diag("Perl $Config{PERL_REVISION}.$Config{PERL_VERSION}.$Config{PERL_SUBVERSION}\n");
     diag("osname=$Config{osname}, osvers=$Config{osvers}, archname=$Config{archname}\n");
     diag("Using DBI $DBI::VERSION\n");
     diag("Using DBD::ODBC $DBD::ODBC::VERSION\n");

@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2010-01-26 13:46:22 +0000 (Tue, 26 Jan 2010) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2010-04-12 15:57:56 +0100 (Mon, 12 Apr 2010) $ $Revision: 10667 $)
 
 =cut
 
@@ -34,9 +34,6 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
    !!DBD::ODBC unsupported attribute passed (Username)
    !!DBD::ODBC unsupported attribute passed (dbi_connect_closure)
    !!DBD::ODBC unsupported attribute passed (LongReadLen)
-  strawberry perl build issue:
-    http://groups.google.com/group/perl.dbd.pg.changes/browse_thread/thread/8205bf83b5a48f63/cf43d87fe644798f?hl=en&q=easysoft&pli=1
-    http://www.nntp.perl.org/group/perl.dbi.users/2008/10/msg33322.html
   Add a perlcritic test - see DBD::Pg
   Why doesn't http://www.presicient.com/dbidocs/ display DBD::ODBC docs
     properly.
@@ -44,7 +41,48 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
 =head1 CHANGES
 
-=head2 Changes in DBD::ODBC  1.23_2 November NN, 2009
+=head2 Changes in DBD::ODBC  1.23_4 April 13, 2010
+
+Added more FAQs.
+
+Small optimization to remove calls to SQLError when tracing it not
+turned on. This was a bug. We only need to call SQLError when
+SQLExecute succeeds if there is an error handler or if tracing is
+enabled. The test was for tracing disabled!
+
+Large experimental change primarily affecting MS SQL Server users but
+it does impact on other drivers too. Firstly, for MS SQL Server users
+we no longer SQLFreeStmt(SQL_RESET_PARAMS) and rebind bound parameters
+as it is causing the MS SQL Server ODBC driver to re-prepare the SQL.
+Secondly (for all drivers) we no longer call SQLBindParameter again IF
+all the arguments to it are the same as the previous call. If you find
+something not working you better let me know as this is such a speed
+up I'm going to go with this unless anyone complains.
+
+Minor change to avoid a double call to SQLGetInfo for SQL_DBMS_NAME
+immediately after connection.
+
+Small change for rt 55736 (reported by Matthew Kidd) to not assume a
+parameters is varXXX(max) if SQLDesribeParam failed in the Microsoft
+Native Client driver.
+
+=head2 Changes in DBD::ODBC  1.23_3 March 24, 2010
+
+Minor changes to Makefile.PL and dbdimp.c to remove some compiler
+warnings.
+
+Fix some calls to SQLMoreResults which were not passing informational
+messages on to DBI's set_err. As you could not see all the
+informational messages from a procedures, only the first.
+
+Fix minor issue in 02simple test which printed the Perl subversion
+before the version.
+
+Changes to 20SqlServer.t to fix a few typos and make table names
+consistent wrt to case - (as someone had turned on case-sensitivity in
+SQL Server) Similar changes in rt_38977.t and rt_50852.t
+
+=head2 Changes in DBD::ODBC  1.23_2 January 26, 2010
 
 Fixed bug in Makefile.PL which could fail to find unixODBC/iODBC
 header files but not report it as a problem. Thanks to Thomas
