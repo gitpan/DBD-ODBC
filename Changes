@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2010-04-12 15:57:56 +0100 (Mon, 12 Apr 2010) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2010-04-26 10:55:49 +0100 (Mon, 26 Apr 2010) $ $Revision: 10667 $)
 
 =cut
 
@@ -41,11 +41,24 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
 =head1 CHANGES
 
+=head2 Changes in DBD::ODBC  1.23_5 May 6, 2010
+
+Added advice from Jan Dubois (ActiveState) on building DBD::ODBC for
+ActivePerl (see README.windows).
+
+rt56692. Fix spelling mistake in DBD::ODBC pod - thanks to Ansgar
+Burchardt.
+
+Added a 7th way to help documentation - become a tester.
+
+Hopefully fixed problems building on windows 32 bit platforms that
+have old sql header files not mentioning SQLLEN/SQLULEN.
+
 =head2 Changes in DBD::ODBC  1.23_4 April 13, 2010
 
 Added more FAQs.
 
-Small optimization to remove calls to SQLError when tracing it not
+Small optimization to remove calls to SQLError when tracing is not
 turned on. This was a bug. We only need to call SQLError when
 SQLExecute succeeds if there is an error handler or if tracing is
 enabled. The test was for tracing disabled!
@@ -63,7 +76,7 @@ Minor change to avoid a double call to SQLGetInfo for SQL_DBMS_NAME
 immediately after connection.
 
 Small change for rt 55736 (reported by Matthew Kidd) to not assume a
-parameters is varXXX(max) if SQLDesribeParam failed in the Microsoft
+parameter is varXXX(max) if SQLDescribeParam failed in the Microsoft
 Native Client driver.
 
 =head2 Changes in DBD::ODBC  1.23_3 March 24, 2010
@@ -73,7 +86,7 @@ warnings.
 
 Fix some calls to SQLMoreResults which were not passing informational
 messages on to DBI's set_err. As you could not see all the
-informational messages from a procedures, only the first.
+informational messages from procedures, only the first.
 
 Fix minor issue in 02simple test which printed the Perl subversion
 before the version.

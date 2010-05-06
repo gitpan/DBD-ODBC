@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 13903 2010-04-12 14:57:56Z mjevans $
+/* $Id: dbdimp.c 13931 2010-04-26 09:55:49Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -3163,7 +3163,6 @@ static int rebind_param(
     SQLSMALLINT d_digits;      /* decimal digits of parameter */
     SQLLEN buffer_length;      /* length in bytes of parameter buffer */
     SQLLEN strlen_or_ind;      /* parameter length or indicator */
-
 
     if (DBIc_TRACE(imp_sth, 0, 0, 4)) {
         char *text = neatsvpv(phs->sv, value_len);

@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 13771 2010-01-26 13:46:22Z mjevans $
+ * $Id: dbdimp.h 13931 2010-04-26 09:55:49Z mjevans $
  * portions Copyright (c) 2007-2008 Martin J. Evans
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
@@ -206,7 +206,6 @@ struct phs_st {             /* scalar placeholder */
     SQLLEN bp_buffer_length;
     
     char name[1];           /* struct is malloc'd bigger as needed */
-    
 };
 
 
