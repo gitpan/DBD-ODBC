@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2010-04-26 10:55:49 +0100 (Mon, 26 Apr 2010) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2010-05-06 15:30:12 +0100 (Thu, 06 May 2010) $ $Revision: 10667 $)
 
 =cut
 
@@ -40,6 +40,11 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
 
 =head1 CHANGES
+
+=head2 Changes in DBD::ODBC  1.24 May 10, 2010
+
+Minor change in Makefile.PL to only use NO_META if ExtUtils::MakeMaker
+is at least at version 6.10. Reported by Chunmei Wu.
 
 =head2 Changes in DBD::ODBC  1.23_5 May 6, 2010
 

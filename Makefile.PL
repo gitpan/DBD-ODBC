@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 13822 2010-02-12 09:43:10Z mjevans $
+# $Id: Makefile.PL 13947 2010-05-06 14:30:12Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -101,7 +101,6 @@ my %opts =
     ## no critic (RequireInterpolationOfMetachars)
     NAME         => 'DBD::ODBC',
     VERSION_FROM => 'ODBC.pm',
-    NO_META      => 1,
     # See note below on CONFIGURE. This used to work when could rely on
     # CONFIGURE being after PREREQ_PM but that is not the case now so the
     # line below does nothing since 6.33 of MakeMaker.
@@ -121,6 +120,7 @@ my $eumm = $ExtUtils::MakeMaker::VERSION;
 $eumm =~ tr/_//d;
 
 $opts{LICENSE} = 'perl' if $eumm >= 6.3002;
+$opts{NO_META} = 1 if $eumm >= 6.10;
 
 if ($eumm >= 5.43) {
     $opts{AUTHOR} = 'Tim Bunce, Jeff Urlwin, Martin J. Evans mailto:dbi-users@perl.org';
