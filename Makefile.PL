@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 13947 2010-05-06 14:30:12Z mjevans $
+# $Id: Makefile.PL 13986 2010-05-14 16:02:18Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -523,7 +523,7 @@ EOT
             qq{typedef void* PTR;\n#include <sql.h>\n#include <sqlext.h>\n};
     } elsif ($myodbc eq 'iodbc') {
 	my @libs = glob "$odbclibdir/*iodbc*.*";
-	my @ilibs = grep { /\.($dlext|$soext|$arext)$/ } @libs;
+	my @ilibs = grep { /\.($dlext|$soext|$arext)/ } @libs;
         if (scalar(@ilibs) == 0) {
             die "That's odd, I can't see any iodbc libs in $odbclibdir. " .
                 "This is all I found:\n" . join(q{,}, @libs) . "\n" .

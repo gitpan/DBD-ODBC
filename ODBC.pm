@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 13947 2010-05-06 14:30:12Z mjevans $
+# $Id: ODBC.pm 14063 2010-05-27 19:03:41Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -12,7 +12,7 @@
 
 require 5.006;
 
-$DBD::ODBC::VERSION = '1.24';
+$DBD::ODBC::VERSION = '1.24_1';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -25,7 +25,7 @@ $DBD::ODBC::VERSION = '1.24';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 13947 2010-05-06 14:30:12Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 14063 2010-05-27 19:03:41Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -129,7 +129,7 @@ $DBD::ODBC::VERSION = '1.24';
                 odbc_async_exec => undef, # sth and dbh
                 odbc_exec_direct => undef,
                 odbc_SQL_ROWSET_SIZE => undef,
-                SQL_DRIVER_ODBC_VER => undef,
+                odbc_SQL_DRIVER_ODBC_VER => undef,
                 odbc_cursortype => undef,
                 odbc_query_timeout => undef, # sth and dbh
                 odbc_has_unicode => undef,
@@ -519,7 +519,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.24.
+This documentation refers to DBD::ODBC version 1.24_1.
 
 =head1 SYNOPSIS
 
@@ -919,7 +919,7 @@ still not pass unicode strings to the prepare method if you also set
 odbc_exec_direct. This is a restriction in this attribute which is
 unavoidable.
 
-=head3 SQL_DRIVER_ODBC_VER
+=head3 odbc_SQL_DRIVER_ODBC_VER
 
 This, while available via get_info() is captured here.  I may get rid
 of this as I only used it for debugging purposes.

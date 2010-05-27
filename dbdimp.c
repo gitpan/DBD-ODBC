@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 13931 2010-04-26 09:55:49Z mjevans $
+/* $Id: dbdimp.c 14063 2010-05-27 19:03:41Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -549,7 +549,7 @@ int dbd_db_login(
 /*  This API was introduced in DBI after 1.607 (subversion revision     */
 /*  11723) and is the same as dbd_db_login6 except the connection       */
 /*  strings are SVs so we can detect unicode strings and call           */
-/*  SQLDriveConnectW.                                                  */
+/*  SQLDriveConnectW.                                                   */
 /*                                                                      */
 /************************************************************************/
 int dbd_db_login6_sv(
@@ -3369,7 +3369,7 @@ static int rebind_param(
           default:
 	    break;
         }
-    } else if ( value_type = SQL_C_WCHAR) {
+    } else if ( value_type == SQL_C_WCHAR) {
         d_digits = 0;
     }
 
