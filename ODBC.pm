@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 14063 2010-05-27 19:03:41Z mjevans $
+# $Id: ODBC.pm 14279 2010-07-23 16:17:50Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -12,7 +12,14 @@
 
 require 5.006;
 
-$DBD::ODBC::VERSION = '1.24_1';
+# NOTE: Don't forget to update the version reference in the POD below too.
+# NOTE: If you create a developer release x.y_z ensure y is greater than
+# the preceding y in the non developer release e.g., 1.24 should be followed
+# by 1.25_1 and then released as 1.26.
+# see discussion on dbi-users at
+# http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
+# http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
+$DBD::ODBC::VERSION = '1.24_2';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -25,7 +32,7 @@ $DBD::ODBC::VERSION = '1.24_1';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 14063 2010-05-27 19:03:41Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 14279 2010-07-23 16:17:50Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -64,7 +71,7 @@ $DBD::ODBC::VERSION = '1.24_1';
 	    'State' => \$DBD::ODBC::sqlstate,
 	    'Attribution' => 'DBD::ODBC by Jeff Urlwin, Tim Bunce and Martin J. Evans',
 	    });
-
+        DBD::ODBC::st->install_method("odbc_lob_read");
 	return $drh;
     }
 
@@ -519,7 +526,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.24_1.
+This documentation refers to DBD::ODBC version 1.24_2.
 
 =head1 SYNOPSIS
 
@@ -1024,6 +1031,63 @@ now 3.x, this can be used to force 2.x behavior via something like: my
   $dbh = DBI->connect("dbi:ODBC:$DSN", $user, $pass,
                       { odbc_version =>2});
 
+=head2 Private statement methods
+
+=head3 odbc_lob_read
+
+  $chrs_or_bytes_read = $sth->lob_read($column_no, \$lob, $length, \%attr);
+
+Reads C<$length> bytes from the lob at column C<$column_no> returning
+the lob into C<$lob> and the number of bytes or characters read into
+C<$chrs_or_bytes_read>. If an error occurs undef will be returned.
+When there is no more data to be read 0 is returned.
+
+NOTE: This is currently an experimental method and may change in the
+future e.g., it may support automatic concatenation of the lob
+parts onto the end of the C<$lob> with the addition of an extra flag
+or destination offset as in DBI's undocumented blob_read.
+
+The type the lob is retrieved as may be overriden in C<%attr> using
+C<TYPE =E<gt> sql_type>. C<%attr> is optional and if omitted defaults to
+SQL_C_BINARY for binary columns and SQL_C_CHAR/SQL_C_WCHAR for other
+column types depending on whether DBD::ODBC is built with unicode
+support. C<$chrs_or_bytes_read> will by the bytes read when the column
+types SQL_C_CHAR or SQL_C_BINARY are used and characters read if the
+column type is SQL_C_WCHAR.
+
+When built with unicode support C<$length> specifes the amount of
+buffer space to be used when retrieving the lob data but as it is
+returned as SQLWCHAR characters this means you at most retrieve
+C<$length/2> characters. When those retrieved characters are encoded
+in UTF-8 for Perl, the C<$lob> scalar may need to be larger than
+C<$length> so DBD::ODBC grows it appropriately.
+
+You can retrieve a lob in chunks like this:
+
+  $sth->bind_col($column, undef, {BindAsLOB=>1});
+  while(my $retrieved = $sth->odbc_lob_read($column, \my $data, $length)) {
+      print "retrieved=$retrieved lob_data=$data\n";
+  }
+
+NOTE: to retrieve a lob like this you B<must> first bind the lob
+column specifying BindAsLOB or DBD::ODBC will 1) bind the column as
+normal and it will be subject to LongReadLen and b) fail
+odbc_lob_read.
+
+NOTE: Some database engines and ODBC drivers do not allow you to
+retrieve columns out of order (e.g., MS SQL Server unless you are
+using cursors).  In those cases you must ensure the lob retrieved is
+the last (or only) column in your select list.
+
+NOTE: You can retrieve only part of a lob but you will probably have
+to call finish on the statement handle before you do anything else
+with that statement.
+
+NOTE: If your select contains multiple lobs you cannot read part of
+the first lob, the second lob then return to the first lob. You must
+read all lobs in order and completely or read part of a lob and then
+do no further calls to odbc_lob_read.
+
 =head2 Private statement attributes
 
 =head3 odbc_more_results
@@ -1265,6 +1329,52 @@ For comprehensive tracing of DBI method calls without all the DBI
 internals see L<DBIx::Log4perl>.
 
 =head2 Deviations from the DBI specification
+
+=head3 last_insert_id
+
+DBD::ODBC does not support DBI's last_insert_id. There is no ODBC
+defined way of obtaining this information. Generally the mechanism
+(and it differs vastly between databases and ODBC drivers) it to issue
+a select of some form (e.g., select @@identity or select
+sequence.currval from dual, etc).
+
+There are literally dozens of databases and ODBC drivers supported by
+DBD::ODBC and I cannot have them all. If you know how to retrieve the
+information for last_insert_id and you mail me the ODBC Driver
+name/version and database name/version with a small working example I
+will collect examples and document them here.
+
+=head3 Comments in SQL
+
+DBI does not say anything in particular about comments in SQL.
+DBD::ODBC looks for placeholders in the SQL string and until 1.24_2 it
+did not recognise comments in SQL strings so could find what it
+believes to be a placeholder in a comment e.g.,
+
+  select '1' /* placeholder ? in comment */
+  select -- named placeholder :named in comment
+    '1'
+
+I cannot be exact about support for ignoring placeholders in literals
+but it has existed for a long time in DBD::ODBC. Support for ignoring
+placeholders in comments was added in 1.24_2. If you find a case where
+a named placeholder is not ignored and should be see
+L</odbc_ignore_named_placeholders> for a workaround and mail me an
+example along with your ODBC driver name.
+
+=head2 do
+
+DBD::ODBC implements C<do> by calling SQLExecDirect in ODBC and not
+SQLPrepare followed by SQLExecute so C<do> is not the same as:
+
+  $dbh->prepare($sql)->execute()
+
+It does this to avoid a round-trip to the server so it is faster.
+Normally this is good but some people fall foul of this with MS SQL
+Server if they call a procedure which outputs print statements (e.g.,
+backup) as the procedure may not complete. See the DBD::ODBC FAQ and
+in general you are better to use prepare/execute when calling
+procedures.
 
 =head3 Mixed placeholder types
 

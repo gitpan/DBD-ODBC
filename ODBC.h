@@ -1,5 +1,5 @@
 /*
- * $Id: ODBC.h 11710 2008-09-01 16:53:29Z mjevans $
+ * $Id: ODBC.h 14277 2010-07-23 10:31:55Z mjevans $
  * Copyright (c) 1994,1995,1996,1997  Tim Bunce
  *
  * You may distribute under the terms of either the GNU General Public
@@ -37,6 +37,6 @@ int  odbc_get_foreign_keys _((SV *dbh, SV *sth, char *PK_CatalogName, char *PK_S
 void dbd_error _((SV *h, RETCODE err_rc, char *what));
 void dbd_error2 _((SV *h, RETCODE err_rc, char *what, HENV henv, HDBC hdbc, HSTMT hstmt));
 int dbd_db_execdirect _(( SV *dbh, SV *statement ));
-
+IV odbc_st_lob_read(SV *sth, int colno, SV *data, UV length, IV type);
 
 /* end of ODBC.h */
