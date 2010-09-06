@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 14279 2010-07-23 16:17:50Z mjevans $
+# $Id: ODBC.pm 14332 2010-08-16 08:19:14Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.006;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.24_2';
+$DBD::ODBC::VERSION = '1.24_3';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.24_2';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 14279 2010-07-23 16:17:50Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 14332 2010-08-16 08:19:14Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -526,7 +526,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.24_2.
+This documentation refers to DBD::ODBC version 1.24_3.
 
 =head1 SYNOPSIS
 
@@ -1343,6 +1343,11 @@ DBD::ODBC and I cannot have them all. If you know how to retrieve the
 information for last_insert_id and you mail me the ODBC Driver
 name/version and database name/version with a small working example I
 will collect examples and document them here.
+
+B<Microsoft Access>. Recent versions of MS Access support I<select
+@@identity> to retrieve the last insert ID.  See
+http://support.microsoft.com/kb/815629. Information provided by Robert
+Freimuth.
 
 =head3 Comments in SQL
 

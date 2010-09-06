@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14279 2010-07-23 16:17:50Z mjevans $
+/* $Id: dbdimp.c 14378 2010-09-06 14:07:03Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -28,6 +28,8 @@
  *   http://perl.active-venture.com/pod/perlapi-svfunctions.html
  * Formatted Printing of IVs, UVs, and NVs
  *   http://perldoc.perl.org/perlguts.html#Formatted-Printing-of-IVs,-UVs,-and-NVs
+ * Internal replacements for standard C library functions:
+ * http://search.cpan.org/~jesse/perl-5.12.1/pod/perlclib.pod
  */
 #define NEED_newRV_noinc
 #define NEED_sv_2pv_flags
@@ -1069,6 +1071,8 @@ int dbd_db_disconnect(SV *dbh, imp_dbh_t *imp_dbh)
    }
    rc = SQLDisconnect(imp_dbh->hdbc);
    if (!SQL_SUCCEEDED(rc)) {
+       /* don't change string below without looking elsewhere
+          - it is relied upon */
       dbd_error(dbh, rc, "db_disconnect/SQLDisconnect");
       /* return 0;	XXX if disconnect fails, fall through... */
    }
@@ -3147,7 +3151,7 @@ static void get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
                if (DBIc_TRACE(imp_sth, 0, 0, 5))
                    TRACE3(imp_dbh,
                           "      Param %s is numeric SQL type %s "
-                          "(param size:%lu) changed to SQL_VARCHAR",
+                          "(param size:%lu) changed to SQL_VARCHAR\n",
                           phs->name,
                           S_SqlTypeToString(phs->described_sql_type),
                           (unsigned long)phs->param_size);
@@ -3233,7 +3237,7 @@ static int rebind_param(
          * just copy the value & length over and not rebind.
          */
         if (SvREADONLY(phs->sv))
-            croak(PL_no_modify);
+            Perl_croak(aTHX_ PL_no_modify);
         /* phs->sv _is_ the real live variable, it may 'mutate' later   */
         /* pre-upgrade high to reduce risk of SvPVX realloc/move        */
         (void)SvUPGRADE(phs->sv, SVt_PVNV);

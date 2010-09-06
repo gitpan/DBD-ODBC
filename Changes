@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2010-07-23 17:17:50 +0100 (Fri, 23 Jul 2010) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2010-09-06 15:07:31 +0100 (Mon, 06 Sep 2010) $ $Revision: 10667 $)
 
 =cut
 
@@ -36,6 +36,19 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
   Add a perlcritic test - see DBD::Pg
 
 =head1 CHANGES
+
+=head2 Changes in DBD::ODBC  1.24_3 September 6, 2010
+
+Added note from Robert Freimuth for obtaining the last insert ID in MS
+Access.
+
+Changed all &sv_yes/&sv_no occurrances in XS to PL_sv_yes/PL_sv_no as
+the originals have now gone from blead Perl.
+
+Minor change to fix missing newline in trace output.
+
+Added a FAQ entry for how "use regional settings" in MS SQL Server
+breaks things.
 
 =head2 Changes in DBD::ODBC  1.24_2 July 23, 2010
 
