@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2010-09-06 15:07:31 +0100 (Mon, 06 Sep 2010) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2010-09-08 10:40:53 +0100 (Wed, 08 Sep 2010) $ $Revision: 10667 $)
 
 =cut
 
@@ -36,6 +36,16 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
   Add a perlcritic test - see DBD::Pg
 
 =head1 CHANGES
+
+=head2 Changes in DBD::ODBC  1.24_5 September 15, 2010
+
+Fixed missing SvSETMAGIC on a bound scalar which was causing length()
+to return the wrong result - see
+http://www.perlmonks.org/?node_id=860211 and a big thank you to Perl
+Monks and in particular ikegami.
+
+Changed bind_col so it actually pays attention to the TYPE attribute
+as you could not override the bind type of a bound column before.
 
 =head2 Changes in DBD::ODBC  1.24_4 September 8, 2010
 

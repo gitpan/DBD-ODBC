@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14378 2010-09-06 14:07:03Z mjevans $
+/* $Id: dbdimp.c 14381 2010-09-08 09:40:53Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -2394,6 +2394,13 @@ static SQLRETURN bind_columns(
     for(i=0, fbh = imp_sth->fbh;
         i < num_fields && SQL_SUCCEEDED(rc); i++, fbh++)
     {
+        if (fbh->req_type != 0) {
+            if (DBIc_TRACE(imp_sth, 0, 0, 5))
+                TRACE2(imp_sth, "     Overriding bound sql type %d with requested type %"IVdf"\n",
+                       fbh->ftype, fbh->req_type);
+            fbh->ftype = fbh->req_type;
+        }
+
         if (!(fbh->bind_flags & ODBC_TREAT_AS_LOB)) {
 
             fbh->data = rbuf_ptr;
@@ -2411,7 +2418,8 @@ static SQLRETURN bind_columns(
                               fbh->data, fbh->ColDisplaySize);
             rc = SQLBindCol(imp_sth->hstmt,
                             (SQLSMALLINT)(i+1),
-                            fbh->ftype, fbh->data,
+                            fbh->ftype,
+                            fbh->data,
                             fbh->ColDisplaySize, &fbh->datalen);
             if (!SQL_SUCCEEDED(rc)) {
                 dbd_error(h, rc, "describe/SQLBindCol");
@@ -2944,6 +2952,8 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
 	     }
            }
 	   sv_setwvn(sv,(SQLWCHAR*)fbh->data,fbh->datalen/sizeof(SQLWCHAR));
+           /*SvSETMAGIC(sv);*/
+           
 	   break;
 #endif /* WITH_UNICODE */
 	 default:
@@ -3730,6 +3740,7 @@ int dbd_st_bind_col(
     }
 
     imp_sth->fbh[field-1].req_type = type;
+
     imp_sth->fbh[field-1].bind_flags = 0; /* default to none */
 
     /* DBIXS 13590 added StrictlyTyped and DiscardString attributes */
@@ -3751,6 +3762,13 @@ int dbd_st_bind_col(
         }
 #endif  /* DBIXS_REVISION >= 13590 */
     }
+
+    if (DBIc_TRACE(imp_sth, 0, 0, 4)) {
+        TRACE3(imp_sth, "  bind_col %d requested type:%"IVdf", flags:%lx\n",
+               field, imp_sth->fbh[field-1].req_type,
+               imp_sth->fbh[field-1].bind_flags);
+    }
+
     return 1;
 }
 
