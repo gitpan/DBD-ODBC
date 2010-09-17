@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14381 2010-09-08 09:40:53Z mjevans $
+/* $Id: dbdimp.c 14417 2010-09-17 13:22:52Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -2952,8 +2952,6 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
 	     }
            }
 	   sv_setwvn(sv,(SQLWCHAR*)fbh->data,fbh->datalen/sizeof(SQLWCHAR));
-           /*SvSETMAGIC(sv);*/
-           
 	   break;
 #endif /* WITH_UNICODE */
 	 default:
@@ -3203,6 +3201,7 @@ static void get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
      case SQL_WCHAR:
      case SQL_WVARCHAR:
      case SQL_WLONGVARCHAR:
+     case -152:                                 /* SQL Server XML Type */
        phs->value_type = SQL_C_WCHAR;
        if (DBIc_TRACE(imp_sth, 0, 0, 8)) {
            TRACE0(imp_dbh,
@@ -3259,7 +3258,7 @@ static int rebind_param(
          * just copy the value & length over and not rebind.
          */
         if (SvREADONLY(phs->sv))
-            Perl_croak(aTHX_ PL_no_modify);
+            Perl_croak(aTHX_ "%s", PL_no_modify);
         /* phs->sv _is_ the real live variable, it may 'mutate' later   */
         /* pre-upgrade high to reduce risk of SvPVX realloc/move        */
         (void)SvUPGRADE(phs->sv, SVt_PVNV);
@@ -3740,7 +3739,6 @@ int dbd_st_bind_col(
     }
 
     imp_sth->fbh[field-1].req_type = type;
-
     imp_sth->fbh[field-1].bind_flags = 0; /* default to none */
 
     /* DBIXS 13590 added StrictlyTyped and DiscardString attributes */

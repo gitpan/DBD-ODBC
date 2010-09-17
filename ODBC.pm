@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 14381 2010-09-08 09:40:53Z mjevans $
+# $Id: ODBC.pm 14418 2010-09-17 13:23:25Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.006;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.24_5';
+$DBD::ODBC::VERSION = '1.24_6';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.24_5';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 14381 2010-09-08 09:40:53Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 14418 2010-09-17 13:23:25Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -526,7 +526,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.24_5.
+This documentation refers to DBD::ODBC version 1.24_6.
 
 =head1 SYNOPSIS
 
@@ -1504,7 +1504,7 @@ unicode.
 
 =head3 Enabling and Disabling Unicode support
 
-On Windows Unicode support as ss enabled by default and to disable it
+On Windows Unicode support is enabled by default and to disable it
 you will need to specify C<-nou> to F<Makefile.PL> to get back to the
 original behavior of DBD::ODBC before any Unicode support was added.
 
