@@ -2,7 +2,7 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-(As of $LastChangedDate: 2010-09-17 14:22:52 +0100 (Fri, 17 Sep 2010) $ $Revision: 10667 $)
+(As of $LastChangedDate: 2010-09-22 08:40:40 +0100 (Wed, 22 Sep 2010) $ $Revision: 10667 $)
 
 =cut
 
@@ -36,8 +36,14 @@ DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
   Add a perlcritic test - see DBD::Pg
  Anywhere we are storing a value in an SV that we didn't create
    (and thus might have magic) should probably set magic.
+ Write a test for XML type columns in SQL Server
 
 =head1 CHANGES
+
+=head2 Changes in DBD::ODBC  1.25 September 22, 2010
+
+Official release of 1.25 combining all the changes in the 1.24_x
+development releases.
 
 =head2 Changes in DBD::ODBC  1.24_6 September 16, 2010
 
