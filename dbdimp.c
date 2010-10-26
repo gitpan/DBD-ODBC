@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14417 2010-09-17 13:22:52Z mjevans $
+/* $Id: dbdimp.c 14491 2010-10-16 14:35:17Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -30,6 +30,7 @@
  *   http://perldoc.perl.org/perlguts.html#Formatted-Printing-of-IVs,-UVs,-and-NVs
  * Internal replacements for standard C library functions:
  * http://search.cpan.org/~jesse/perl-5.12.1/pod/perlclib.pod
+ * http://search.cpan.org/dist/Devel-PPPort/PPPort.pm
  */
 #define NEED_newRV_noinc
 #define NEED_sv_2pv_flags
@@ -40,6 +41,7 @@
 # include "unicode_helper.h"
 #endif
 
+/* trap iODBC on Unicode builds */
 #if defined(WITH_UNICODE) && (defined(_IODBCUNIX_H) || defined(_IODBCEXT_H))
 #error DBD::ODBC will not run properly with iODBC in unicode mode as iODBC defines wide characters as being 4 bytes in size
 #endif
@@ -51,7 +53,8 @@
 #define TRACE2(a,b,c,d) PerlIO_printf(DBIc_LOGPIO(a), (b), (c), (d))
 #define TRACE3(a,b,c,d,e) PerlIO_printf(DBIc_LOGPIO(a), (b), (c), (d), (e))
 
-static SQLSMALLINT default_parameter_type(imp_sth_t *imp_sth, phs_t *phs);
+static SQLSMALLINT default_parameter_type(
+    char *why, imp_sth_t *imp_sth, phs_t *phs);
 static int post_connect(SV *dbh, imp_dbh_t *imp_dbh, SV *attr);
 static int set_odbc_version(SV *dbh, imp_dbh_t *imp_dbh, SV* attr);
 static const char *S_SqlTypeToString (SWORD sqltype);
@@ -63,14 +66,16 @@ static const char *cSqlForeignKeys = "SQLForeignKeys(%s,%s,%s,%s,%s,%s)";
 static const char *cSqlColumns = "SQLColumns(%s,%s,%s,%s)";
 static const char *cSqlGetTypeInfo = "SQLGetTypeInfo(%d)";
 static SQLRETURN bind_columns(SV *h, imp_sth_t *imp_sth);
-static void       AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output, PerlIO *logfp);
+static void AllODBCErrors(HENV henv, HDBC hdbc, HSTMT hstmt, int output,
+                          PerlIO *logfp);
 static int check_connection_active(SV *h);
 static int build_results(SV *sth, SV *dbh, RETCODE orc);
 
-/* AV *dbd_st_fetch(SV * sth, imp_sth_t *imp_sth); */
 int dbd_describe(SV *h, imp_sth_t *imp_sth, int more);
-int dbd_db_login6_sv(SV *dbh, imp_dbh_t *imp_dbh, SV *dbname, SV *uid, SV *pwd, SV *attr);
-int dbd_db_login6(SV *dbh, imp_dbh_t *imp_dbh, char *dbname, char *uid, char *pwd, SV *attr);
+int dbd_db_login6_sv(SV *dbh, imp_dbh_t *imp_dbh, SV *dbname,
+                     SV *uid, SV *pwd, SV *attr);
+int dbd_db_login6(SV *dbh, imp_dbh_t *imp_dbh, char *dbname,
+                  char *uid, char *pwd, SV *attr);
 int dbd_st_finish(SV *sth, imp_sth_t *imp_sth);
 
 #define av_sz(av) (av_len(av) + 1)
@@ -79,7 +84,7 @@ int dbd_st_finish(SV *sth, imp_sth_t *imp_sth);
 #define XXSAFECHAR(p) ((p) ? (p) : "(null)")
 
 /* unique value for db attrib that won't conflict with SQL types, just
- * increment by one if you are adding! */
+ * increment by one if you are adding */
 #define ODBC_IGNORE_NAMED_PLACEHOLDERS 0x8332
 #define ODBC_DEFAULT_BIND_TYPE         0x8333
 #define ODBC_ASYNC_EXEC                0x8334
@@ -100,19 +105,20 @@ int dbd_st_finish(SV *sth, imp_sth_t *imp_sth);
 
 /* This is the bind type for parameters we fall back to if the bind_param
    method was not given a parameter type and SQLDescribeParam is not supported
-   or failed */
+   or failed.
+   It also defines the point we switch from VARCHAR to LONGVARCHAR */
 #ifdef WITH_UNICODE
 # define ODBC_BACKUP_BIND_TYPE_VALUE	SQL_WVARCHAR
 # define ODBC_BACKUP_LONG_BIND_TYPE_VALUE    SQL_WLONGVARCHAR
+# define ODBC_SWITCH_TO_LONGVARCHAR 2000
 #else
 # define ODBC_BACKUP_BIND_TYPE_VALUE	SQL_VARCHAR
 # define ODBC_BACKUP_LONG_BIND_TYPE_VALUE	SQL_LONGVARCHAR
+# define ODBC_SWITCH_TO_LONGVARCHAR 4000
 #endif
 
-SV *dbd_param_err(SQLHANDLE h, int recno);
 static int  rebind_param(SV *sth, imp_sth_t *imp_sth, phs_t *phs);
 static void get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs);
-
 
 DBISTATE_DECLARE;
 
@@ -127,13 +133,14 @@ static RETCODE odbc_set_query_timeout(SV *h, HSTMT hstmt, UV odbc_timeout)
 {
    RETCODE rc;
    D_imp_xxh(h);
+
    if (DBIc_TRACE(imp_xxh, 0, 0, 3)) {
       TRACE1(imp_xxh, "   Set timeout to: %"UVuf"\n", odbc_timeout);
    }
    rc = SQLSetStmtAttr(hstmt,(SQLINTEGER)SQL_ATTR_QUERY_TIMEOUT,
                        (SQLPOINTER)odbc_timeout,(SQLINTEGER)SQL_IS_INTEGER);
    if (!SQL_SUCCEEDED(rc)) {
-      /* raise warnings if setting fails, but don't die? */
+       /* Some drivers get upset with this so we ignore errors */
        if (DBIc_TRACE(imp_xxh, 0, 0, 3))
            TRACE1(
                imp_xxh,
@@ -142,20 +149,6 @@ static RETCODE odbc_set_query_timeout(SV *h, HSTMT hstmt, UV odbc_timeout)
    }
    return rc;
 }
-#if 0
-static UV odbc_get_query_timeout(imp_dbh_t *imp_dbh) {
-   RETCODE rc;
-   UV timeout;
-   rc = SQLGetConnectAttr(imp_dbh->hdbc,
-                          (SQLINTEGER)SQL_ATTR_QUERY_TIMEOUT,
-                          (SQLPOINTER)&timeout,sizeof(timeout), 0);
-   if (!SQL_SUCCEEDED(rc)) {
-       if (DBIc_TRACE(imp_dbh, 0, 0, 3))
-           TRACE1(imp_dbh, "    !!Failed to get ATTR query Timeout %d\n", rc);
-   }
-   return timeout;
-}
-#endif  /* 0 */
 
 
 
@@ -191,18 +184,11 @@ static void odbc_clear_result_set(SV *sth, imp_sth_t *imp_sth)
 	 }
       }
    }
-   /*
-   PerlIO_printf(DBILOGFP,"CLEAR RESULTS cached attributes:\n");
-   while ( (value = hv_iternextsv((HV*)SvRV(inner), &key, &keylen)) ) {
-   PerlIO_printf(DBILOGFP,"CLEARRESULTS '%s' => %s\n", key, neatsvpv(value,0));
-   }
-*/
 
    imp_sth->fbh       = NULL;
    imp_sth->ColNames  = NULL;
    imp_sth->RowBuffer = NULL;
    imp_sth->done_desc = 0;
-
 }
 
 
@@ -298,12 +284,13 @@ static void odbc_handle_outparams(imp_sth_t *imp_sth, int debug)
 
 
 
-static int build_results(SV *sth, SV *dbh, RETCODE orc)
+static int build_results(SV *sth,
+                         SV *dbh,
+                         RETCODE orc)
 {
    RETCODE rc;
    D_imp_dbh(dbh);
    D_imp_sth(sth);
-   dTHR;
 
    if (DBIc_TRACE(imp_sth, 0, 0, 3))
        TRACE2(imp_sth, "    build_results sql %p\n\t%s\n",
@@ -314,13 +301,11 @@ static int build_results(SV *sth, SV *dbh, RETCODE orc)
    imp_sth->ColNames = NULL;
    imp_sth->RowBuffer = NULL;
    imp_sth->RowCount = -1;
-   imp_sth->eod = -1;
 
    imp_sth->odbc_column_display_size = imp_dbh->odbc_column_display_size;
    imp_sth->odbc_utf8_on = imp_dbh->odbc_utf8_on;
 
    if (!dbd_describe(sth, imp_sth, 0)) {
-      /* SQLFreeStmt(imp_sth->hstmt, SQL_DROP); */ /* TBD: 3.0 update */
        if (DBIc_TRACE(imp_sth, 0, 0, 3)) {
            TRACE0(imp_sth, "    !!dbd_describe failed, build_results...!\n");
       }
@@ -346,23 +331,20 @@ static int build_results(SV *sth, SV *dbh, RETCODE orc)
       imp_sth->RowCount = -1;
       rc = SQLRowCount(imp_sth->hstmt, &imp_sth->RowCount);
       dbd_error(sth, rc, "build_results/SQLRowCount");
-      if (rc != SQL_SUCCESS) {
-	 return -1;
-      }
+      if (rc != SQL_SUCCESS) return -1;
    } else {
       imp_sth->RowCount = 0;
    }
 
    DBIc_ACTIVE_on(imp_sth); /* XXX should only set for select ?	*/
-   imp_sth->eod = SQL_SUCCESS;
    return 1;
 }
 
 
 
-int odbc_discon_all(SV *drh, imp_drh_t *imp_drh)
+int odbc_discon_all(SV *drh,
+                    imp_drh_t *imp_drh)
 {
-   dTHR;
    /* The disconnect_all concept is flawed and needs more work */
    if (!PL_dirty && !SvTRUE(get_sv("DBI::PERL_ENDING",0))) {
        DBIh_SET_ERR_CHAR(drh, (imp_xxh_t*)imp_drh, Nullch, 1,
@@ -372,22 +354,17 @@ int odbc_discon_all(SV *drh, imp_drh_t *imp_drh)
    return FALSE;
 }
 
-
 
 
 /* error : <=(-2), ok row count : >=0, unknown count : (-1)   */
-int dbd_db_execdirect( SV *dbh,
-		       SV *statement )
+int dbd_db_execdirect(SV *dbh,
+                      SV *statement )
 {
    D_imp_dbh(dbh);
-   SQLRETURN ret;
+   SQLRETURN ret;                               /* SQLxxx return value */
    SQLLEN rows;
    SQLHSTMT stmt;
    int dbh_active;
-   char *sql;
-   STRLEN sql_len;
-
-   sql = SvPV(statement, sql_len);
 
    if ((dbh_active = check_connection_active(dbh)) == 0) return 0;
 
@@ -430,24 +407,19 @@ int dbd_db_execdirect( SV *dbh,
        if (DBIc_TRACE(imp_dbh, 0x02000000, 0, 0))
            TRACE0(imp_dbh, "    Processing utf8 sql in non-unicode mode\n");
 
-       ret = SQLExecDirect(stmt, (SQLCHAR *)sql, SQL_NTS);
+       ret = SQLExecDirect(stmt, (SQLCHAR *)SvPV_nolen(statement), SQL_NTS);
    }
 #else
    if (DBIc_TRACE(imp_dbh, 0x02000000, 0, 0))
-       TRACE0(imp_dbh, "    Processing utf8 sql in non-unicode mode\n");
-   ret = SQLExecDirect(stmt, (SQLCHAR *)sql, SQL_NTS);
+       TRACE0(imp_dbh, "    Processing sql in non-unicode mode\n");
+   ret = SQLExecDirect(stmt, (SQLCHAR *)SvPV_nolen(statement), SQL_NTS);
 #endif
    if (DBIc_TRACE(imp_dbh, 0, 0, 3))
       TRACE1(imp_dbh, "    SQLExecDirect = %d\n", ret);
    if (!SQL_SUCCEEDED(ret) && ret != SQL_NO_DATA) {
       dbd_error2(dbh, ret, "Execute immediate failed",
                  imp_dbh->henv, imp_dbh->hdbc, stmt );
-      if (ret < 0)  {
-	 rows = -2;
-      }
-      else {
-	 rows = -3; /* ?? */
-      }
+      rows = -2;                             /* error */
    }
    else {
       if (ret == SQL_NO_DATA) {
@@ -456,8 +428,7 @@ int dbd_db_execdirect( SV *dbh,
 	 ret = SQLRowCount(stmt, &rows);
 	 if (!SQL_SUCCEEDED(ret)) {
 	    dbd_error( dbh, ret, "SQLRowCount failed" );
-	    if (ret < 0)
-	       rows = -1;
+	    rows = -1;
 	 }
       }
    }
@@ -500,8 +471,7 @@ int dsnHasDriverOrDSN(char *dsn) {
    strncpy(upper_dsn, dsn, sizeof(upper_dsn)-1);
    upper_dsn[sizeof(upper_dsn)-1] = '\0';
    while (*cp != '\0') {
-      *cp = toupper(*cp);
-      cp++;
+      *cp++ = toupper(*cp);
    }
    return (strncmp(upper_dsn, "DSN=", 4) == 0 ||
            strncmp(upper_dsn, "DRIVER=", 7) == 0);
@@ -516,8 +486,7 @@ int dsnHasUIDorPWD(char *dsn) {
    strncpy(upper_dsn, dsn, sizeof(upper_dsn)-1);
    upper_dsn[sizeof(upper_dsn)-1] = '\0';
    while (*cp != '\0') {
-      *cp = toupper(*cp);
-      cp++;
+      *cp++ = toupper(*cp);
    }
    return (strstr(upper_dsn, "UID=") != 0 || strstr(upper_dsn, "PWD=") != 0);
 }
@@ -529,8 +498,6 @@ int dsnHasUIDorPWD(char *dsn) {
 /*  dbd_db_login                                                        */
 /*  ============                                                        */
 /*                                                                      */
-/* Connect to a data source.                                            */
-/* Allocates henv and hdbc.                                             */
 /* NOTE: This is the old 5 argument version with no attribs             */
 /*                                                                      */
 /************************************************************************/
@@ -567,14 +534,13 @@ int dbd_db_login6_sv(
 {
 #ifndef WITH_UNICODE
    if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
-       TRACE0(imp_dbh, "non-Unicode login6\n");
+       TRACE0(imp_dbh, "non-Unicode login6_sv\n");
    return dbd_db_login6(dbh, imp_dbh, SvPV_nolen(dbname),
                         (SvOK(uid) ? SvPV_nolen(uid) : NULL),
                         (SvOK(pwd) ? SvPV_nolen(pwd) : NULL), attr);
 #else
 
    D_imp_drh_from_dbh;
-   dTHR;
    SQLRETURN rc;
    SV *wconstr;			/* copy of connection string in wide chrs */
    /* decoded connection string in wide characters and its length to work
@@ -583,8 +549,7 @@ int dbd_db_login6_sv(
    STRLEN dc_constr_len;
 
    if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0)) {
-       TRACE0(imp_dbh, "Unicode login6\n");
-       TRACE2(imp_dbh, "dbname=%s, uid=%s, pwd=xxxxx\n",
+       TRACE2(imp_dbh, "Unicode login6 dbname=%s, uid=%s, pwd=xxxxx\n",
               SvPV_nolen(dbname), neatsvpv(uid, 0));
    }
 
@@ -612,7 +577,7 @@ int dbd_db_login6_sv(
    }
 
    /* If the connection string is too long to pass to SQLConnect or it
-      contains DSN or DRIVER, we've little choice to but to call
+      contains DSN or DRIVER, we've little choice but to call
       SQLDriverConnect and need to tag the uid/pwd on the end of the
       connection string (unless they already exist). */
    if ((SvCUR(dbname) > SQL_MAX_DSN_LENGTH ||
@@ -701,7 +666,7 @@ int dbd_db_login6_sv(
            if (imp_drh->connects == 0) {
                SQLFreeHandle(SQL_HANDLE_ENV, imp_drh->henv);
                imp_drh->henv = SQL_NULL_HENV;
-               imp_dbh->henv = SQL_NULL_HENV;	/* needed for dbd_error */
+               imp_dbh->henv = SQL_NULL_HENV;
            }
            return 0;
        }
@@ -749,7 +714,7 @@ int dbd_db_login6_sv(
       if (imp_drh->connects == 0) {
           SQLFreeHandle(SQL_HANDLE_ENV, imp_drh->henv);
           imp_drh->henv = SQL_NULL_HENV;
-          imp_dbh->henv = SQL_NULL_HENV;	/* needed for dbd_error */
+          imp_dbh->henv = SQL_NULL_HENV;
       }
       return 0;
    } else if (rc == SQL_SUCCESS_WITH_INFO) {
@@ -796,7 +761,6 @@ int dbd_db_login6(
     SV *attr)
 {
    D_imp_drh_from_dbh;
-   dTHR;
 
    RETCODE rc;
    char dbname_local[512];
@@ -810,7 +774,7 @@ int dbd_db_login6(
        TRACE0(imp_dbh, "dbd_db_login6\n");
    if (!imp_drh->connects) {
       rc = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &imp_drh->henv);
-      dbd_error(dbh, rc, "db_login/SQLAllocHandle(env)");
+      dbd_error(dbh, rc, "db_login6/SQLAllocHandle(env)");
       if (!SQL_SUCCEEDED(rc)) return 0;
 
       if (set_odbc_version(dbh, imp_dbh, attr) != 1) return 0;
@@ -822,7 +786,7 @@ int dbd_db_login6(
 
    rc = SQLAllocHandle(SQL_HANDLE_DBC, imp_drh->henv, &imp_dbh->hdbc);
    if (!SQL_SUCCEEDED(rc)) {
-      dbd_error(dbh, rc, "db_login/SQLAllocHandle(dbc)");
+      dbd_error(dbh, rc, "db_login6/SQLAllocHandle(dbc)");
       if (imp_drh->connects == 0) {
           SQLFreeHandle(SQL_HANDLE_ENV, imp_drh->henv);
           imp_drh->henv = SQL_NULL_HENV;
@@ -868,6 +832,8 @@ int dbd_db_login6(
        croak("Connection string too big to convert to wide characters");
    }
 
+   /* The following is a massive simplification assuming only 7-bit ASCII
+      is ever passed to dbd_db_login6 */
    for (i = 0; i < strlen(dbname); i++) {
        wconstr[i] = dbname[i];
    }
@@ -898,6 +864,11 @@ int dbd_db_login6(
        char out_str[512];
        SQLSMALLINT out_str_len;
 
+       /* Work around a bug in mdbtools where the out connection string length
+          can sometimes be unset. We set it to a ridiculous value and if it
+          remains we know mdbtools did not return it. */
+       out_str_len = 9999;
+
        rc = SQLDriverConnect(imp_dbh->hdbc,
                              0, /* no hwnd */
                              dbname,
@@ -905,13 +876,17 @@ int dbd_db_login6(
                              out_str, sizeof(out_str), &out_str_len,
                              SQL_DRIVER_NOPROMPT);
        if (SQL_SUCCEEDED(rc)) {
-           imp_dbh->out_connect_string = newSVpv(out_str, out_str_len);
+           if (out_str_len == 9999) {
+               imp_dbh->out_connect_string = newSVpv("", 0);
+           } else {
+               imp_dbh->out_connect_string = newSVpv(out_str, out_str_len);
+           }
+
            if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
        	       TRACE1(imp_dbh, "Out connection string: %s\n",
                       SvPV_nolen(imp_dbh->out_connect_string));
        }
    }
-
 # endif  /* WITH_UNICODE */
 #else
    /* if we are using something that can not handle SQLDriverconnect,
@@ -948,7 +923,7 @@ int dbd_db_login6(
 	 if (imp_drh->connects == 0) {
              SQLFreeHandle(SQL_HANDLE_ENV, imp_drh->henv);
              imp_drh->henv = SQL_NULL_HENV;
-             imp_dbh->henv = SQL_NULL_HENV;	/* needed for dbd_error */
+             imp_dbh->henv = SQL_NULL_HENV;
 	 }
 	 return 0;
       }
@@ -1000,7 +975,7 @@ int dbd_db_login6(
           rc = SQLConnectW(imp_dbh->hdbc,
                            wconstr, wconstr_len,
                            wuidp, uid_len,
-                          wpwdp, pwd_len);
+                           wpwdp, pwd_len);
       }
 #else
       rc = SQLConnect(imp_dbh->hdbc,
@@ -1011,16 +986,16 @@ int dbd_db_login6(
    }
 
    if (!SQL_SUCCEEDED(rc)) {
-      dbd_error(dbh, rc, "db_login/SQLConnect");
-      SQLFreeHandle(SQL_HANDLE_DBC, imp_dbh->hdbc);/* TBD: 3.0 update */
+      dbd_error(dbh, rc, "db_login6/SQLConnect");
+      SQLFreeHandle(SQL_HANDLE_DBC, imp_dbh->hdbc);
       if (imp_drh->connects == 0) {
           SQLFreeHandle(SQL_HANDLE_ENV, imp_drh->henv);
           imp_drh->henv = SQL_NULL_HENV;
-          imp_dbh->henv = SQL_NULL_HENV;	/* needed for dbd_error */
+          imp_dbh->henv = SQL_NULL_HENV;
       }
       return 0;
    } else if (rc == SQL_SUCCESS_WITH_INFO) {
-       dbd_error(dbh, rc, "db_login/SQLConnect");
+       dbd_error(dbh, rc, "db_login6/SQLConnect");
    }
 
    if (post_connect(dbh, imp_dbh, attr) != 1) return 0;
@@ -1037,8 +1012,7 @@ int dbd_db_disconnect(SV *dbh, imp_dbh_t *imp_dbh)
 {
    RETCODE rc;
    D_imp_drh_from_dbh;
-   UDWORD autoCommit = 0;
-   dTHR;
+   SQLUINTEGER autoCommit = SQL_AUTOCOMMIT_OFF;
 
    /* We assume that disconnect will always work	*/
    /* since most errors imply already disconnected.	*/
@@ -1048,20 +1022,15 @@ int dbd_db_disconnect(SV *dbh, imp_dbh_t *imp_dbh)
        SvREFCNT_dec(imp_dbh->out_connect_string);
    }
 
-   /* If not autocommit, should we rollback?  I don't think that's
-    * appropriate.  -- TBD: Need to check this, maybe we should
-    * rollback?
-    */
-
-   /* TBD: 3.0 update */
-   rc = SQLGetConnectOption(imp_dbh->hdbc, SQL_AUTOCOMMIT, &autoCommit);
-   /* quietly handle a problem with SQLGetConnectOption() */
+   rc = SQLGetConnectAttr(
+       imp_dbh->hdbc, SQL_ATTR_AUTOCOMMIT, &autoCommit, SQL_IS_UINTEGER, 0);
    if (!SQL_SUCCEEDED(rc)) {
+       /* quietly handle a problem with SQLGetConnectAttr() */
        AllODBCErrors(imp_dbh->henv, imp_dbh->hdbc, 0,
                      DBIc_TRACE(imp_dbh, 0, 0, 4), DBIc_LOGPIO(imp_dbh));
    }
    else {
-      if (!autoCommit) {
+      if (SQL_AUTOCOMMIT_OFF == autoCommit) {
 	 rc = dbd_db_rollback(dbh, imp_dbh);
 	 if (DBIc_TRACE(imp_dbh, 0, 0, 3)) {
              TRACE1(imp_dbh,
@@ -1075,7 +1044,7 @@ int dbd_db_disconnect(SV *dbh, imp_dbh_t *imp_dbh)
        /* don't change string below without looking elsewhere
           - it is relied upon */
       dbd_error(dbh, rc, "db_disconnect/SQLDisconnect");
-      /* return 0;	XXX if disconnect fails, fall through... */
+      /* if disconnect fails, fall through. Probably not disconnected */
    }
    if (DBIc_TRACE(imp_dbh, 0x04000000, 0, 0))
        TRACE1(imp_dbh, "SQLDisconnect=%d\n", rc);
@@ -1087,11 +1056,11 @@ int dbd_db_disconnect(SV *dbh, imp_dbh_t *imp_dbh)
    if (imp_drh->connects == 0) {
        SQLFreeHandle(SQL_HANDLE_ENV, imp_drh->henv);
        imp_drh->henv = SQL_NULL_HENV;
-       imp_dbh->henv = SQL_NULL_HENV;	/* needed for dbd_error */
+       imp_dbh->henv = SQL_NULL_HENV;
    }
    /* We don't free imp_dbh since a reference still exists	*/
    /* The DESTROY method is the only one to 'free' memory.	*/
-   /* Note that statement objects may still exists for this dbh!	*/
+   /* Note that statement objects may still exist for this dbh!	*/
 
    return 1;
 }
@@ -1102,19 +1071,17 @@ int dbd_db_disconnect(SV *dbh, imp_dbh_t *imp_dbh)
 int dbd_db_commit(SV *dbh, imp_dbh_t *imp_dbh)
 {
    RETCODE rc;
-   dTHR;
 
-   /* TBD: 3.0 update */
-   rc = SQLTransact(imp_dbh->henv, imp_dbh->hdbc, SQL_COMMIT);
+   rc = SQLEndTran(SQL_HANDLE_DBC, imp_dbh->hdbc, SQL_COMMIT);
    if (!SQL_SUCCEEDED(rc)) {
-      dbd_error(dbh, rc, "db_commit/SQLTransact");
+      dbd_error(dbh, rc, "db_commit/SQLEndTran");
       return 0;
    }
    /* support for DBI 1.20 begin_work */
    if (DBIc_has(imp_dbh, DBIcf_BegunWork)) {
       /* reset autocommit */
-      rc = SQLSetConnectOption(imp_dbh->hdbc, SQL_AUTOCOMMIT,
-                               SQL_AUTOCOMMIT_ON);
+      rc = SQLSetConnectAttr(
+          imp_dbh->hdbc, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER)SQL_AUTOCOMMIT_ON, 0);
       DBIc_off(imp_dbh,DBIcf_BegunWork);
    }
    return 1;
@@ -1125,19 +1092,17 @@ int dbd_db_commit(SV *dbh, imp_dbh_t *imp_dbh)
 int dbd_db_rollback(SV *dbh, imp_dbh_t *imp_dbh)
 {
    RETCODE rc;
-   dTHR;
 
-   /* TBD: 3.0 update */
-   rc = SQLTransact(imp_dbh->henv, imp_dbh->hdbc, SQL_ROLLBACK);
+   rc = SQLEndTran(SQL_HANDLE_DBC, imp_dbh->hdbc, SQL_ROLLBACK);
    if (!SQL_SUCCEEDED(rc)) {
-      dbd_error(dbh, rc, "db_rollback/SQLTransact");
+      dbd_error(dbh, rc, "db_rollback/SQLEndTran");
       return 0;
    }
    /* support for DBI 1.20 begin_work */
    if (DBIc_has(imp_dbh, DBIcf_BegunWork)) {
       /*  reset autocommit */
-      rc = SQLSetConnectOption(imp_dbh->hdbc, SQL_AUTOCOMMIT,
-                               SQL_AUTOCOMMIT_ON);
+      rc = SQLSetConnectAttr(
+          imp_dbh->hdbc, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER)SQL_AUTOCOMMIT_ON, 0);
       DBIc_off(imp_dbh,DBIcf_BegunWork);
    }
    return 1;
@@ -1154,7 +1119,6 @@ void dbd_error2(
     HSTMT hstmt)
 {
    D_imp_xxh(h);
-   dTHR;
 
    /*
     * It's a shame to have to add all this stuff with imp_dbh and
@@ -1187,12 +1151,12 @@ void dbd_error2(
       UCHAR sqlstate[SQL_SQLSTATE_SIZE+1];
       /*
        *  ODBC spec says ErrorMsg must not be greater than
-       *  SQL_MAX_MESSAGE_LENGTH (says spec) but we concatenate a little
+       *  SQL_MAX_MESSAGE_LENGTH but we concatenate a little
        *  on the end later (e.g. sql state) so make room for more.
        */
-      UCHAR ErrorMsg[SQL_MAX_MESSAGE_LENGTH+512];
-      SWORD ErrorMsgLen;
-      SDWORD NativeError;
+      SQLCHAR ErrorMsg[SQL_MAX_MESSAGE_LENGTH+512];
+      SQLSMALLINT ErrorMsgLen;
+      SQLINTEGER NativeError;
       RETCODE rc = 0;
 
       /* TBD: 3.0 update */
@@ -1217,8 +1181,6 @@ void dbd_error2(
 	  */
 	 if(imp_dbh->odbc_err_handler) {
 	    dSP;
-	    /* SV *sv, **svp; */
-	    /* HV *hv; */
 	    int retval, count;
 
 	    ENTER;
@@ -1300,7 +1262,6 @@ empties entire ODBC error queue.
 void dbd_error(SV *h, RETCODE err_rc, char *what)
 {
    D_imp_xxh(h);
-   dTHR;
 
    struct imp_dbh_st *imp_dbh = NULL;
    struct imp_sth_st *imp_sth = NULL;
@@ -1335,31 +1296,6 @@ void dbd_error(SV *h, RETCODE err_rc, char *what)
 
 
 
-void dbd_caution(SV *h, char *what)
-{
-   D_imp_xxh(h);
-   dTHR;
-
-   SV *errstr;
-   errstr = DBIc_ERRSTR(imp_xxh);
-   sv_setpvn(errstr, "", 0);
-   sv_setiv(DBIc_ERR(imp_xxh), (IV)-1);
-   /* sqlstate isn't set for SQL_NO_DATA returns  */
-   sv_setpvn(DBIc_STATE(imp_xxh), "00000", 5);
-
-   if (what) {
-      sv_catpv(errstr, "(DBD: ");
-      sv_catpv(errstr, what);
-      sv_catpv(errstr, " err=-1)");
-   }
-
-   if (DBIc_TRACE(imp_xxh, 0, 0, 3))
-      PerlIO_printf(DBIc_LOGPIO(imp_xxh), "    !!%s error %d recorded: %s\n",
-		    what, -1, SvPV(errstr,PL_na));
-}
-
-
-
 /*-------------------------------------------------------------------------
 dbd_preparse:
 - scan for placeholders (? and :xx style) and convert them to ?.
@@ -1373,22 +1309,22 @@ We need two data structures to translate this stuff:
 -------------------------------------------------------------------------*/
 void dbd_preparse(imp_sth_t *imp_sth, char *statement)
 {
-   dTHR;
    enum STATES {DEFAULT, LITERAL, COMMENT, LINE_COMMENT};
    enum STATES state = DEFAULT;
+   enum STYLES {
+       STYLE_NONE,                              /* no style 0 */
+       STYLE_NUMBER,                            /* :N 1 */
+       STYLE_NAME,                              /* :name 2*/
+       STYLE_NORMAL                             /* ? 3 */
+   };
    char literal_ch = '\0';
 
-   char *src, *dest;
-   phs_t phs_tpl, *phs;
-   SV *phs_sv;
-   int idx=0, style=0, laststyle=0;
-   int param = 0;
-   STRLEN namelen;
-   char name[256];
-   SV **svpp;
-   char ch;
+   char *src, *dest;                            /* input and output SQL */
+   phs_t phs_tpl;
+   int idx=0;                                   /* parameter number */
+   enum STYLES style = STYLE_NONE;        /* type of parameter */
+   enum STYLES laststyle = STYLE_NONE;    /* last type of parameter */
 
-   /* allocate room for copy of statement with spare capacity	*/
    imp_sth->statement = (char*)safemalloc(strlen(statement)+1);
 
    /* initialize phs ready to be cloned per placeholder	*/
@@ -1398,44 +1334,49 @@ void dbd_preparse(imp_sth_t *imp_sth, char *statement)
 
    src  = statement;
    dest = imp_sth->statement;
-   if (DBIc_TRACE(imp_sth, 0, 0, 5))
+   if (DBIc_TRACE(imp_sth, 0, 0, 5)) {
        TRACE1(imp_sth, "    ignore named placeholders = %d\n",
               imp_sth->odbc_ignore_named_placeholders);
+   }
+
    while(*src) {
        enum STATES next_state = state;
 
        switch (state) {
-         case DEFAULT:
-         {
+         case DEFAULT: {
              if ((*src == '\'') || (*src == '"')) {
-                 literal_ch = *src;
+                 literal_ch = *src;             /* save quote chr */
                  next_state = LITERAL;
              } else if ((*src == '/') && (*(src + 1) == '*')) {
-                 next_state = COMMENT;
+                 next_state = COMMENT;          /* in comment */
              } else if ((*src == '-') && (*(src + 1) == '-')) {
-                 next_state = LINE_COMMENT;
+                 next_state = LINE_COMMENT;     /* in line comment */
              } else if ((*src == '?') || (*src == ':')) {
+                 STRLEN namelen;
+                 char name[256];         /* current named parameter */
+                 SV **svpp;
+                 char ch;
+
                  ch = *src++;
                  if (ch == '?') {                    /* X/Open standard */
                      idx++;
                      my_snprintf(name, sizeof(name), "%d", idx);
                      *dest++ = ch;
-                     style = 3;
-                 }
-                 else if (isDIGIT(*src)) {                 /* ':1' */
+                     style = STYLE_NORMAL;
+                 } else if (isDIGIT(*src)) {                 /* ':1' */
                      char *p = name;
                      *dest++ = '?';
                      idx = atoi(src);
                      while(isDIGIT(*src))
                          *p++ = *src++;
                      *p = 0;
-                     style = 1;
+                     style = STYLE_NUMBER;
                      if (DBIc_TRACE(imp_sth, 0, 0, 5))
-                         TRACE1(imp_sth, "    found numbered parameter = %s\n", name);
-                 }
-                 else if (!imp_sth->odbc_ignore_named_placeholders &&
+                         TRACE1(imp_sth,
+                                "    found numbered parameter = %s\n", name);
+                 } else if (!imp_sth->odbc_ignore_named_placeholders &&
                           isALNUM(*src)) {
-                     /* ':foo' is valid, only if we are ignoring named
+                     /* ':foo' is valid, only if we are not ignoring named
                       * parameters
                       */
                      char *p = name;
@@ -1445,17 +1386,17 @@ void dbd_preparse(imp_sth_t *imp_sth, char *statement)
                      while(isALNUM(*src))	/* includes '_'	*/
                          *p++ = *src++;
                      *p = 0;
-                     style = 2;
+                     style = STYLE_NAME;
                      if (DBIc_TRACE(imp_sth, 0, 0, 5))
                          TRACE1(imp_sth, "    found named parameter = %s\n", name);
-                 }
-                 else {			/* perhaps ':=' PL/SQL construct */
+                 } else {          /* perhaps ':=' PL/SQL construct */
                      *dest++ = ch;
                      continue;
                  }
                  *dest = '\0';			/* handy for debugging	*/
                  if (laststyle && style != laststyle)
-                     croak("Can't mix placeholder styles (%d/%d)",style,laststyle);
+                     croak("Can't mix placeholder styles (%d/%d)",
+                           style,laststyle);
                  laststyle = style;
 
                  if (imp_sth->all_params_hv == NULL)
@@ -1464,19 +1405,26 @@ void dbd_preparse(imp_sth_t *imp_sth, char *statement)
 
                  svpp = hv_fetch(imp_sth->all_params_hv, name, (I32)namelen, 0);
                  if (svpp == NULL) {
+                     SV *phs_sv;
+                     phs_t *phs;
+
                      if (DBIc_TRACE(imp_sth, 0, 0, 5))
-                         TRACE1(imp_sth, "    creating new parameter key %s\n", name);
+                         TRACE1(imp_sth,
+                                "    creating new parameter key %s\n", name);
                      /* create SV holding the placeholder */
-                     phs_sv = newSVpv((char*)&phs_tpl, sizeof(phs_tpl)+namelen+1);
+                     phs_sv = newSVpv((char*)&phs_tpl,
+                                      sizeof(phs_tpl)+namelen+1);
                      phs = (phs_t*)SvPVX(phs_sv);
                      strcpy(phs->name, name);
                      phs->idx = idx;
 
                      /* store placeholder to all_params_hv */
-                     svpp = hv_store(imp_sth->all_params_hv, name, (I32)namelen, phs_sv, 0);
+                     svpp = hv_store(imp_sth->all_params_hv, name,
+                                     (I32)namelen, phs_sv, 0);
                  } else {
                      if (DBIc_TRACE(imp_sth, 0, 0, 5))
-                         TRACE1(imp_sth, "    parameter key %s already exists\n", name);
+                         TRACE1(imp_sth,
+                                "    parameter key %s already exists\n", name);
                      croak("DBD::ODBC does not yet support binding a named parameter more than once\n");
                  }
                  break;
@@ -1484,24 +1432,21 @@ void dbd_preparse(imp_sth_t *imp_sth, char *statement)
              *dest++ = *src++;
              break;
          }
-         case LITERAL:
-         {
+         case LITERAL: {
              if (*src == literal_ch) {
                  next_state = DEFAULT;
              }
              *dest++ = *src++;
              break;
          }
-         case COMMENT:
-         {
+         case COMMENT: {
              if ((*(src - 1) == '*') && (*src == '/')) {
                  next_state = DEFAULT;
              }
              *dest++ = *src++;
              break;
          }
-         case LINE_COMMENT:
-         {
+         case LINE_COMMENT: {
              if (*src == '\n') {
                  next_state = DEFAULT;
              }
@@ -1537,9 +1482,8 @@ int dbd_st_tables(
    RETCODE rc;
    int dbh_active;
    size_t max_stmt_len;
-   dTHR;
 
-   imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
+   imp_sth->henv = imp_dbh->henv;
    imp_sth->hdbc = imp_dbh->hdbc;
 
    imp_sth->done_desc = 0;
@@ -1552,8 +1496,6 @@ int dbd_st_tables(
       return 0;
    }
 
-   /* just for sanity, later.  Any internals that may rely on this (including */
-   /* debugging) will have valid data */
    max_stmt_len =
        strlen(cSqlTables)+
        strlen(XXSAFECHAR(catalog)) +
@@ -1581,7 +1523,6 @@ int dbd_st_tables(
    dbd_error(sth, rc, "st_tables/SQLTables");
    if (!SQL_SUCCEEDED(rc)) {
       SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
-      /* SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*/ /* TBD: 3.0 update */
       imp_sth->hstmt = SQL_NULL_HSTMT;
       return 0;
    }
@@ -1597,14 +1538,13 @@ int dbd_st_primary_keys(
     char *schema,
     char *table)
 {
-   dTHR;
    D_imp_dbh(dbh);
    D_imp_sth(sth);
    RETCODE rc;
    int dbh_active;
    size_t max_stmt_len;
 
-   imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
+   imp_sth->henv = imp_dbh->henv;
    imp_sth->hdbc = imp_dbh->hdbc;
 
    imp_sth->done_desc = 0;
@@ -1646,7 +1586,6 @@ int dbd_st_primary_keys(
 
    if (!SQL_SUCCEEDED(rc)) {
       SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
-      /* SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*/ /* TBD: 3.0 update */
       imp_sth->hstmt = SQL_NULL_HSTMT;
       return 0;
    }
@@ -1665,7 +1604,6 @@ int dbd_st_statistics(
     int unique,
     int quick)
 {
-   dTHR;
    D_imp_dbh(dbh);
    D_imp_sth(sth);
    RETCODE rc;
@@ -1674,7 +1612,7 @@ int dbd_st_statistics(
    SQLUSMALLINT odbc_quick;
    size_t max_stmt_len;
 
-   imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
+   imp_sth->henv = imp_dbh->henv;
    imp_sth->hdbc = imp_dbh->hdbc;
 
    imp_sth->done_desc = 0;
@@ -1710,21 +1648,21 @@ int dbd_st_statistics(
                       (table && *table) ? table : 0, SQL_NTS,
                       odbc_unique, odbc_quick);
 
-   if (DBIc_TRACE(imp_sth, 0, 0, 4))
-      PerlIO_printf(
-          DBIc_LOGPIO(imp_dbh),
-          "SQLStatistics call: cat = %s, schema = %s, table = %s"
-          ", unique=%d, quick = %d\n",
-          XXSAFECHAR(catalog), XXSAFECHAR(schema), XXSAFECHAR(table),
-          odbc_unique, odbc_quick);
+   if (DBIc_TRACE(imp_sth, 0, 0, 4)) {
+       PerlIO_printf(
+           DBIc_LOGPIO(imp_dbh),
+           "SQLStatistics call: cat = %s, schema = %s, table = %s"
+           ", unique=%d, quick = %d\n",
+           XXSAFECHAR(catalog), XXSAFECHAR(schema), XXSAFECHAR(table),
+           odbc_unique, odbc_quick);
+   }
 
    dbd_error(sth, rc, "st_statistics/SQLStatistics");
 
    if (!SQL_SUCCEEDED(rc)) {
-      SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
-      /* SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*/ /* TBD: 3.0 update */
-      imp_sth->hstmt = SQL_NULL_HSTMT;
-      return 0;
+       SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
+       imp_sth->hstmt = SQL_NULL_HSTMT;
+       return 0;
    }
 
    return build_results(sth, dbh, rc);
@@ -1750,15 +1688,13 @@ int odbc_st_prepare(
    char *statement,
    SV *attribs)
 {
-   dTHR;
-   SV *sql;
+    SV *sql;
 
-   sql = sv_newmortal();
+    sql = sv_newmortal();
 
-   sv_setpvn(sql, statement, strlen(statement));
+    sv_setpvn(sql, statement, strlen(statement));
 
-   return dbd_st_prepare_sv(sth, imp_sth, sql, attribs);
-
+    return dbd_st_prepare_sv(sth, imp_sth, sql, attribs);
 }
 
 
@@ -1769,7 +1705,8 @@ int odbc_st_prepare(
 /*  ==================                                                  */
 /*                                                                      */
 /*  dbd_st_prepare_sv is the newer version of dbd_st_prepare taking a   */
-/*  a perl scalar for the sql statement instead of a char*.             */
+/*  a perl scalar for the sql statement instead of a char* so it may be */
+/*  unicode                                                             */
 /*                                                                      */
 /************************************************************************/
 int odbc_st_prepare_sv(
@@ -1778,18 +1715,17 @@ int odbc_st_prepare_sv(
     SV *statement,
     SV *attribs)
 {
-   dTHR;
    D_imp_dbh_from_sth;
    RETCODE rc;
    int dbh_active;
    char *sql;
-   STRLEN sql_len;
 
-   sql = SvPV(statement, sql_len);
+   sql = SvPV_nolen(statement);
 
    imp_sth->done_desc = 0;
-   imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
+   imp_sth->henv = imp_dbh->henv;
    imp_sth->hdbc = imp_dbh->hdbc;
+    /* inherit from connection */
    imp_sth->odbc_ignore_named_placeholders =
        imp_dbh->odbc_ignore_named_placeholders;
    imp_sth->odbc_default_bind_type = imp_dbh->odbc_default_bind_type;
@@ -1799,10 +1735,12 @@ int odbc_st_prepare_sv(
    imp_sth->odbc_putdata_start = imp_dbh->odbc_putdata_start;
    imp_sth->odbc_column_display_size = imp_dbh->odbc_column_display_size;
    imp_sth->odbc_utf8_on = imp_dbh->odbc_utf8_on;
+   imp_sth->odbc_exec_direct = imp_dbh->odbc_exec_direct;
 
-   if (DBIc_TRACE(imp_dbh, 0, 0, 5))
+   if (DBIc_TRACE(imp_dbh, 0, 0, 5)) {
        TRACE1(imp_dbh, "    initializing sth query timeout to %ld\n",
               (long)imp_dbh->odbc_query_timeout);
+   }
 
    if ((dbh_active = check_connection_active(sth)) == 0) return 0;
 
@@ -1811,8 +1749,6 @@ int odbc_st_prepare_sv(
       dbd_error(sth, rc, "st_prepare/SQLAllocHandle(stmt)");
       return 0;
    }
-
-   imp_sth->odbc_exec_direct = imp_dbh->odbc_exec_direct;
 
    {
       /*
@@ -1841,7 +1777,6 @@ int odbc_st_prepare_sv(
 
    /* Hold this statement for subsequent call of dbd_execute */
    if (!imp_sth->odbc_exec_direct) {
-       /* parse the (possibly edited) SQL statement */
        if (DBIc_TRACE(imp_dbh, SQL_TRACE_FLAG, 0, 3)) {
            TRACE1(imp_dbh, "    SQLPrepare %s\n", imp_sth->statement);
        }
@@ -1865,8 +1800,7 @@ int odbc_st_prepare_sv(
 
            wsql = (SQLWCHAR *)SvPV(sql_copy, wsql_len);
 
-           rc = SQLPrepareW(imp_sth->hstmt,
-                            wsql, wsql_len / sizeof(SQLWCHAR));
+           rc = SQLPrepareW(imp_sth->hstmt, wsql, wsql_len / sizeof(SQLWCHAR));
        } else {
            if (DBIc_TRACE(imp_dbh, 0x02000000, 0, 0))
                TRACE0(imp_dbh, "    Processing non-utf8 sql in unicode mode\n");
@@ -1874,7 +1808,7 @@ int odbc_st_prepare_sv(
            rc = SQLPrepare(imp_sth->hstmt, imp_sth->statement, SQL_NTS);
        }
 
-#else
+#else  /* !WITH_UNICODE */
        if (DBIc_TRACE(imp_dbh, 0x02000000, 0, 0))
            TRACE0(imp_dbh, "    Processing sql in non-unicode mode\n");
 
@@ -1886,7 +1820,6 @@ int odbc_st_prepare_sv(
        if (!SQL_SUCCEEDED(rc)) {
            dbd_error(sth, rc, "st_prepare/SQLPrepare");
            SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
-           /* SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*/ /* TBD: 3.0 update */
            imp_sth->hstmt = SQL_NULL_HSTMT;
            return 0;
        }
@@ -1895,7 +1828,6 @@ int odbc_st_prepare_sv(
               "held for later exec\n", imp_sth->statement);
    }
 
-
    /* init sth pointers */
    imp_sth->henv = imp_dbh->henv;
    imp_sth->hdbc = imp_dbh->hdbc;
@@ -1903,7 +1835,6 @@ int odbc_st_prepare_sv(
    imp_sth->ColNames = NULL;
    imp_sth->RowBuffer = NULL;
    imp_sth->RowCount = -1;
-   imp_sth->eod = -1;
 
    /*
     * If odbc_async_exec is set and odbc_async_type is SQL_AM_STATEMENT,
@@ -2008,7 +1939,7 @@ static const char *S_SqlCTypeToString (SWORD sqltype)
       s_c(SQL_C_TYPE_TIMESTAMP);
    }
 #undef s_c
-   sprintf(s_buf, "(CType %d)", sqltype);
+   my_snprintf(s_buf, sizeof(s_buf), "(CType %d)", sqltype);
    return s_buf;
 }
 
@@ -2022,12 +1953,11 @@ static const char *S_SqlCTypeToString (SWORD sqltype)
  */
 int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
 {
-    dTHR;
     SQLRETURN rc;                           /* ODBC fn return value */
-    SQLSMALLINT i;
+    SQLSMALLINT column_n;                   /* column we are describing */
     imp_fbh_t *fbh;
     SQLLEN colbuf_bytes_reqd = 0;
-    SQLSMALLINT num_fields;
+    SQLSMALLINT num_fields;                     /* number resultant columns */
     SQLCHAR *cur_col_name;
     struct imp_dbh_st *imp_dbh = NULL;
     imp_dbh = (struct imp_dbh_st *)(DBIc_PARENT_COM(imp_sth));
@@ -2035,13 +1965,12 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
     if (DBIc_TRACE(imp_sth, 0, 0, 4))
         TRACE1(imp_sth, "    dbd_describe done_desc=%d\n", imp_sth->done_desc);
 
-    if (imp_sth->done_desc)
-        return 1;                       /* success, already done it */
+    if (imp_sth->done_desc) return 1;   /* success, already done it */
 
     imp_sth->done_bind = 0;
 
-    rc = SQLNumResultCols(imp_sth->hstmt, &num_fields);
-    if (!SQL_SUCCEEDED(rc)) {
+    /* Find out how many columns there are in the result-set */
+    if (!SQL_SUCCEEDED(rc = SQLNumResultCols(imp_sth->hstmt, &num_fields))) {
         dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
         return 0;
     } else if (DBIc_TRACE(imp_sth, 0, 0, 4)) {
@@ -2051,8 +1980,8 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
     }
 
     /*
-     * If "more" is set (from dbd_st_fetch) and SQLMoreResults is supported
-     * then we skip over non-result-set generating statements.
+     * If "more" is not set (set in dbd_st_fetch) and SQLMoreResults is
+     * supported then we skip over non-result-set generating statements.
      */
     imp_sth->done_desc = 1;	/* assume ok from here on */
     if (!more) {
@@ -2066,8 +1995,7 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
             if (rc == SQL_NO_DATA) {            /* mo more results */
                 imp_sth->moreResults = 0;
                 break;
-            }
-            else if (rc == SQL_SUCCESS_WITH_INFO) {
+            } else if (rc == SQL_SUCCESS_WITH_INFO) {
                 /* warn about an info returns */
                 dbd_error(h, rc, "dbd_describe/SQLMoreResults");
             } else if (!SQL_SUCCEEDED(rc)) {
@@ -2080,8 +2008,8 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
             /* force future executes to rebind automatically */
             imp_sth->odbc_force_rebind = 1;
 
-            rc = SQLNumResultCols(imp_sth->hstmt, &num_fields);
-            if (!SQL_SUCCEEDED(rc)) {
+            if (!SQL_SUCCEEDED(
+                    rc = SQLNumResultCols(imp_sth->hstmt, &num_fields))) {
                 dbd_error(h, rc, "dbd_describe/SQLNumResultCols");
                 return 0;
             } else if (DBIc_TRACE(imp_sth, 0, 0, 8)) {
@@ -2093,9 +2021,9 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
 
     DBIc_NUM_FIELDS(imp_sth) = num_fields;
 
-    if (num_fields == 0) {
+    if (0 == num_fields) {
         if (DBIc_TRACE(imp_sth, 0, 0, 4))
-            TRACE0(imp_dbh, "    dbd_describe skipped (no result cols)\n");
+            TRACE0(imp_dbh, "    dbd_describe skipped (no resultant cols)\n");
         imp_sth->done_desc = 1;
         return 1;
     }
@@ -2110,11 +2038,13 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
 
     cur_col_name = imp_sth->ColNames;
     /* Pass 1: Get space needed for field names, display buffer and dbuf */
-    for (fbh=imp_sth->fbh, i=0; i < num_fields; i++, fbh++) {
+    for (fbh=imp_sth->fbh, column_n=0;
+         column_n < num_fields;
+         column_n++, fbh++) {
         fbh->imp_sth = imp_sth;
 #ifdef WITH_UNICODE
         rc = SQLDescribeColW(imp_sth->hstmt,
-                            (SQLSMALLINT)(i+1),
+                            (SQLSMALLINT)(column_n + 1),
                              (SQLWCHAR *) cur_col_name,
                             (SQLSMALLINT)imp_dbh->max_column_name_len,
                             &fbh->ColNameLen,
@@ -2122,27 +2052,9 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
                             &fbh->ColDef,
                             &fbh->ColScale,
                             &fbh->ColNullable);
-        /*
-        printf("strlen=%d, collen=%d\n", strlen(cur_col_name), fbh->ColNameLen);
-
-        {
-
-            int i;
-
-            SQLWCHAR *wp = (SQLWCHAR *)cur_col_name;
-
-            printf("SQLDescribeCol = ");
-
-            for (i = 0; i < fbh->ColNameLen; i++) {
-                printf("%ld, ", wp[i]);
-            }
-            printf("\n");
-        }
-        */
-
 #else /* WITH_UNICODE */
         rc = SQLDescribeCol(imp_sth->hstmt,
-                            (SQLSMALLINT)(i+1),
+                            (SQLSMALLINT)(column_n + 1),
                             cur_col_name,
                             (SQLSMALLINT)imp_dbh->max_column_name_len,
                             &fbh->ColNameLen,
@@ -2169,16 +2081,18 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
                           "namelen = %d, type = %s(%d), "
                           "precision/column size = %ld, scale = %d, "
                           "nullable = %d\n",
-                          i+1, fbh->ColName,
+                          column_n + 1,
+                          fbh->ColName,
                           fbh->ColNameLen,
                           S_SqlTypeToString(fbh->ColSqlType),
                           fbh->ColSqlType,
                           fbh->ColDef, fbh->ColScale, fbh->ColNullable);
-#ifdef SQL_COLUMN_DISPLAY_SIZE
-        rc = SQLColAttributes(imp_sth->hstmt,
-                              (SQLSMALLINT)(i+1),SQL_COLUMN_DISPLAY_SIZE,
-                              NULL, 0, NULL ,
-                              &fbh->ColDisplaySize);/* TBD: 3.0 update */
+#ifdef SQL_DESC_DISPLAY_SIZE
+        rc = SQLColAttribute(imp_sth->hstmt,
+                             (SQLSMALLINT)(column_n + 1),
+                             SQL_DESC_DISPLAY_SIZE,
+                             NULL, 0, NULL ,
+                             &fbh->ColDisplaySize);
         if (!SQL_SUCCEEDED(rc)) {
             /* Some ODBC drivers don't support SQL_COLUMN_DISPLAY_SIZE on
                some result-sets. e.g., The "Infor Integration ODBC driver"
@@ -2204,14 +2118,14 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
 
         /* TBD: should we only add a terminator if it's a char??? */
         fbh->ColDisplaySize += 1; /* add terminator */
-#else
+#else  /* !SQL_COLUMN_DISPLAY_SIZE */
         fbh->ColDisplaySize = imp_sth->odbc_column_display_size;
-#endif
+#endif  /* SQL_COLUMN_DISPLAY_SIZE */
 
-#ifdef SQL_COLUMN_LENGTH
-        rc = SQLColAttributes(imp_sth->hstmt,(SQLSMALLINT)(i+1),
-                              SQL_COLUMN_LENGTH,
-                              NULL, 0, NULL ,&fbh->ColLength);
+#ifdef SQL_DESC_LENGTH
+        rc = SQLColAttribute(imp_sth->hstmt,(SQLSMALLINT)(column_n + 1),
+                             SQL_DESC_LENGTH,
+                             NULL, 0, NULL ,&fbh->ColLength);
         if (!SQL_SUCCEEDED(rc)) {
             /* See comment above under SQL_COLUMN_DISPLAY_SIZE */
 	    fbh->ColLength = imp_sth->odbc_column_display_size;
@@ -2228,9 +2142,9 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
 # if defined(WITH_UNICODE)
         fbh->ColLength += 1; /* add extra byte for double nul terminator */
 # endif
-#else
+#else  /* !SQL_COLUMN_LENGTH */
         fbh->ColLength = imp_sth->odbc_column_display_size;
-#endif
+#endif  /* SQL_COLUMN_LENGTH */
 
         /* may want to ensure Display Size at least as large as column
          * length -- workaround for some drivers which report a shorter
@@ -2308,7 +2222,7 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
             /* MS SQL returns bytes, Oracle returns characters ... */
             fbh->ColLength*=sizeof(SQLWCHAR);
             fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
-# else
+# else  /* !WITH_UNICODE */
             fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth) + 1;
 # endif	/* WITH_UNICODE */
             break;
@@ -2346,7 +2260,8 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
             PerlIO_printf(DBIc_LOGPIO(imp_dbh),
                           "     now using col %d: type = %s (%d), len = %ld, "
                           "display size = %ld, prec = %ld, scale = %lu\n",
-                          i+1, S_SqlTypeToString(fbh->ColSqlType),
+                          column_n + 1,
+                          S_SqlTypeToString(fbh->ColSqlType),
                           fbh->ColSqlType,
                           (long)fbh->ColLength, (long)fbh->ColDisplaySize,
                           (long)fbh->ColDef, (unsigned long)fbh->ColScale);
@@ -2451,7 +2366,6 @@ static SQLRETURN bind_columns(
 int dbd_st_execute(
     SV *sth, imp_sth_t *imp_sth)
 {
-   dTHR;
    RETCODE rc;
    D_imp_dbh_from_sth;
    int outparams = 0;
@@ -2711,7 +2625,6 @@ int dbd_st_execute(
       /* imp_sth->done_desc = 1;  */
       DBIc_ACTIVE_off(imp_sth);
    }
-   imp_sth->eod = SQL_SUCCESS;
 
    if (outparams) {	/* check validity of bound output SV's	*/
        odbc_handle_outparams(imp_sth, DBIc_TRACE_LEVEL(imp_sth));
@@ -2747,7 +2660,6 @@ int dbd_st_execute(
  */
 AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
 {
-   dTHR;
    D_imp_dbh_from_sth;
    int i;
    AV *av;
@@ -2779,7 +2691,7 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
    rc = SQLFetch(imp_sth->hstmt);
    if (DBIc_TRACE(imp_sth, 0, 0, 4))
        TRACE1(imp_dbh, "    SQLFetch rc %d\n", rc);
-   imp_sth->eod = rc;
+
    if (!SQL_SUCCEEDED(rc)) {
       if (SQL_NO_DATA_FOUND == rc) {
 
@@ -2887,89 +2799,94 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
    ChopBlanks = DBIc_has(imp_sth, DBIcf_ChopBlanks);
 
    for(i=0; i < num_fields; ++i) {
-      imp_fbh_t *fbh = &imp_sth->fbh[i];
-      SV *sv = AvARRAY(av)[i]; /* Note: we (re)use the SV in the AV	*/
+       imp_fbh_t *fbh = &imp_sth->fbh[i];
+       SV *sv = AvARRAY(av)[i]; /* Note: we (re)use the SV in the AV	*/
 
-      if (DBIc_TRACE(imp_sth, 0, 0, 4))
-	 PerlIO_printf(
-             DBIc_LOGPIO(imp_dbh),
-             "    fetch col#%d %s datalen=%ld displ=%lu\n",
-             i+1, fbh->ColName, (long)fbh->datalen,
-             (unsigned long)fbh->ColDisplaySize);
+       if (DBIc_TRACE(imp_sth, 0, 0, 4))
+           PerlIO_printf(
+               DBIc_LOGPIO(imp_dbh),
+               "    fetch col#%d %s datalen=%ld displ=%lu\n",
+               i+1, fbh->ColName, (long)fbh->datalen,
+               (unsigned long)fbh->ColDisplaySize);
 
-      if (fbh->datalen == SQL_NULL_DATA) {	/* NULL value		*/
-	 SvOK_off(sv);
-	 continue;
-      }
+       if (fbh->datalen == SQL_NULL_DATA) {	/* NULL value		*/
+           SvOK_off(sv);
+           continue;
+       }
 
-      if (fbh->datalen > fbh->ColDisplaySize || fbh->datalen < 0) {
-	 /* truncated LONG ??? DBIcf_LongTruncOk() */
-	 /* DBIcf_LongTruncOk this should only apply to LONG type fields */
-	 /* truncation of other fields should always be an error since it's */
-	 /* a sign of an internal error */
-	 if (!DBIc_has(imp_sth, DBIcf_LongTruncOk)
-	     /*  && rc == SQL_SUCCESS_WITH_INFO */) {
+       if (fbh->datalen > fbh->ColDisplaySize || fbh->datalen < 0) {
+           /* truncated LONG ??? DBIcf_LongTruncOk() */
+           /* DBIcf_LongTruncOk this should only apply to LONG type fields */
+           /* truncation of other fields should always be an error since it's */
+           /* a sign of an internal error */
+           if (!DBIc_has(imp_sth, DBIcf_LongTruncOk)
+               /*  && rc == SQL_SUCCESS_WITH_INFO */) {
 
-	    /*
-	     * Since we've detected the problem locally via the datalen,
-	     * we don't need to worry about the value of rc.
-	     *
-	     * This used to make sure rc was set to SQL_SUCCESS_WITH_INFO
-	     * but since it's an error and not SUCCESS, call dbd_error()
-	     * with SQL_ERROR explicitly instead.
-	     */
+               /*
+                * Since we've detected the problem locally via the datalen,
+                * we don't need to worry about the value of rc.
+                *
+                * This used to make sure rc was set to SQL_SUCCESS_WITH_INFO
+                * but since it's an error and not SUCCESS, call dbd_error()
+                * with SQL_ERROR explicitly instead.
+                */
 
-	    dbd_error(
-                sth, SQL_ERROR,
-                "st_fetch/SQLFetch (long truncated DBI attribute LongTruncOk "
-                "not set and/or LongReadLen too small)");
-	    return Nullav;
-	 }
-	 /* LongTruncOk true, just ensure perl has the right length
-	  * for the truncated data.
-	  */
-	 sv_setpvn(sv, (char*)fbh->data, fbh->ColDisplaySize);
-      }
-      else switch(fbh->ftype) {
+               dbd_error(
+                   sth, SQL_ERROR,
+                   "st_fetch/SQLFetch (long truncated DBI attribute LongTruncOk "
+                   "not set and/or LongReadLen too small)");
+               return Nullav;
+           }
+           /* LongTruncOk true, just ensure perl has the right length
+            * for the truncated data.
+            */
+           sv_setpvn(sv, (char*)fbh->data, fbh->ColDisplaySize);
+       } else {
+           switch(fbh->ftype) {
 #ifdef TIMESTAMP_STRUCT /* iODBC doesn't define this */
-	 TIMESTAMP_STRUCT *ts;
-	 case SQL_C_TIMESTAMP:
-	 case SQL_C_TYPE_TIMESTAMP:
-	    ts = (TIMESTAMP_STRUCT *)fbh->data;
-	    sprintf(cvbuf, "%04d-%02d-%02d %02d:%02d:%02d",
-		    ts->year, ts->month, ts->day,
-		    ts->hour, ts->minute, ts->second, ts->fraction);
-	    sv_setpv(sv, cvbuf);
-	    break;
+             case SQL_C_TIMESTAMP:
+             case SQL_C_TYPE_TIMESTAMP:
+             {
+                 TIMESTAMP_STRUCT *ts;
+                 ts = (TIMESTAMP_STRUCT *)fbh->data;
+                 my_snprintf(cvbuf, sizeof(cvbuf),
+                             "%04d-%02d-%02d %02d:%02d:%02d",
+                             ts->year, ts->month, ts->day,
+                             ts->hour, ts->minute, ts->second, ts->fraction);
+                 sv_setpv(sv, cvbuf);
+                 break;
+             }
 #endif
 #if defined(WITH_UNICODE)
-         case SQL_C_WCHAR:
-	   if (ChopBlanks && fbh->ColSqlType == SQL_WCHAR && fbh->datalen > 0)
-	   {
-	     SQLWCHAR *p = (SQLWCHAR*)fbh->data;
-	     while(fbh->datalen && p[fbh->datalen-1]==L' ') {
-	       --fbh->datalen;
-	     }
-           }
-	   sv_setwvn(sv,(SQLWCHAR*)fbh->data,fbh->datalen/sizeof(SQLWCHAR));
-	   break;
+             case SQL_C_WCHAR:
+               if (ChopBlanks && fbh->ColSqlType == SQL_WCHAR &&
+                   fbh->datalen > 0)
+               {
+                   SQLWCHAR *p = (SQLWCHAR*)fbh->data;
+                   while(fbh->datalen && p[fbh->datalen-1]==L' ') {
+                       --fbh->datalen;
+                   }
+               }
+               sv_setwvn(sv,(SQLWCHAR*)fbh->data,fbh->datalen/sizeof(SQLWCHAR));
+               break;
 #endif /* WITH_UNICODE */
-	 default:
-           if (ChopBlanks && fbh->ColSqlType == SQL_CHAR && fbh->datalen > 0)
-           {
-	       char *p = (char*)fbh->data;
-	       while(fbh->datalen && p[fbh->datalen - 1]==' ')
-                   --fbh->datalen;
-           }
-           sv_setpvn(sv, (char*)fbh->data, fbh->datalen);
-	   if (imp_sth->odbc_utf8_on && fbh->ftype != SQL_C_BINARY ) {
+             default:
+               if (ChopBlanks && fbh->ColSqlType == SQL_CHAR &&
+                   fbh->datalen > 0) {
+                   char *p = (char*)fbh->data;
+                   while(fbh->datalen && p[fbh->datalen - 1]==' ')
+                       --fbh->datalen;
+               }
+               sv_setpvn(sv, (char*)fbh->data, fbh->datalen);
+               if (imp_sth->odbc_utf8_on && fbh->ftype != SQL_C_BINARY ) {
 #ifdef sv_utf8_decode
-           sv_utf8_decode(sv);
+                   sv_utf8_decode(sv);
 #else
-           SvUTF8_on(sv);
+                   SvUTF8_on(sv);
 #endif
-	   }
-      }
+               }
+           }
+       }
    }
    return av;
 }
@@ -2987,7 +2904,6 @@ int dbd_st_rows(SV *sth, imp_sth_t *imp_sth)
 
 int dbd_st_finish(SV *sth, imp_sth_t *imp_sth)
 {
-   dTHR;
    D_imp_dbh_from_sth;
    RETCODE rc;
 
@@ -3019,7 +2935,6 @@ int dbd_st_finish(SV *sth, imp_sth_t *imp_sth)
 
 void dbd_st_destroy(SV *sth, imp_sth_t *imp_sth)
 {
-   dTHR;
    D_imp_dbh_from_sth;
    RETCODE rc;
 
@@ -3056,7 +2971,6 @@ void dbd_st_destroy(SV *sth, imp_sth_t *imp_sth)
    if (imp_dbh->hdbc != SQL_NULL_HDBC && !PL_dirty) {
 
       rc = SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
-      /* rc = SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*/ /* TBD: 3.0 update */
 
       if (DBIc_TRACE(imp_sth, 0, 0, 5))
           TRACE1(imp_dbh, "   SQLFreeStmt=%d.\n", rc);
@@ -3124,9 +3038,8 @@ static void get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
           default a SQL type to bind the parameter as. The default is either
           the value set with odbc_default_bind_type or a fallback of
           SQL_VARCHAR. */
-       phs->sql_type = default_parameter_type(imp_sth, phs);
-       if (DBIc_TRACE(imp_sth, 0, 0, 4))
-           TRACE1(imp_dbh, "      defaulted param type to %d\n", phs->sql_type);
+       phs->sql_type = default_parameter_type(
+           "SQLDescribeParam not supported", imp_sth, phs);
    } else if (!phs->describe_param_called) {
        /* If we haven't had a go at calling SQLDescribeParam before for this
           parameter, have a go now. If it fails we'll default the sql type
@@ -3139,10 +3052,8 @@ static void get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
        phs->describe_param_called = 1;
        phs->describe_param_status = rc;
        if (!SQL_SUCCEEDED(rc)) {
-           phs->sql_type = default_parameter_type(imp_sth, phs);
-           if (DBIc_TRACE(imp_sth, 0, 0, 3))
-               TRACE1(imp_dbh, "      SQLDescribeParam failed reverting to "
-                      "default SQL bind type %d\n", phs->sql_type);
+           phs->sql_type = default_parameter_type(
+               "SQLDescribeParam failed", imp_sth, phs);
            /* show any odbc errors in log */
            AllODBCErrors(imp_sth->henv, imp_sth->hdbc, imp_sth->hstmt,
                          DBIc_TRACE(imp_sth, 0, 0, 3),
@@ -3201,7 +3112,7 @@ static void get_param_type(SV *sth, imp_sth_t *imp_sth, phs_t *phs)
      case SQL_WCHAR:
      case SQL_WVARCHAR:
      case SQL_WLONGVARCHAR:
-     case -152:                                 /* SQL Server XML Type */
+     case MS_SQLS_XML_TYPE:                  /* SQL Server XML Type */
        phs->value_type = SQL_C_WCHAR;
        if (DBIc_TRACE(imp_sth, 0, 0, 8)) {
            TRACE0(imp_dbh,
@@ -3226,7 +3137,6 @@ static int rebind_param(
     imp_sth_t *imp_sth,
     phs_t *phs)
 {
-    dTHR;
     D_imp_dbh_from_sth;
     SQLRETURN rc;
     SQLULEN default_column_size;
@@ -3787,7 +3697,6 @@ int dbd_bind_ph(
     int is_inout,
     IV maxlen)
 {
-   dTHR;
    SV **phs_svp;
    STRLEN name_len;
    char *name;
@@ -3800,7 +3709,7 @@ int dbd_bind_ph(
 
    if (SvNIOK(ph_namesv) ) {                /* passed as a number */
       name = namebuf;
-      sprintf(name, "%d", (int)SvIV(ph_namesv));
+      my_snprintf(name, sizeof(name), "%d", (int)SvIV(ph_namesv));
       name_len = strlen(name);
    }
    else {
@@ -3917,7 +3826,6 @@ long len;
 SV *destrv;
 long destoffset;
 {
-   dTHR;
    SQLLEN retl;
    SV *bufsv;
    RETCODE rc;
@@ -4084,15 +3992,15 @@ static const db_params *
 /*======================================================================*/
 int dbd_db_STORE_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv, SV *valuesv)
 {
-   dTHR;
    D_imp_drh_from_dbh;
    RETCODE rc;
    STRLEN kl;
    STRLEN plen;
    char *key = SvPV(keysv,kl);
    int on;
-   UDWORD vParam;
+   SQLPOINTER vParam;
    const db_params *pars;
+   SQLINTEGER attr_length = SQL_IS_UINTEGER;
    int bSetSQLConnectionOption;
 
    if ((pars = S_dbOption(S_db_storeOptions, key, kl)) == NULL) {
@@ -4106,13 +4014,14 @@ int dbd_db_STORE_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv, SV *valuesv)
    bSetSQLConnectionOption = TRUE;
    switch(pars->fOption)
    {
-      case SQL_LOGIN_TIMEOUT:
-      case SQL_TXN_ISOLATION:
-      case SQL_ROWSET_SIZE:
-	 vParam = SvIV(valuesv);
+      case SQL_ATTR_LOGIN_TIMEOUT:
+      case SQL_ATTR_TXN_ISOLATION:
+      case SQL_ROWSET_SIZE:                     /* not ODBC 3 */
+        vParam = (SQLPOINTER)SvIV(valuesv);
 	 break;
       case SQL_OPT_TRACEFILE:
-	 vParam = (UDWORD) SvPV(valuesv, plen);
+	 vParam = (SQLPOINTER) SvPV(valuesv, plen);
+         attr_length = SQL_NTS;
 	 break;
 
       case ODBC_IGNORE_NAMED_PLACEHOLDERS:
@@ -4201,8 +4110,7 @@ int dbd_db_STORE_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv, SV *valuesv)
 			    SQL_ASYNC_MODE,
 			    &imp_dbh->odbc_async_type,
 			    sizeof(imp_dbh->odbc_async_type),
-			    NULL
-			   );
+			    NULL);
 	    /*
 	     * Normally, we'd do a if (!SQL_ok(rc)) ... here.
 	     * Unfortunately, if the driver doesn't support async
@@ -4220,12 +4128,12 @@ int dbd_db_STORE_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv, SV *valuesv)
                 if (DBIc_TRACE(imp_dbh, 0, 0, 4))
                     TRACE0(imp_dbh,
                            "    Supported AsyncType is SQL_AM_CONNECTION\n");
-	       rc = SQLSetConnectOption(imp_dbh->hdbc,
-					SQL_ATTR_ASYNC_ENABLE,
-					SQL_ASYNC_ENABLE_ON
-				       );
+	       rc = SQLSetConnectAttr(imp_dbh->hdbc,
+                                      SQL_ATTR_ASYNC_ENABLE,
+                                      (SQLPOINTER)SQL_ASYNC_ENABLE_ON,
+                                      SQL_IS_UINTEGER);
 	       if (!SQL_SUCCEEDED(rc)) {
-		  dbd_error(dbh, rc, "db_STORE/SQLSetConnectOption");
+		  dbd_error(dbh, rc, "db_STORE/SQLSetConnectAttr");
 		  return FALSE;
 	       }
 	       imp_dbh->odbc_async_exec = 1;
@@ -4259,12 +4167,12 @@ int dbd_db_STORE_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv, SV *valuesv)
 		* is turned on only when the statement handle is created.
 		*/
 	       if (imp_dbh->odbc_async_type == SQL_AM_CONNECTION){
-		  rc = SQLSetConnectOption(imp_dbh->hdbc,
-					   SQL_ATTR_ASYNC_ENABLE,
-					   SQL_ASYNC_ENABLE_OFF
-					  );
+		  rc = SQLSetConnectAttr(imp_dbh->hdbc,
+                                         SQL_ATTR_ASYNC_ENABLE,
+                                         (SQLPOINTER)SQL_ASYNC_ENABLE_OFF,
+                                         SQL_IS_UINTEGER);
 		  if (!SQL_SUCCEEDED(rc)) {
-		     dbd_error(dbh, rc, "db_STORE/SQLSetConnectOption");
+		     dbd_error(dbh, rc, "db_STORE/SQLSetConnectAttr");
 		     return FALSE;
 		  }
 	       }
@@ -4304,22 +4212,23 @@ int dbd_db_STORE_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv, SV *valuesv)
 
        case SQL_ATTR_ACCESS_MODE:
          on = SvTRUE(valuesv);
-	 vParam = on ? pars->atrue : pars->afalse;
+	 vParam = (SQLPOINTER)(on ? pars->atrue : pars->afalse);
          break;
 
       default:
 	 on = SvTRUE(valuesv);
-	 vParam = on ? pars->atrue : pars->afalse;
+	 vParam = (SQLPOINTER)(on ? pars->atrue : pars->afalse);
 	 break;
    }
 
    if (bSetSQLConnectionOption) {
       /* TBD: 3.0 update */
 
-      rc = SQLSetConnectOption(imp_dbh->hdbc, pars->fOption, vParam);
+       rc = SQLSetConnectAttr(imp_dbh->hdbc, pars->fOption,
+                              vParam, attr_length);
 
       if (!SQL_SUCCEEDED(rc)) {
-	 dbd_error(dbh, rc, "db_STORE/SQLSetConnectOption");
+	 dbd_error(dbh, rc, "db_STORE/SQLSetConnectAttr");
 	 return FALSE;
       }
       /* keep our flags in sync */
@@ -4345,12 +4254,11 @@ int dbd_db_STORE_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv, SV *valuesv)
 /*======================================================================*/
 SV *dbd_db_FETCH_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv)
 {
-   dTHR;
    D_imp_drh_from_dbh;
    RETCODE rc;
    STRLEN kl;
    char *key = SvPV(keysv,kl);
-   UDWORD vParam = 0;
+   SQLUINTEGER vParam = 0;
    const db_params *pars;
    SV *retsv = Nullsv;
 
@@ -4461,12 +4369,13 @@ SV *dbd_db_FETCH_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv)
           * to S_db_fetchOptions.
 	  */
 
-	 rc = SQLGetConnectOption(imp_dbh->hdbc, pars->fOption, &vParam);/* TBD: 3.0 update */
-	 dbd_error(dbh, rc, "db_FETCH/SQLGetConnectOption");
+	 rc = SQLGetConnectAttr(
+             imp_dbh->hdbc, pars->fOption, &vParam, SQL_IS_UINTEGER, 0);
+	 dbd_error(dbh, rc, "db_FETCH/SQLGetConnectAttr");
 	 if (!SQL_SUCCEEDED(rc)) {
              if (DBIc_TRACE(imp_dbh, 0, 0, 3))
                  TRACE1(imp_dbh,
-                        "    !!SQLGetConnectOption=%d in dbd_db_FETCH\n", rc);
+                        "    !!SQLGetConnectAttr=%d in dbd_db_FETCH\n", rc);
 	    return Nullsv;
 	 }
 
@@ -4566,7 +4475,6 @@ static T_st_params S_st_store_params[] =
 /*======================================================================*/
 SV *dbd_st_FETCH_attrib(SV *sth, imp_sth_t *imp_sth, SV *keysv)
 {
-   dTHR;
    STRLEN kl;
    char *key = SvPV(keysv,kl);
    int i;
@@ -4798,7 +4706,6 @@ SV *dbd_st_FETCH_attrib(SV *sth, imp_sth_t *imp_sth, SV *keysv)
 /*======================================================================*/
 int dbd_st_STORE_attrib(SV *sth, imp_sth_t *imp_sth, SV *keysv, SV *valuesv)
 {
-   dTHR;
    D_imp_dbh_from_sth;
    STRLEN kl;
    STRLEN vl;
@@ -4859,7 +4766,6 @@ SV *
    SV *dbh;
 int ftype;
 {
-   dTHR;
    D_imp_dbh(dbh);
    RETCODE rc;
    SV *retsv = NULL;
@@ -4923,7 +4829,6 @@ char * SchemaName;
 char * TableName;
 int		 Unique;
 {
-   dTHR;
    D_imp_dbh(dbh);
    D_imp_sth(sth);
    RETCODE rc;
@@ -4964,7 +4869,6 @@ char * CatalogName;
 char * SchemaName;
 char * TableName;
 {
-   dTHR;
    D_imp_dbh(dbh);
    D_imp_sth(sth);
    RETCODE rc;
@@ -5010,7 +4914,6 @@ char * TableName;
 int    Scope;
 int    Nullable;
 {
-   dTHR;
    D_imp_dbh(dbh);
    D_imp_sth(sth);
    RETCODE rc;
@@ -5055,11 +4958,11 @@ char * FK_CatalogName;
 char * FK_SchemaName;
 char * FK_TableName;
 {
-   dTHR;
    D_imp_dbh(dbh);
    D_imp_sth(sth);
    RETCODE rc;
    int dbh_active;
+   size_t max_stmt_len;
 
    imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
    imp_sth->hdbc = imp_dbh->hdbc;
@@ -5077,19 +4980,22 @@ char * FK_TableName;
 
    /* just for sanity, later.  Any internals that may rely on this (including */
    /* debugging) will have valid data */
-   imp_sth->statement = (char *)safemalloc(strlen(cSqlForeignKeys)+
-					   strlen(XXSAFECHAR(PK_CatalogName))+
-					   strlen(XXSAFECHAR(PK_SchemaName))+
-					   strlen(XXSAFECHAR(PK_TableName))+
-					   strlen(XXSAFECHAR(FK_CatalogName))+
-					   strlen(XXSAFECHAR(FK_SchemaName))+
-					   strlen(XXSAFECHAR(FK_TableName))+
-					   1);
+   max_stmt_len = strlen(cSqlForeignKeys)+
+       strlen(XXSAFECHAR(PK_CatalogName))+
+       strlen(XXSAFECHAR(PK_SchemaName))+
+       strlen(XXSAFECHAR(PK_TableName))+
+       strlen(XXSAFECHAR(FK_CatalogName))+
+       strlen(XXSAFECHAR(FK_SchemaName))+
+       strlen(XXSAFECHAR(FK_TableName))+
+       1;
 
-   sprintf(imp_sth->statement,
-	   cSqlForeignKeys,
-	   XXSAFECHAR(PK_CatalogName), XXSAFECHAR(PK_SchemaName),XXSAFECHAR(PK_TableName),
-	   XXSAFECHAR(FK_CatalogName), XXSAFECHAR(FK_SchemaName),XXSAFECHAR(FK_TableName)
+   imp_sth->statement = (char *)safemalloc(max_stmt_len);
+
+   my_snprintf(imp_sth->statement, max_stmt_len,
+               cSqlForeignKeys,
+               XXSAFECHAR(PK_CatalogName), XXSAFECHAR(PK_SchemaName),
+               XXSAFECHAR(PK_TableName), XXSAFECHAR(FK_CatalogName),
+               XXSAFECHAR(FK_SchemaName),XXSAFECHAR(FK_TableName)
 	  );
    /* fix to handle "" (undef) calls -- thanks to Kevin Shepherd */
    rc = SQLForeignKeys(
@@ -5144,11 +5050,11 @@ int
 SV *sth;
 int ftype;
 {
-   dTHR;
    D_imp_dbh(dbh);
    D_imp_sth(sth);
    RETCODE rc;
    int dbh_active;
+   size_t max_stmt_len;
 
 #if 0
    /* TBD: cursorname? */
@@ -5170,15 +5076,15 @@ int ftype;
 
    /* just for sanity, later. Any internals that may rely on this (including */
    /* debugging) will have valid data */
-   imp_sth->statement = (char *)safemalloc(strlen(cSqlGetTypeInfo)+ftype/10+1);
-   sprintf(imp_sth->statement, cSqlGetTypeInfo, ftype);
+   max_stmt_len = strlen(cSqlGetTypeInfo)+ftype/10+1;
+   imp_sth->statement = (char *)safemalloc(max_stmt_len);
+   my_snprintf(imp_sth->statement, max_stmt_len, cSqlGetTypeInfo, ftype);
 
    rc = SQLGetTypeInfo(imp_sth->hstmt, (SQLSMALLINT)ftype);
 
    dbd_error(sth, rc, "odbc_get_type_info/SQLGetTypeInfo");
    if (!SQL_SUCCEEDED(rc)) {
       SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
-      /* SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*/ /* TBD: 3.0 update */
       imp_sth->hstmt = SQL_NULL_HSTMT;
       return 0;
    }
@@ -5192,7 +5098,6 @@ SV *
    odbc_cancel(sth)
    SV *sth;
 {
-   dTHR;
    D_imp_sth(sth);
    RETCODE rc;
 
@@ -5213,7 +5118,6 @@ IV odbc_st_lob_read(
     UV length,
     IV type)
 {
-    dTHR;
     D_imp_sth(sth);
     SQLLEN len = 0;
     SQLRETURN rc;
@@ -5304,7 +5208,6 @@ IV odbc_st_lob_read(
 /************************************************************************/
 SV *odbc_col_attributes(SV *sth, int colno, int desctype)
 {
-   dTHR;
    D_imp_sth(sth);
    RETCODE rc;
    SV *retsv = NULL;
@@ -5436,11 +5339,11 @@ char *schema;
 char *table;
 char *column;
 {
-    dTHR;
     D_imp_dbh(dbh);
     D_imp_sth(sth);
     RETCODE rc;
     int dbh_active;
+    size_t max_stmt_len;
     imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
     imp_sth->hdbc = imp_dbh->hdbc;
 
@@ -5456,15 +5359,17 @@ char *column;
 
     /* just for sanity, later.  Any internals that may rely on this (including */
     /* debugging) will have valid data */
-    imp_sth->statement = (char *)safemalloc(strlen(cSqlColumns)+
-                                            strlen(XXSAFECHAR(catalog))+
-                                            strlen(XXSAFECHAR(schema))+
-                                            strlen(XXSAFECHAR(table))+
-                                            strlen(XXSAFECHAR(column))+1);
+    max_stmt_len = strlen(cSqlColumns)+
+        strlen(XXSAFECHAR(catalog))+
+        strlen(XXSAFECHAR(schema))+
+        strlen(XXSAFECHAR(table))+
+        strlen(XXSAFECHAR(column))+1;
 
-    sprintf(imp_sth->statement,
-            cSqlColumns, XXSAFECHAR(catalog), XXSAFECHAR(schema),
-            XXSAFECHAR(table), XXSAFECHAR(column));
+    imp_sth->statement = (char *)safemalloc(max_stmt_len);
+
+    my_snprintf(imp_sth->statement, max_stmt_len,
+                cSqlColumns, XXSAFECHAR(catalog), XXSAFECHAR(schema),
+                XXSAFECHAR(table), XXSAFECHAR(column));
 
     rc = SQLColumns(imp_sth->hstmt,
                     (catalog && *catalog) ? catalog : 0, SQL_NTS,
@@ -5483,7 +5388,6 @@ char *column;
 
     if (!SQL_SUCCEEDED(rc)) {
         SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
-        /* SQLFreeStmt(imp_sth->hstmt, SQL_DROP);*/ /* TBD: 3.0 update */
         imp_sth->hstmt = SQL_NULL_HSTMT;
         return 0;
     }
@@ -5922,7 +5826,8 @@ static int post_connect(
 
 
 
-static SQLSMALLINT default_parameter_type(imp_sth_t *imp_sth, phs_t *phs)
+static SQLSMALLINT default_parameter_type(
+    char *why, imp_sth_t *imp_sth, phs_t *phs)
 {
     if (imp_sth->odbc_default_bind_type != 0) {
         return imp_sth->odbc_default_bind_type;
@@ -5931,11 +5836,26 @@ static SQLSMALLINT default_parameter_type(imp_sth_t *imp_sth, phs_t *phs)
            test unless the large value is bound as an SQL_LONGVARCHAR
            or SQL_WLONGVARCHAR. Who knows what large is, but for now it is
            4000 */
+        /*
+          Changed to 2000 for the varchar max swtich as in a unicode build we
+          can change a string of 'x' x 2001 into 4002 wide chrs and SQL Server
+          will also return invalid precision in this case on a varchar(4000).
+          Of course, being SQL Server, it also has this problem with the
+          newer varchar(8000)! */
         if (!SvOK(phs->sv)) {
+           if (DBIc_TRACE(imp_sth, 0, 0, 3))
+               TRACE2(imp_sth, "%s, sv is not OK, defaulting to %d\n",
+                      why, ODBC_BACKUP_BIND_TYPE_VALUE);
             return ODBC_BACKUP_BIND_TYPE_VALUE;
-        } else if (SvCUR(phs->sv) > 4000) {
+        } else if (SvCUR(phs->sv) > ODBC_SWITCH_TO_LONGVARCHAR) {
+           if (DBIc_TRACE(imp_sth, 0, 0, 3))
+               TRACE3(imp_sth, "%s, sv=%d bytes, defaulting to %d\n",
+                      why, SvCUR(phs->sv), ODBC_BACKUP_LONG_BIND_TYPE_VALUE);
             return ODBC_BACKUP_LONG_BIND_TYPE_VALUE;
         } else {
+           if (DBIc_TRACE(imp_sth, 0, 0, 3))
+               TRACE3(imp_sth, "%s, sv=%d bytes, defaulting to %d\n",
+                      why, SvCUR(phs->sv), ODBC_BACKUP_BIND_TYPE_VALUE);
             return ODBC_BACKUP_BIND_TYPE_VALUE;
         }
     }

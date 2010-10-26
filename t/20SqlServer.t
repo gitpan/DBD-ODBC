@@ -661,7 +661,6 @@ AS
    }
    my $base_dsn = $dsn;
    $dsn .= ";MARS_Connection=no";
-   #DBI:MyDriver(RaiseError=>1):db=test;port=42
    $dbh = DBI->connect($dsn, $ENV{DBI_USER}, $ENV{DBI_PASS}, {PrintError => 0});
    ok($dbh, "Connected with MARS_Connection");
    diag("$DBI::errstr\n$dsn\n") if !$dbh;

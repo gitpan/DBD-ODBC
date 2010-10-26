@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 13986 2010-05-14 16:02:18Z mjevans $
+# $Id: Makefile.PL 14490 2010-10-16 14:28:54Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -985,8 +985,9 @@ sub find_iodbc
     }
     for my $d(@dirs) {
         print "  Looking for iODBC libs in $d\n";
-        if (glob "$d/*iodbc*") {
-            print "    Found iODBC libs in $d\n";
+        my @found;
+        if (@found = glob "$d/*iodbc*") {
+            print "    Found iODBC libs ", join(",", @found), " in $d\n";
             return ('iodbc', $d);
         }
     }
@@ -1008,9 +1009,10 @@ sub find_unixodbc
     push @dirs, "$home/lib" if !defined($opt_o) && !defined($ENV{ODBCHOME});
 
     for my $d(@dirs) {
+        my @found;
         print "  Looking for unixODBC libs in $d\n";
-        if (glob "$d/*odbc*") {
-            print "    Found unixODBC libs in $d\n";
+        if (@found = glob "$d/*odbc*") {
+            print "    Found unixODBC libs ", join(",", @found), " in $d\n";
             return ('unixodbc', $d);
         }
     }
@@ -1057,7 +1059,11 @@ changes_pm = ' . File::Spec->catfile($self->{INST_LIB}, 'DBD/ODBC', 'Changes.pm'
 inst_libdbdodbc = ' . File::Spec->catdir($self->{INST_LIB}, 'DBD/ODBC') . '
 faq_pm = ' . File::Spec->catfile($self->{INST_LIB}, 'DBD/ODBC', 'FAQ.pm') . '
 
-config :: $(changes_pm) $(faq_pm)
+# make TO_DO file available as installed pod docs "perldoc DBD::ODBC::TO_DO"
+inst_libdbdodbc = ' . File::Spec->catdir($self->{INST_LIB}, 'DBD/ODBC') . '
+todo_pm = ' . File::Spec->catfile($self->{INST_LIB}, 'DBD/ODBC', 'TO_DO.pm') . '
+
+config :: $(changes_pm) $(faq_pm) $(todo_pm)
 	@$(NOOP)
 
 $(changes_pm): Changes
@@ -1069,6 +1075,11 @@ $(faq_pm): FAQ
 	$(NOECHO) $(MKPATH) $(inst_libdbdodbc)
 	$(NOECHO) $(RM_F) $(faq_pm)
 	$(CP) FAQ $(faq_pm)
+
+$(todo_pm): TO_DO
+	$(NOECHO) $(MKPATH) $(inst_libdbdodbc)
+	$(NOECHO) $(RM_F) $(todo_pm)
+	$(CP) TO_DO $(todo_pm)
 ';
 
 }
