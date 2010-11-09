@@ -8,7 +8,7 @@ DBD::ODBC::FAQ - Frequently Asked Questions for DBD::ODBC
 
 =head1 VERSION
 
-($Revision: 14470 $)
+($Revision: 14506 $)
 
 =head1 QUESTIONS
 

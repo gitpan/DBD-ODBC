@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14491 2010-10-16 14:35:17Z mjevans $
+/* $Id: dbdimp.c 14517 2010-11-09 11:12:37Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -3709,7 +3709,7 @@ int dbd_bind_ph(
 
    if (SvNIOK(ph_namesv) ) {                /* passed as a number */
       name = namebuf;
-      my_snprintf(name, sizeof(name), "%d", (int)SvIV(ph_namesv));
+      my_snprintf(name, sizeof(namebuf), "%d", (int)SvIV(ph_namesv));
       name_len = strlen(name);
    }
    else {

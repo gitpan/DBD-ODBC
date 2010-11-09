@@ -2,9 +2,14 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2010-10-16 15:35:17 +0100 (Sat, 16 Oct 2010) $
+As of $LastChangedDate: 2010-11-09 11:12:37 +0000 (Tue, 09 Nov 2010) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC  1.26_2 November 9, 2010
+
+  Fixed bug found by frew where an snprintf can overflow when binding
+  alot of parameters.
 
 =head2 Changes in DBD::ODBC  1.26_1 October 24, 2010
 
