@@ -2,9 +2,16 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2010-11-09 11:12:37 +0000 (Tue, 09 Nov 2010) $
+As of $LastChangedDate: 2010-11-18 13:44:41 +0000 (Thu, 18 Nov 2010) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC  1.26_3 November 18, 2010
+
+  Fixed rt 63108. The change to column binding in 1.24_2 was not
+  complete and causes bound columns to be rebound on each execute
+  wasting time and leaking memory. Found, diagnosed and proposed fix
+  by Steve Bentley.
 
 =head2 Changes in DBD::ODBC  1.26_2 November 9, 2010
 
