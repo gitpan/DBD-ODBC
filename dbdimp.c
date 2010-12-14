@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14529 2010-11-18 13:44:41Z mjevans $
+/* $Id: dbdimp.c 14567 2010-12-14 14:45:50Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -371,6 +371,8 @@ int dbd_db_execdirect(SV *dbh,
    int dbh_active;
 
    if ((dbh_active = check_connection_active(dbh)) == 0) return 0;
+
+   /*set_attr(dbh, "Statement", statement);*/
 
    ret = SQLAllocHandle(SQL_HANDLE_STMT,  imp_dbh->hdbc, &stmt );
    if (!SQL_SUCCEEDED(ret)) {
@@ -2031,7 +2033,7 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
         imp_sth->done_desc = 1;
         return 1;
     }
-
+    DBIc_ACTIVE_on(imp_sth); /*HERE*/
     /* allocate field buffers */
     Newz(42, imp_sth->fbh, num_fields, imp_fbh_t);
     /* the +255 below instead is due to an old comment in this code before
@@ -4616,7 +4618,13 @@ SV *dbd_st_FETCH_attrib(SV *sth, imp_sth_t *imp_sth, SV *keysv)
 	    }
 	       /* XXX need to 'finish' here */
 	    dbd_st_finish(sth, imp_sth);
-	 }
+	 } else {
+             if (DBIc_TRACE(imp_sth, 0, 0, 4)) {
+                 TRACE2(imp_sth,
+                        "    fetch odbc_more_results, numfields == %d "
+                        "&& moreResults = %d\n", i, imp_sth->moreResults);
+             }
+         }
 	 break;
       case 11:                                  /* ParamValues */
       {
@@ -5083,7 +5091,7 @@ int ftype;
 
    /* just for sanity, later. Any internals that may rely on this (including */
    /* debugging) will have valid data */
-   max_stmt_len = strlen(cSqlGetTypeInfo)+ftype/10+1;
+   max_stmt_len = strlen(cSqlGetTypeInfo)+(abs(ftype)/10)+2;
    imp_sth->statement = (char *)safemalloc(max_stmt_len);
    my_snprintf(imp_sth->statement, max_stmt_len, cSqlGetTypeInfo, ftype);
 

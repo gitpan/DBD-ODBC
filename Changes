@@ -2,9 +2,25 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2010-11-18 13:44:41 +0000 (Thu, 18 Nov 2010) $
+As of $LastChangedDate: 2010-12-14 14:45:50 +0000 (Tue, 14 Dec 2010) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC  1.26_4 December 14, 2010
+
+  Fixed bug highlighted by investigation into rt 62033 where the
+  active flag was sometimes not set on the statement after
+  SQLMoreResults indicates a result-set exists.
+
+  Fix rt63550 reported by John Corcoran where is a do method call
+  fails the SQL C<Statement> is not available in an error handler as
+  we never created a DBI statement in the first place. Added a note
+  to "do" deviations pod.
+
+  Minor fix to head at wrong level in the pod.
+
+  Fix a possible snprintf buffer overflow in GetTypeInfo when
+  the type is specified and it is negative.
 
 =head2 Changes in DBD::ODBC  1.26_3 November 18, 2010
 
