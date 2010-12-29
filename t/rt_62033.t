@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_62033.t 14567 2010-12-14 14:45:50Z mjevans $
+# $Id: rt_62033.t 14569 2010-12-14 16:20:49Z mjevans $
 #
 # rt62033 - not really this rt but a bug discovered when looking in to it
 #

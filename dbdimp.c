@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14567 2010-12-14 14:45:50Z mjevans $
+/* $Id: dbdimp.c 14569 2010-12-14 16:20:49Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -371,8 +371,6 @@ int dbd_db_execdirect(SV *dbh,
    int dbh_active;
 
    if ((dbh_active = check_connection_active(dbh)) == 0) return 0;
-
-   /*set_attr(dbh, "Statement", statement);*/
 
    ret = SQLAllocHandle(SQL_HANDLE_STMT,  imp_dbh->hdbc, &stmt );
    if (!SQL_SUCCEEDED(ret)) {

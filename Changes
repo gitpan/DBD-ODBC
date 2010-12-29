@@ -2,9 +2,13 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2010-12-14 14:45:50 +0000 (Tue, 14 Dec 2010) $
+As of $LastChangedDate: 2010-12-14 16:20:49 +0000 (Tue, 14 Dec 2010) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC  1.27 December 29, 2010
+
+  Official release of the 1.26 development releases.
 
 =head2 Changes in DBD::ODBC  1.26_4 December 14, 2010
 
