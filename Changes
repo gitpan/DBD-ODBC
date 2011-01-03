@@ -2,9 +2,34 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2010-12-14 16:20:49 +0000 (Tue, 14 Dec 2010) $
+As of $LastChangedDate: 2010-12-29 15:39:25 +0000 (Wed, 29 Dec 2010) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC  1.28_1 December 29, 2010
+
+  Rewrote documentation on odbc_SQL_ROWSET_SIZE and added loads of
+  notes so I don't have to go through a huge irc conversation with
+  ribasushi again.
+
+  Workaround bug in DBI (prior to 1.616) which mistakenly issues a
+  FETCH on any attribute passed to the connect method and sometimes
+  driver managers error on SQL_ROWSET_SIZE in SQLGetConnectAttr.
+
+  ChopBlanks was not working on UCS-2 encoded data written into bound
+  columns and was also sometimes reading off the end of the bound
+  array.
+
+  Minor FAQ changes:
+    Added an additional way to read MS Access dbs from Unix
+    Clarified versions for MARS_Connection
+    updates to cancel_big_fetch.pl
+
+  Updated TO_DO with more stuff to do
+
+  Improved tracing output
+
+  Tidied up some of the examples
 
 =head2 Changes in DBD::ODBC  1.27 December 29, 2010
 
@@ -16,7 +41,7 @@ $Revision: 10667 $
   active flag was sometimes not set on the statement after
   SQLMoreResults indicates a result-set exists.
 
-  Fix rt63550 reported by John Corcoran where is a do method call
+  Fix rt 63550 reported by John Corcoran where if a do method call
   fails the SQL C<Statement> is not available in an error handler as
   we never created a DBI statement in the first place. Added a note
   to "do" deviations pod.
@@ -36,7 +61,7 @@ $Revision: 10667 $
 =head2 Changes in DBD::ODBC  1.26_2 November 9, 2010
 
   Fixed bug found by frew where an snprintf can overflow when binding
-  alot of parameters.
+  a lot of parameters.
 
 =head2 Changes in DBD::ODBC  1.26_1 October 24, 2010
 

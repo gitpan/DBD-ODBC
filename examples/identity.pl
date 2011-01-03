@@ -1,11 +1,11 @@
 #!perl -w
-# $Id: identity.pl 11680 2008-08-28 08:23:27Z mjevans $
+# $Id: identity.pl 14631 2011-01-03 16:48:35Z mjevans $
 
 
 use strict;
 use DBI;
 
-my $dbh = DBI->connect("DBI:ODBC:PERL_TEST_SQLSERVER",,, {RaiseError => 1});
+my $dbh = DBI->connect();
 
 # create a temp table with an identity property on a column:
 my $sql = qq{CREATE TABLE #TEMP1 (MyCol INT NOT NULL IDENTITY)};

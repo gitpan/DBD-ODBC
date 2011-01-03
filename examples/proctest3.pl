@@ -1,5 +1,5 @@
 #!perl -w
-# $Id: proctest3.pl 11680 2008-08-28 08:23:27Z mjevans $
+# $Id: proctest3.pl 14631 2011-01-03 16:48:35Z mjevans $
 
 
 use DBI;
@@ -24,7 +24,7 @@ AS
 sub test()
 {
    my $sth = $dbh->prepare("{call PERL_DBD_TESTPRC(?)}");
-	
+
    $sth->bind_param(1, -1, { TYPE => 4 });
    $sth->execute();
 
@@ -37,7 +37,7 @@ sub test()
    }
 }
 
-	
+
 
 ##########################################
 ### Test

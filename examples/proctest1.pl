@@ -1,10 +1,11 @@
 #!perl -w
-# $Id: proctest1.pl 11680 2008-08-28 08:23:27Z mjevans $
+# $Id: proctest1.pl 14631 2011-01-03 16:48:35Z mjevans $
 
 
 use DBI;
 use strict;
 use Data::Dumper;
+use warnings;
 
 my $dbh = DBI->connect();
 
@@ -24,10 +25,10 @@ print 'kaboom'
 
 $dbh->disconnect;
 
-sub test($;$)
+sub test
 {
    my ($outputTempate, $recurse) = @_;
-	
+
    my $queryInputParameter1 = 2222;
    my $queryOutputParameter = $outputTempate;
    my $dbh = DBI->connect;
@@ -42,11 +43,11 @@ sub test($;$)
       return 0;
    }
    local $dbh->{odbc_err_handler} = \&err_handler;
-	
+
    my $sth = $dbh->prepare('{? = call PERL_DBD_TESTPRC(?) }');
    $sth->bind_param_inout(1, \$queryOutputParameter, 30, { TYPE => DBI::SQL_INTEGER });
    $sth->bind_param(2, $queryInputParameter1, { TYPE => DBI::SQL_INTEGER });
-					
+
    $sth->execute();
 
 	print '$sth->{Active}: ', $sth->{Active}, "\n";
@@ -54,7 +55,7 @@ sub test($;$)
 	   do {
 		 for(my $rowRef; $rowRef = $sth->fetchrow_hashref('NAME'); )  {
 		    my %outputData = %$rowRef;
-		    
+
 		    print 'outputData ', Dumper(\%outputData), "\n";
 		    if($recurse > 0)  {
 		       test($dbh, --$recurse);
@@ -62,7 +63,7 @@ sub test($;$)
 		 }
 	   } while($sth->{odbc_more_results});
 	}
-	print '$queryOutputParameter: \'', $queryOutputParameter, 
+	print '$queryOutputParameter: \'', $queryOutputParameter,
 		'\' expected: (', $queryInputParameter1 + 1, ")\n\n";
 	print "Err handler called $testpass times\n";
 }
