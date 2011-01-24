@@ -47,9 +47,18 @@ $Revision: 10667 $
   Anywhere we are storing a value in an SV that we didn't create
     (and thus might have magic) should probably set magic.
 
-  Perhaps add a switch to pick iODBC or unixODBC driver managers
-
   Work out how to use Unicode in freeTDS as it does not have SQLW functions
     see examples/freetds_unicode.pl latest CVS trunk apparently has SQLW functions
 
   Add a test for ChopBlanks and unicode data
+
+  Write a document on MARS_CONNECTION
+
+  Add a link or documentation on server cursors
+
+  Add some private SQLGetInfo values for whether SQL_ROWSET_SIZE hack
+  works etc. How can you tell a driver supports MARS_CONNECTION.
+
+  Might be able to detect MARS capable with SS_COPT_MARS_ENABLED
+
+SQL_COPT_SS_MARS_ENABLED

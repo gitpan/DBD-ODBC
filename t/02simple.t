@@ -1,5 +1,5 @@
 #!perl -w -I./t
-# $Id: 02simple.t 13872 2010-03-19 11:15:31Z mjevans $
+# $Id: 02simple.t 14639 2011-01-12 13:42:24Z mjevans $
 
 use Test::More;
 use strict;
@@ -256,7 +256,9 @@ $rc = ODBCTEST::tab_delete($dbh);
 # data_sources is unsupported.
 my @data_sources = DBI->data_sources('ODBC');
 #diag("Data sources:\n\t", join("\n\t",@data_sources),"\n\n");
-cmp_ok($#data_sources, '>=', 0, "data sources test");
+# NOTE: data_sources may return 0 data sources if there are none
+# and we are using a DSN-less connection string
+cmp_ok($#data_sources, '>=', -1, "data sources test");
 
 
 ok($dbh->ping, "test ping method");

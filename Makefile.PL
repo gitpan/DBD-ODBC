@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 14490 2010-10-16 14:28:54Z mjevans $
+# $Id: Makefile.PL 14639 2011-01-12 13:42:24Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -101,12 +101,12 @@ my %opts =
     ## no critic (RequireInterpolationOfMetachars)
     NAME         => 'DBD::ODBC',
     VERSION_FROM => 'ODBC.pm',
-    # See note below on CONFIGURE. This used to work when could rely on
+    # See note below on CONFIGURE. This used to work when we could rely on
     # CONFIGURE being after PREREQ_PM but that is not the case now so the
     # line below does nothing since 6.33 of MakeMaker.
     PREREQ_PM    => {
-        "Test::Simple" => 0.40,# actually Test::More pkg in T::S dist,
-        "DBI"          => 1.21 },
+        "Test::Simple" => 0.40, # actually Test::More pkg in T::S dist,
+        "DBI"          => 1.609 },
     clean        => { FILES => 'ODBC.xsi dbdodbc.h' },
     dist         => {
 	DIST_DEFAULT => 'clean distcheck tardist',
@@ -155,11 +155,18 @@ my $opt_g = 0;                  # build debug
 my $opt_o = q{};                # odbc home overrides ODBCHOME
 my $opt_u = undef;              # build unicode version
 my $opt_e = undef;              # easysoft
+my $opt_x = undef;              # prefer unixODBC over iODBC
 
-Getopt::Long::GetOptions("g!" => \$opt_g,
-                         "o=s" => \$opt_o,
-                         "u!" => \$opt_u,
-                         "e!" => \$opt_e) or die "Invalid arguments\n";
+my @options = ("g!" => \$opt_g,
+               "o=s" => \$opt_o,
+               "u!" => \$opt_u,
+               "e!" => \$opt_e,
+               "x!" => \$opt_x);
+my %options = @options;
+Getopt::Long::GetOptions(@options) or die "Invalid arguments\n";
+
+print "Command line options:\n",
+    (map {"  $_ = " . (defined(${$options{$_}}) ? ${$options{$_}} : 'undef') . "\n"} keys %options), "\n";
 if (($ENV{LANG} || q{}) =~ m/utf-?8/i) {
     print <<"EOT";
 
@@ -206,7 +213,7 @@ if (defined($opt_u) && $opt_u) {
     require 5.008001;
 }
 
-my (@known_drivers) = sort { $a cmp $b } (
+my @known_drivers = sort { $a cmp $b } (
 	'Microsoft ODBC',
 	'unixodbc',
 	'iodbc',
@@ -241,7 +248,7 @@ if ($OSNAME eq 'MSWin32') {
 	$opts{DEFINE}  .= " -DWITH_UNICODE";
 	require 5.008001;
     }
-    # stop all those strcpt etc warnings:
+    # stop all those strcpy etc warnings:
     $opts{DEFINE} .= " -D_CRT_SECURE_NO_DEPRECATE";
     $opts{INC}  = "$extrainc";
     $opts{LIBS} = ["ODBC32.LIB"];
@@ -320,16 +327,17 @@ EOT
     # if we haven't got odbchome set try and find a driver, driver manager.
     if (!$odbchome) {
         if ($ENV{WINDIR} && $OSNAME eq 'cygwin') {
-            # per patches from Teun Burgers
-            my $tmp_odbchome = $ENV{WINDIR};
-            $tmp_odbchome =~ s/^([A-Za-z]):*$/\/\/$1/;
-            $tmp_odbchome =~ s/\\/\//g;
-            $odbchome = $tmp_odbchome if (-e "$tmp_odbchome/odbc.ini")
+            ## per patches from Teun Burgers
+            #my $tmp_odbchome = $ENV{WINDIR};
+            #$tmp_odbchome =~ s/^([A-Za-z]):*$/\/\/$1/;
+            #$tmp_odbchome =~ s/\\/\//g;
+            #$odbchome = $tmp_odbchome if (-e "$tmp_odbchome/odbc.ini")
+            chomp($odbchome = `cygpath \$WINDIR`);
         } elsif (-f '/opt/sapdb/interfaces/odbc/lib/libsqlod.a') {
             $odbchome = '/opt/sapdb/interfaces/odbc/';
         }
     }
-    if($OSNAME eq 'cygwin'){#Trade cygwin as MSWin.
+    if ($OSNAME eq 'cygwin'){   #Trade cygwin as MSWin.
         my $extrainc = q{};
         $extrainc = ";$Config{incpath}\\mfc" if $Config{cc} eq 'bcc32';
         $opts{SKIP} = ['processPL'];
@@ -343,7 +351,6 @@ EOT
         print {$sqlhfh} "#include <windows.h>\n";
         print {$sqlhfh}
             "#include <sql.h>\n#include <sqltypes.h>\n#include <sqlext.h>\n";
-    
     } elsif ($OSNAME !~ /MSWin/  ) {
         # look for Ingres' driver manager first on the basis of if you
         # have ingres you probably want to use it. Also Ingres ships with
@@ -438,8 +445,7 @@ EOT
     $arext =~ s/^\.//;
 
     # Try to work out which driver manager is being used.
-    # Feel free to come up with neat (or un-neat) hacks to get your's to build!
-
+    #
     # NOTE: if $myodbc is already set we found a driver manager config binary
     # above and have already set $odbchome, $odbcincdir and $odbclibdir.
     #
@@ -447,9 +453,17 @@ EOT
     # libodbc.xx but only iodbc supplies a libiodbc.xx. As a result the only
     # reliable way of telling one from the other is to look for libiodbc.xx
     # first.
-    ($myodbc, $odbclibdir) = find_iodbc($odbchome) if !$myodbc;
+    # NOTE: -x says we prefer unixODBC over iODBC
+    # This is to cater for those insane situations when someone had libiodbc
+    # and unixODBC binary packages installed but unixODBC dev package
+    # e.g. some people on Debian/Ubuntu
+    if ($opt_x && !$myodbc) {
+        ($myodbc, $odbclibdir) = find_unixodbc($odbchome);
+    } else {
+        ($myodbc, $odbclibdir) = find_iodbc($odbchome) if !$myodbc;
 
-    ($myodbc, $odbclibdir) = find_unixodbc($odbchome) if !$myodbc;
+        ($myodbc, $odbclibdir) = find_unixodbc($odbchome) if !$myodbc;
+    }
 
     $myodbc = 'Microsoft ODBC'
         if (!$myodbc &&

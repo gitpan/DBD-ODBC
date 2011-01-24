@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 20SqlServer.t 13874 2010-03-24 14:22:58Z mjevans $
+# $Id: 20SqlServer.t 14641 2011-01-12 18:44:12Z mjevans $
 
 use Test::More;
 use strict;
@@ -655,7 +655,7 @@ AS
    $dbh->disconnect;
 
    my $dsn = $ENV{DBI_DSN};
-   if ($dsn !~ /^dbi:ODBC:DSN=/) {
+   if ($dsn !~ /^dbi:ODBC:DSN=/ && $dsn !~ /DRIVER=/i) {
        my @a = split(q/:/, $ENV{DBI_DSN});
        $dsn = join(q/:/, @a[0..($#a - 1)]) . ":DSN=" . $a[-1];
    }

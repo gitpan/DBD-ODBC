@@ -1,4 +1,4 @@
-# $Id: multiple_active_stmts.pl 14631 2011-01-03 16:48:35Z mjevans $
+# $Id: multiple_active_stmts.pl 14639 2011-01-12 13:42:24Z mjevans $
 # Various ways of enabling Multiple Active Statements support in
 # MS SQL Server - what you use depends on your driver.
 #
@@ -8,7 +8,6 @@ use Data::Dumper;
 
 my $attrs = { RaiseError => 1, PrintError => 0, AutoCommit => 1 };
 
-my @x = map { $ENV{"DBICTEST_MSSQL_ODBC_$_"} } (qw/DSN USER PASS/);
 my %connect_args = (DSN => 'dbi:ODBC:DSN=baugi',
                     USER => 'sa',
                     PASS => undef);

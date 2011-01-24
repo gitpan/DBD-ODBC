@@ -1,9 +1,9 @@
-# $Id: ODBC.pm 14615 2010-12-29 15:39:25Z mjevans $
+# $Id: ODBC.pm 14651 2011-01-24 09:23:01Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
 # portions Copyright (c) 1997  Thomas K. Wenrich
-# portions Copyright (c) 2007-2010 Martin J. Evans
+# portions Copyright (c) 2007-2011 Martin J. Evans
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -19,7 +19,7 @@ require 5.006;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.28_1';
+$DBD::ODBC::VERSION = '1.28_2';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.28_1';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 14615 2010-12-29 15:39:25Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 14651 2011-01-24 09:23:01Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -524,7 +524,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.28_1.
+This documentation refers to DBD::ODBC version 1.28_2.
 
 =head1 SYNOPSIS
 
@@ -1760,18 +1760,8 @@ other people like you may look at the test reports to see how
 successful they are before choosing the version of a module to
 install.
 
-CPAN::Reporter is easy to install and configure like this:
-
-  perl -MCPAN -e shell
-  cpan> install CPAN::Reporter
-  cpan> reload cpan
-  cpan> o conf init test_report
-
-Simply answer the questions to configure CPAN::Reporter.
-
-You can find the CPAN testers wiki at L<http://wiki.cpantesters.org/>
-and the installation guide for CPAN::Reporter at
-L<http://wiki.cpantesters.org/wiki/CPANInstall>.
+See this guide on how to get started with sending test reports:
+L<http://wiki.cpantesters.org/wiki/QuickStart>.
 
 =head2 Others/todo?
 
@@ -1851,6 +1841,10 @@ L<http://www.easysoft.com/developer/languages/perl/sql_server_unix_tutorial.html
 Perl DBI - Put Your Data On The Web:
 
 L<http://www.easysoft.com/developer/languages/perl/tutorial_data_web.html>
+
+Multiple Active Statements (MAS) and DBD::ODBC
+
+L<http://www.easysoft.com/developer/languages/perl/multiple-active-statements.html>
 
 =head2 Frequently Asked Questions
 
