@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 14639 2011-01-12 13:42:24Z mjevans $
+# $Id: Makefile.PL 14709 2011-02-22 17:09:44Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -45,6 +45,8 @@ EOT
     foreach (@envs) {
         print "$_: ", ($ENV{$_} ? $ENV{$_} : ''), "\n";
     }
+    print "Perl: $]\n";
+    print "ExtUtils::MakeMaker: $ExtUtils::MakeMaker::VERSION\n";
 }
 
 # the following now redundant since we found constants (see end) which allows
@@ -126,7 +128,8 @@ if ($eumm >= 5.43) {
     $opts{AUTHOR} = 'Tim Bunce, Jeff Urlwin, Martin J. Evans mailto:dbi-users@perl.org';
     $opts{ABSTRACT} = 'ODBC driver for the DBI module.';
     $opts{CAPI} = 'TRUE' if $Config{archname} =~ /-object\b/i;
-    $opts{PREREQ_PRINT} = 1;
+    # Never set PREREQ_FATAL to true - it is flawed
+    # - see http://wiki.cpantesters.org/wiki/CPANAuthorNotes
     #$opts{PREREQ_FATAL} = 1;
     # See
     # http://www.mail-archive.com/cpan-testers-discuss%40perl.org/msg00076.html
@@ -149,6 +152,9 @@ if ($eumm >= 5.43) {
         }
     }
     };
+}
+if ($eumm >= 5.48) {
+    $opts{PREREQ_PRINT} = 1;
 }
 
 my $opt_g = 0;                  # build debug
@@ -297,7 +303,7 @@ EOT
         # remove lib prefix and .so suffix so "-l" style link can be used
         $ilibname =~ s/^lib(odbc.*?)\.\w+$/$1/;
         $opts{LIBS} = "-L$odbclibdir -l$ilibname";
-        warn "Warning: LD_LIBRARY_PATH doesn't include $odbchome\n"
+        warn "Warning: LD_LIBRARY_PATH doesn't include $odbclibdir\n"
             unless (exists($ENV{LD_LIBRARY_PATH}) &&
                         ($ENV{LD_LIBRARY_PATH} =~ /\Q$odbclibdir/));
     }
@@ -630,7 +636,7 @@ EOT
 	    # remove lib prefix and .so suffix so "-l" style link can be used
 	    $ilibname =~ s/^lib(odbc.*)\.\w+$/$1/;
 	    $opts{LIBS} = "-L$odbclibdir -l$ilibname";
-	    warn "Warning: LD_LIBRARY_PATH doesn't include $odbchome\n"
+	    warn "Warning: LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH} doesn't include $odbclibdir\n"
 		unless (exists($ENV{LD_LIBRARY_PATH}) &&
                         ($ENV{LD_LIBRARY_PATH} =~ /\Q$odbclibdir/));
 	}

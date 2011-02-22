@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 14651 2011-01-24 09:23:01Z mjevans $
+# $Id: ODBC.pm 14713 2011-02-22 17:23:27Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.006;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.28_2';
+$DBD::ODBC::VERSION = '1.28_3';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.28_2';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 14651 2011-01-24 09:23:01Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 14713 2011-02-22 17:23:27Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -513,6 +513,44 @@ $DBD::ODBC::VERSION = '1.28_2';
 	my $tmp = _Cancel($sth);
 	return $tmp;
     }
+
+# Just in case someone comes along and wants to add this
+#    sub execute_for_fetch {
+#        my ($sth, $fetch_tuple_sub, $tuple_status) = @_;
+#        print "execute_for_fetch\n";
+#        my $row_count = 0;
+#        my $tuple_count="0E0";
+#        my $tuple_batch_status;
+#
+#        if (defined($tuple_status)) {
+#            @$tuple_status = ();
+#            $tuple_batch_status = [ ];
+#        }
+#        while (1) {
+#            my @tuple_batch;
+#            for (my $i = 0; $i < $batch_size; $i++) {
+#                push @tuple_batch, [ @{$fetch_tuple_sub->() || last} ];
+#            }
+#            last unless @tuple_batch;
+#            my $res = odbc_execute_array($sth,
+#                                         \@tuple_batch,
+#                                         scalar(@tuple_batch),
+#                                         $tuple_batch_status);
+#            if (defined($res) && defined($row_count)) {
+#                $row_count += $res;
+#            } else {
+#                $row_count = undef;
+#            }
+#            $tuple_count+=@$tuple_batch_status;
+#            push @$tuple_status, @$tuple_batch_status
+#                if defined($tuple_status);
+#        }
+#        if (!wantarray) {
+#            return undef if !defined $row_count;
+#            return $tuple_count;
+#        }
+#        return (defined $row_count ? $tuple_count : undef, $row_count);
+#    }
 }
 
 1;
@@ -524,7 +562,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.28_2.
+This documentation refers to DBD::ODBC version 1.28_3.
 
 =head1 SYNOPSIS
 
@@ -1325,6 +1363,13 @@ of DBI 1.604, the only trace flag defined which is relevant to
 DBD::ODBC is 'SQL' which DBD::ODBC supports by outputting the SQL
 strings (after modification) passed to the prepare and do methods.
 
+From DBI 1.617 DBI also defines ENC (encoding), CON (connection) TXN
+(transaction) and DBD (DBD only) trace flags. DBI's ENC and CON trace
+flags are synonomous with DBD::ODBC's odbcunicode and odbcconnection
+trace flags though I may remove the DBD::ODBC ones in the
+future. DBI's DBD trace flag allows output of only DBD::ODBC trace
+messages without DBI's trace messages.
+
 Currently DBD::ODBC supports two private trace flags. The
 'odbcunicode' flag traces some unicode operations and the
 odbcconnection traces the connect process.
@@ -1348,6 +1393,14 @@ or
 
   use DBD::ODBC;
   DBI->trace(DBD::ODBC->parse_trace_flags('odbcconnection|odbcunicode'));
+
+or
+
+  DBI_TRACE=odbcconnection|odbcunicode perl myscript.pl
+
+From DBI 1.617 you can output only DBD::ODBC trace messages using
+
+  DBI_TRACE=DBD perl myscript.pl
 
 DBD::ODBC outputs tracing at levels 3 and above (as levels 1 and 2 are
 reserved for DBI).

@@ -46,7 +46,7 @@ unless($dbh) {
 }
 my $dbname = $dbh->get_info(17); # DBI::SQL_DBMS_NAME
 my $driver_name = $dbh->get_info(6);
-diag("Some of these tests may fail for your driver - please let me know if they do along with the strings $dbname/$driver_name");
+diag("\nSome of these tests may fail for your driver - please let me know if they do along with the strings $dbname/$driver_name");
 # the point about the SQL in the next line is that if DBD::ODBC was
 # ignoring comments everything between /* and */ would be ignored but
 # if it is not ignored it looks like you have used the same placeholder
