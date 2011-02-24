@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14712 2011-02-22 17:20:12Z mjevans $
+/* $Id: dbdimp.c 14721 2011-02-24 10:45:33Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -64,7 +64,7 @@
 # define DBIf_TRACE_DBD 0x00000800
 #endif
 #ifndef DBIf_TRACE_TXN
-# define DBIf_TRACE_DBD 0x000001000
+# define DBIf_TRACE_TXN 0x000001000
 #endif
 
 /* combined DBI trace connection and encoding flags with DBD::ODBC ones */
@@ -2364,7 +2364,7 @@ static SQLRETURN bind_columns(
             if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 5))
                 TRACE2(imp_sth, "     Overriding bound sql type %d with requested type %"IVdf"\n",
                        fbh->ftype, fbh->req_type);
-            fbh->ftype = fbh->req_type;
+            fbh->ftype = (SWORD)fbh->req_type;
         }
 
         if (!(fbh->bind_flags & ODBC_TREAT_AS_LOB)) {

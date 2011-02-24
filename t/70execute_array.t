@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 70execute_array.t 14715 2011-02-22 17:36:00Z mjevans $
+# $Id: 70execute_array.t 14721 2011-02-24 10:45:33Z mjevans $
 # loads of execute_array and execute_for_fetch tests
 
 use Test::More;
@@ -464,3 +464,4 @@ error($dbh, {array_context => 0, raise => 0});
 row_wise($dbh, {array_context => 1, raise => 1});
 
 update($dbh, {array_context => 1, raise => 1});
+$dbh->disconnect;
