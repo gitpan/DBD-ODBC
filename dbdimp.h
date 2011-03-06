@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 14693 2011-02-08 22:46:14Z mjevans $
+ * $Id: dbdimp.h 14744 2011-03-06 17:16:41Z mjevans $
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
  * portions Copyright (c) 1994,1995,1996  Tim Bunce
@@ -100,7 +100,8 @@ struct imp_dbh_st {
         DT_SQL_SERVER_NATIVE_CLIENT,    /* sqlncli10.dll | SQLNCLI.DLL */
         DT_MS_ACCESS_JET,                          /* odbcjt32.dll */
         DT_MS_ACCESS_ACE,                          /* ACEODBC.DLL */
-        DT_ES_OOB                                  /* Easysoft OOB */
+        DT_ES_OOB,                                 /* Easysoft OOB */
+        DT_FIREBIRD                                /* Firebird OdbcFb */
     } driver_type;
     char odbc_driver_name[80];
     char odbc_driver_version[20];

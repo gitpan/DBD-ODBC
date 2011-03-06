@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 14709 2011-02-22 17:09:44Z mjevans $
+# $Id: Makefile.PL 14730 2011-03-04 09:17:50Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -107,7 +107,7 @@ my %opts =
     # CONFIGURE being after PREREQ_PM but that is not the case now so the
     # line below does nothing since 6.33 of MakeMaker.
     PREREQ_PM    => {
-        "Test::Simple" => 0.40, # actually Test::More pkg in T::S dist,
+        "Test::Simple" => 0.90, # actually Test::More pkg in T::S dist,
         "DBI"          => 1.609 },
     clean        => { FILES => 'ODBC.xsi dbdodbc.h' },
     dist         => {

@@ -1,5 +1,5 @@
 #!perl -w -I./t
-# $Id: 02simple.t 14639 2011-01-12 13:42:24Z mjevans $
+# $Id: 02simple.t 14740 2011-03-06 15:00:02Z mjevans $
 
 use Test::More;
 use strict;
@@ -84,6 +84,8 @@ SKIP: {
     my $drv = $dbh->get_info(17);
     if ($drv =~ /Oracle/i) {
         $sql = q/select 1 from dual/;
+    } elsif ($drv =~ /Firebird/i) {
+        $sql = q/select 1 from rdb$database/;
     } else {
         $sql = q/select 1/;
     }

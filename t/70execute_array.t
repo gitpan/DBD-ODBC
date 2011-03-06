@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 70execute_array.t 14721 2011-02-24 10:45:33Z mjevans $
+# $Id: 70execute_array.t 14737 2011-03-06 14:56:00Z mjevans $
 # loads of execute_array and execute_for_fetch tests
 
 use Test::More;
@@ -31,6 +31,7 @@ BEGIN {
 END {
     if ($dbh) {
         drop_table($dbh);
+        $dbh->disconnect();
     }
     Test::NoWarnings::had_no_warnings()
           if ($has_test_nowarnings);
@@ -464,4 +465,3 @@ error($dbh, {array_context => 0, raise => 0});
 row_wise($dbh, {array_context => 1, raise => 1});
 
 update($dbh, {array_context => 1, raise => 1});
-$dbh->disconnect;

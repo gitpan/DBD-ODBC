@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 20SqlServer.t 14641 2011-01-12 18:44:12Z mjevans $
+# $Id: 20SqlServer.t 14730 2011-03-04 09:17:50Z mjevans $
 
 use Test::More;
 use strict;
@@ -75,8 +75,13 @@ sub varmax_test
         eval {$dbh->do(q/drop table PERL_DBD_TABLE1/);};
         eval {
             $dbh->do(qq/create table PERL_DBD_TABLE1 (a int identity, b $coltype(MAX))/);
+            # workaround freeTDS problem:
+            if ($driver_name =~ /tdsodbc/) {
+                $dbh->do( qq/insert into PERL_DBD_TABLE1 (b) values(CAST(? AS $coltype(MAX)))/, undef, $data);
+            } else {
             $dbh->do(q/insert into PERL_DBD_TABLE1 (b) values(?)/,
                      undef, $data);
+            }
         };
         diag($@) if $@;
         ok(!$@, "create PERL_DBD_TABLE1 and insert test data");
