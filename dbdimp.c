@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14744 2011-03-06 17:16:41Z mjevans $
+/* $Id: dbdimp.c 14746 2011-03-06 18:57:37Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -1294,7 +1294,7 @@ void dbd_error2(
 
     if (!error_found && (err_rc != SQL_NO_DATA_FOUND)) {
         if (DBIc_TRACE(imp_xxh, DBD_TRACING, 0, 3))
-            TRACE0(imp_dbh, "    ** No error found **");
+            TRACE1(imp_dbh, "    ** No error found %d **\n", err_rc);
         DBIh_SET_ERR_CHAR(
             h, imp_xxh, Nullch, 1,
             "    Unable to fetch information about the error", "IM008", Nullch);
@@ -2977,11 +2977,11 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
                if (ChopBlanks && fbh->datalen > 0 &&
                    ((fbh->ColSqlType == SQL_CHAR) ||
                     (fbh->ColSqlType == SQL_WCHAR))) {
+                   char *p = (char*)fbh->data;
 
                    if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 5))
                        TRACE0(imp_sth, "    chopping blanks\n");
 
-                   char *p = (char*)fbh->data;
                    while(fbh->datalen && p[fbh->datalen - 1]==' ')
                        --fbh->datalen;
                }
