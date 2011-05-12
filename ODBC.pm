@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 14741 2011-03-06 17:11:57Z mjevans $
+# $Id: ODBC.pm 14852 2011-05-12 18:32:46Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.006;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.29';
+$DBD::ODBC::VERSION = '1.30_1';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.29';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 14741 2011-03-06 17:11:57Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 14852 2011-05-12 18:32:46Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -135,6 +135,7 @@ $DBD::ODBC::VERSION = '1.29';
                 odbc_force_rebind => undef, # sth and dbh
                 odbc_async_exec => undef, # sth and dbh
                 odbc_exec_direct => undef,
+                odbc_old_unicode => undef,
                 odbc_SQL_ROWSET_SIZE => undef,
                 odbc_SQL_DRIVER_ODBC_VER => undef,
                 odbc_cursortype => undef,
@@ -498,7 +499,9 @@ $DBD::ODBC::VERSION = '1.29';
                 odbc_query_timeout => undef, # sth and dbh
                 odbc_putdata_start => undef, # sth and dbh
                 odbc_column_display_size => undef, # sth and dbh
-                odbc_utf8_on => undef # sth and dbh
+                odbc_utf8_on => undef, # sth and dbh
+                odbc_exec_direct => undef, # sth and dbh
+                odbc_old_unicode => undef, # sth and dbh
                };
     }
 
@@ -562,7 +565,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.29.
+This documentation refers to DBD::ODBC version 1.30_1.
 
 =head1 SYNOPSIS
 
@@ -990,6 +993,23 @@ B<NOTE:> Even if you build DBD::ODBC with unicode support you can
 still not pass unicode strings to the prepare method if you also set
 odbc_exec_direct. This is a restriction in this attribute which is
 unavoidable.
+
+=head3 odbc_old_unicode
+
+defaults to off. if set to true returns DBD::ODBC to the old unicode behavior in 1.29 and earlier.
+
+By default DBD::ODBC now binds all char columns as SQL_WCHARs meaning the driver is asked to
+return the bound data as wide (Unicode) characters encoded in UCS2. So long as the driver supports
+the ODBC Unicode API properly this should mean you get your data back correctly in Perl even if it
+is in a character set (codepage) different from the one you are working in.
+
+However, if you wrote code using DBD::ODBC 1.29 or earlier and knew DBD::ODBC bound
+varchar/longvarchar columns as SQL_CHARs and decoded them yourself the new behaviour will
+adversely affect you (sorry). To revret to the old behaviour set odbc_old_unicode to true.
+
+See the stackoverflow question at L<http://stackoverflow.com/questions/5912082>,
+the RT at L<http://rt.cpan.org/Public/Bug/Display.html?id=67994>
+and lastly a small discussion on dbi-dev at L<http://www.nntp.perl.org/group/perl.dbi.dev/2011/05/msg6559.html>.
 
 =head3 odbc_SQL_DRIVER_ODBC_VER
 
@@ -1443,7 +1463,7 @@ believes to be a placeholder in a comment e.g.,
 I cannot be exact about support for ignoring placeholders in literals
 but it has existed for a long time in DBD::ODBC. Support for ignoring
 placeholders in comments was added in 1.24_2. If you find a case where
-a named placeholder is not ignored and should be see
+a named placeholder is not ignored and should be, see
 L</odbc_ignore_named_placeholders> for a workaround and mail me an
 example along with your ODBC driver name.
 
@@ -1537,6 +1557,13 @@ ODBC inherently allows this. Therefore you can do:
   # some DBDs will ignore the type in the following, DBD::ODBC does not
   $sth->bind_param(1, $data, DBI::SQL_VARCHAR);
 
+=head3 disconnect and transactions
+
+DBI does not define whether a driver commits or rolls back any
+outstanding transaction when disconnect is called. As such DBD::ODBC
+cannot deviate from the specification but you should know it rolls
+back an uncommitted transaction when disconnect is called if
+SQLDisconnect returns state 25000 (transaction in progress).
 
 =head2 Unicode
 

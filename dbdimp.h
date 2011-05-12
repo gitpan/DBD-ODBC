@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 14744 2011-03-06 17:16:41Z mjevans $
+ * $Id: dbdimp.h 14852 2011-05-12 18:32:46Z mjevans $
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
  * portions Copyright (c) 1994,1995,1996  Tim Bunce
@@ -65,6 +65,8 @@ struct imp_dbh_st {
     /* flag for executing SQLExecDirect instead of SQLPrepare and SQLExecute.
        Magic happens at SQLExecute() */
     int  odbc_exec_direct;
+    /* use old unicode behaviour of binding varchar/longvarchar as SQL_CHAR */
+    int odbc_old_unicode;
     /* flag to store the type of asynchronous execution the driver supports */
     SQLUINTEGER odbc_async_type;
     SV *odbc_err_handler;     /* contains the error handler coderef */
@@ -155,6 +157,7 @@ struct imp_sth_st {
     IV odbc_putdata_start;
     IV odbc_column_display_size;
     int odbc_utf8_on;
+    int odbc_old_unicode;
 };
 #define IMP_STH_EXECUTING	0x0001
 

@@ -1,5 +1,5 @@
 /*
- * $Id: ODBC.h 14277 2010-07-23 10:31:55Z mjevans $
+ * $Id: ODBC.h 14758 2011-03-16 17:37:42Z mjevans $
  * Copyright (c) 1994,1995,1996,1997  Tim Bunce
  *
  * You may distribute under the terms of either the GNU General Public
@@ -38,5 +38,9 @@ void dbd_error _((SV *h, RETCODE err_rc, char *what));
 void dbd_error2 _((SV *h, RETCODE err_rc, char *what, HENV henv, HDBC hdbc, HSTMT hstmt));
 int dbd_db_execdirect _(( SV *dbh, SV *statement ));
 IV odbc_st_lob_read(SV *sth, int colno, SV *data, UV length, IV type);
+int dbd_st_statistics(SV *dbh, SV *sth, char *catalog, char *schema,
+                      char *table, int unique, int quick);
+int dbd_st_bind_col(SV *sth, imp_sth_t *imp_sth, SV *col, SV *ref,
+                    IV type, SV *attribs);
 
 /* end of ODBC.h */

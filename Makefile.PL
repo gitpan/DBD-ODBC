@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 14730 2011-03-04 09:17:50Z mjevans $
+# $Id: Makefile.PL 14826 2011-04-06 08:23:32Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -162,12 +162,14 @@ my $opt_o = q{};                # odbc home overrides ODBCHOME
 my $opt_u = undef;              # build unicode version
 my $opt_e = undef;              # easysoft
 my $opt_x = undef;              # prefer unixODBC over iODBC
+my $opt_w = undef;              # enable -Wall (gcc only)
 
 my @options = ("g!" => \$opt_g,
                "o=s" => \$opt_o,
                "u!" => \$opt_u,
                "e!" => \$opt_e,
-               "x!" => \$opt_x);
+               "x!" => \$opt_x,
+               "w!" => \$opt_w);
 my %options = @options;
 Getopt::Long::GetOptions(@options) or die "Invalid arguments\n";
 
@@ -213,7 +215,9 @@ if ($opt_g) {
       $opts{OPTIMIZE} = '-g -O0';
    }
 }
-
+if ($opt_w) {
+    $opts{CCFLAGS} = '-Wall -fno-strict-aliasing';
+}
 if (defined($opt_u) && $opt_u) {
     $opts{DEFINE} .= ' -DWITH_UNICODE';
     require 5.008001;
@@ -1044,6 +1048,7 @@ sub find_unixodbc
 # Following generates
 # Useless use of private variable in void context at Makefile.PL
 # but is required
+no warnings 'void';
 $rv;
 
 # ====================================================================

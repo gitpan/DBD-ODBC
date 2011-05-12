@@ -1,5 +1,5 @@
 #!/usr/bin/perl -I./t
-# $Id: 05meth.t 11680 2008-08-28 08:23:27Z mjevans $
+# $Id: 05meth.t 14852 2011-05-12 18:32:46Z mjevans $
 
 ## TBd: these tests don't seem to be terribly useful
 use sigtrap;
@@ -105,6 +105,7 @@ $sth->finish();
 
 # turn off error warnings.  We expect one here (invalid transaction state)
 $dbh->{RaiseError} = 0;
+$dbh->{PrintWarn} = 0;
 $dbh->{PrintError} = 0;
 
 ok( $dbh->{$_}, $_) for 'Active';

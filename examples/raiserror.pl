@@ -12,11 +12,7 @@ sub handle_error
 }
 my $dbh = DBI->connect('dbi:ODBC:baugi','sa','easysoft',
                       {
-                          #RaiseError => 1,
-                          #PrintError => 0,
-                          odbc_err_handler => \&handle_error,
-                       #odbc_default_bind_type => DBI::SQL_VARCHAR,
-                       #odbc_cursortype        => 2,
+                          #odbc_err_handler => \&handle_error,
 });
 
 eval {
@@ -41,13 +37,14 @@ sub test()
    $sth->bind_param(2, $p1);
    $sth->bind_param_inout(3, \$p2, 32);
    $sth->execute();
-
-   print qq{After execute: \$retval is $retval.}, "\n";
-   print qq{After execute: \$p1     is $p1.}, "\n";
-   print qq{After execute: \$p2     is $p2.}, "\n";
+   print qq/After execute:\n/;
+   print "err=", $sth->err(), "\n";
+   print "errstr=", $sth->errstr(), "\n";
+   print "state=", DBI::neat($sth->state()), "\n";
+   print qq{\$retval is $retval.}, "\n";
+   print qq{\$p1     is $p1.}, "\n";
+   print qq{\$p2     is $p2.}, "\n";
 }
-
-#$dbh->{odbc_err_handler} = \&handle_error;
 
 test();
 

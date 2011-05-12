@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 70execute_array.t 14737 2011-03-06 14:56:00Z mjevans $
+# $Id: 70execute_array.t 14755 2011-03-16 17:35:44Z mjevans $
 # loads of execute_array and execute_for_fetch tests
 
 use Test::More;
@@ -94,7 +94,7 @@ sub check_data
 {
     my ($dbh, $c1, $c2) = @_;
 
-    my $data = $dbh->selectall_arrayref(qq/select * from $table/);
+    my $data = $dbh->selectall_arrayref(qq/select * from $table order by a/);
     my $row = 0;
     foreach (@$data) {
         is($_->[0], $c1->[$row], "row $row p1 data");
