@@ -2,11 +2,21 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2011-05-12 19:49:22 +0100 (Thu, 12 May 2011) $
+As of $LastChangedDate: 2011-05-16 09:33:58 +0100 (Mon, 16 May 2011) $
 
 $Revision: 10667 $
 
+=head2 Changes in DBD::ODBC 1.30_3 May 17, 2011
+
+  [BUG FIXES]
+
+  * Made the new odbc_describe_parameters work and added test case.
+
 =head2 Changes in DBD::ODBC 1.30_2 May 16, 2011
+
+  [ENHANCEMENTS]
+
+  * Added the new odbc_describe_parameters attribute.
 
 =head2 Changes in DBD::ODBC 1.30_1 May 12, 2011
 
