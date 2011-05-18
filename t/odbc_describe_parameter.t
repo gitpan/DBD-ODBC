@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_39897.t 13148 2009-07-29 16:23:27Z mjevans $
+# $Id: odbc_describe_parameter.t 14871 2011-05-18 15:27:15Z mjevans $
 #
 # Test odbc_describe_parameters
 # Should default to on but you can turn it off in the prepare or at the
@@ -100,7 +100,11 @@ sub default
         #use Data::Dumper;
         #diag(Dumper($pts->{$params[0]}));
         #7
-        is($pts->{$params[0]}->{TYPE}, 4, 'integer parameter');
+        # for drivers which don't have SQLDescribeParam the type will
+        # be defaulted to SQL_VARCHAR or SQL_WVARCHAR
+        ok(($pts->{$params[0]}->{TYPE} == 4) ||
+           ($pts->{$params[0]}->{TYPE} == -9) ||
+           ($pts->{$params[0]}->{TYPE} == 12), 'integer parameter');
     };
 
 
