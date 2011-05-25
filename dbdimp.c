@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 14872 2011-05-18 15:27:41Z mjevans $
+/* $Id: dbdimp.c 14874 2011-05-24 16:43:18Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -2237,7 +2237,7 @@ int dbd_describe(SV *h, imp_sth_t *imp_sth, int more)
 
         /* Unless old unicode behavior map SQL_CHAR to SQL_WCHAR */
         if (!imp_sth->odbc_old_unicode &&
-        	 (fbh->ColSqlType == SQL_CHAR)) {
+        	 (fbh->ColSqlType == SQL_CHAR || fbh->ColSqlType == SQL_VARCHAR)) {
         	  fbh->ColSqlType = SQL_WCHAR;
         }
 # endif
