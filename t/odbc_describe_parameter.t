@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: odbc_describe_parameter.t 14871 2011-05-18 15:27:15Z mjevans $
+# $Id: odbc_describe_parameter.t 14885 2011-06-07 18:34:55Z mjevans $
 #
 # Test odbc_describe_parameters
 # Should default to on but you can turn it off in the prepare or at the
@@ -147,7 +147,8 @@ sub on_prepare
         #diag(Dumper($pts->{$params[0]}));
         #12
         ok(($pts->{$params[0]}->{TYPE} == 12) ||
-               ($pts->{$params[0]}->{TYPE} == -9), 'char parameter (prepare)');
+               ($pts->{$params[0]}->{TYPE} == -9), 'char parameter (prepare)') or
+	       diag($pts->{$params[0]}->{TYPE});
     };
 }
 
