@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 14886 2011-06-11 06:35:39Z mjevans $
+# $Id: ODBC.pm 14890 2011-06-22 19:33:10Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.30_7';
+$DBD::ODBC::VERSION = '1.31';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.30_7';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 14886 2011-06-11 06:35:39Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 14890 2011-06-22 19:33:10Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -567,7 +567,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.30_7.
+This documentation refers to DBD::ODBC version 1.31.
 
 =head1 SYNOPSIS
 

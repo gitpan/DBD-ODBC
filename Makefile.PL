@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 14826 2011-04-06 08:23:32Z mjevans $
+# $Id: Makefile.PL 14890 2011-06-22 19:33:10Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -640,7 +640,7 @@ EOT
 	    # remove lib prefix and .so suffix so "-l" style link can be used
 	    $ilibname =~ s/^lib(odbc.*)\.\w+$/$1/;
 	    $opts{LIBS} = "-L$odbclibdir -l$ilibname";
-	    warn "Warning: LD_LIBRARY_PATH=$ENV{LD_LIBRARY_PATH} doesn't include $odbclibdir\n"
+	    warn "Warning: LD_LIBRARY_PATH=", ($ENV{LD_LIBRARY_PATH} ? $ENV{LD_LIBRARY_PATH} : ""), " doesn't include $odbclibdir\n"
 		unless (exists($ENV{LD_LIBRARY_PATH}) &&
                         ($ENV{LD_LIBRARY_PATH} =~ /\Q$odbclibdir/));
 	}

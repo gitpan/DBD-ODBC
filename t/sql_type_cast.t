@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: sql_type_cast.t 14870 2011-05-18 15:26:34Z mjevans $
+# $Id: sql_type_cast.t 14890 2011-06-22 19:33:10Z mjevans $
 #
 # Test sql_type_cast via DiscardString and StrictlyTyped
 #
@@ -34,6 +34,9 @@ my $dbh;
 BEGIN {
    if (!defined $ENV{DBI_DSN}) {
       plan skip_all => "DBI_DSN is undefined";
+   }
+   if ($DBI::VERSION < 1.611) {
+       plan skip_all => "DBI version is too old for this test";
    }
 }
 
