@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 14868 2011-05-18 08:58:51Z mjevans $
+ * $Id: dbdimp.h 14960 2011-10-22 15:30:16Z mjevans $
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
  * portions Copyright (c) 1994,1995,1996  Tim Bunce
@@ -65,6 +65,9 @@ struct imp_dbh_st {
     /* flag for executing SQLExecDirect instead of SQLPrepare and SQLExecute.
        Magic happens at SQLExecute() */
     int  odbc_exec_direct;
+    /* flag indicating if we should pass SQL_DRIVER_COMPLETE to
+       SQLDriverConnect */
+    int  odbc_driver_complete;
     /* use old unicode behaviour of binding varchar/longvarchar as SQL_CHAR */
     int odbc_old_unicode;
     /* used to disable describing paramters with SQLDescribeParam */
