@@ -1,5 +1,5 @@
 /*
- * $Id: unicode_helper.c 14417 2010-09-17 13:22:52Z mjevans $
+ * $Id: unicode_helper.c 15000 2011-11-15 16:09:32Z mjevans $
  */
 #ifdef WITH_UNICODE
 
@@ -188,7 +188,7 @@ UTF16 * WValloc(char * s)
         UTF16 *target_start, *target_end;
 
         slen = strlen(s);
-        /*printf("utf8 string \\%.20s\\ is %ld bytes long\n", s, strlen(s));*/
+        /*printf("utf8 string \\%.20s\\ is %d bytes long\n", s, slen);*/
 
         source_start = s;
         /* source_end needs to include NUL and be 1 past as ConvertUTF8toUTF17
@@ -395,7 +395,9 @@ static long utf16_len(UTF16 *wp)
 static void utf16_copy(UTF16 *d, UTF16 *s)
 {
     while(*s) {
+        /*printf("Copying %p %d\n", s, *s);*/
         *d++ = *s++;
     }
+    *d = 0;
 }
 #endif /* WITH_UNICODE */
