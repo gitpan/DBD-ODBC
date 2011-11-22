@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 70execute_array.t 14755 2011-03-16 17:35:44Z mjevans $
+# $Id: 70execute_array.t 15009 2011-11-18 19:59:13Z mjevans $
 # loads of execute_array and execute_for_fetch tests
 
 use Test::More;
@@ -373,6 +373,14 @@ sub row_wise
     clear_table($dbh, $table);
     $sth = $dbh->prepare(qq/insert into $table values(?,?)/);
     my $sth2 = $dbh->prepare(qq/select * from $table2/);
+    # some drivers issue warnings when mas fails and this causes
+    # Test::NoWarnings to output something when we already found
+    # the test failed and captured it.
+    # e.g., some ODBC drivers cannot do MAS and this test is then expected to
+    # fail but we ignore the failure. Unfortunately in failing DBD::ODBC will
+    # issue a warning in addition to the fail
+    $sth->{Warn} = 0;
+    $sth->{Warn} = 0;
     ok($sth2->execute, 'execute on second table') or diag($sth2->errstr);
     ok($sth2->{Executed}, 'second statement is in executed state');
     my $res = insert($dbh, $sth,

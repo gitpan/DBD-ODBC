@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 15000 2011-11-15 16:09:32Z mjevans $
+/* $Id: dbdimp.c 15010 2011-11-22 19:07:43Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -3931,7 +3931,6 @@ static int rebind_param(
              (phs->sql_type == SQL_WVARCHAR) &&
              (phs->requested_type == 0))) {
             column_size = 0;
-	    printf("HERE\n");
         }
     }
     /* for rt_38977 we get:
@@ -5498,7 +5497,11 @@ int ftype;
    imp_sth->statement = (char *)safemalloc(max_stmt_len);
    my_snprintf(imp_sth->statement, max_stmt_len, cSqlGetTypeInfo, ftype);
 
+#ifdef WITH_UNICODE
+   rc = SQLGetTypeInfoW(imp_sth->hstmt, (SQLSMALLINT)ftype);
+#else
    rc = SQLGetTypeInfo(imp_sth->hstmt, (SQLSMALLINT)ftype);
+#endif
 
    dbd_error(sth, rc, "odbc_get_type_info/SQLGetTypeInfo");
    if (!SQL_SUCCEEDED(rc)) {
