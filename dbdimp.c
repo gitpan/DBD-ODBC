@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 15010 2011-11-22 19:07:43Z mjevans $
+/* $Id: dbdimp.c 15016 2011-11-24 09:26:38Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -5804,6 +5804,122 @@ char *column;
             "column = %s\n",
             XXSAFECHAR(catalog), XXSAFECHAR(schema), XXSAFECHAR(table),
             XXSAFECHAR(column));
+    dbd_error(sth, rc, "odbc_columns/SQLColumns");
+
+    if (!SQL_SUCCEEDED(rc)) {
+        SQLFreeHandle(SQL_HANDLE_STMT,imp_sth->hstmt);
+        imp_sth->hstmt = SQL_NULL_HSTMT;
+        return 0;
+    }
+    return build_results(sth, dbh, rc);
+}
+
+
+
+int
+   odbc_db_columns2(dbh, sth, catalog, schema, table, column)
+   SV *dbh;
+SV *sth;
+SV *catalog;
+SV *schema;
+SV *table;
+SV *column;
+{
+    D_imp_dbh(dbh);
+    D_imp_sth(sth);
+    RETCODE rc;
+    int dbh_active;
+    size_t max_stmt_len;
+    char *acatalog = NULL;
+    char *aschema = NULL;
+    char *atable = NULL;
+    char *acolumn = NULL;
+    imp_sth->henv = imp_dbh->henv;	/* needed for dbd_error */
+    imp_sth->hdbc = imp_dbh->hdbc;
+
+    imp_sth->done_desc = 0;
+
+    if ((dbh_active = check_connection_active(dbh)) == 0) return 0;
+
+    rc = SQLAllocHandle(SQL_HANDLE_STMT, imp_dbh->hdbc, &imp_sth->hstmt);
+    if (rc != SQL_SUCCESS) {
+        dbd_error(sth, rc, "odbc_db_columns/SQLAllocHandle(stmt)");
+        return 0;
+    }
+
+    if (SvOK(catalog)) acatalog = SvPV_nolen(catalog);
+    if (SvOK(schema)) aschema = SvPV_nolen(schema);
+    if (SvOK(table)) atable = SvPV_nolen(table);
+    if (SvOK(column)) acolumn = SvPV_nolen(column);
+
+    /* just for sanity, later.  Any internals that may rely on this (including */
+    /* debugging) will have valid data */
+    max_stmt_len = strlen(cSqlColumns)+
+        strlen(XXSAFECHAR(acatalog))+
+        strlen(XXSAFECHAR(aschema))+
+        strlen(XXSAFECHAR(atable))+
+        strlen(XXSAFECHAR(acolumn))+1;
+
+    imp_sth->statement = (char *)safemalloc(max_stmt_len);
+
+    my_snprintf(imp_sth->statement, max_stmt_len,
+                cSqlColumns, XXSAFECHAR(acatalog), XXSAFECHAR(aschema),
+                XXSAFECHAR(atable), XXSAFECHAR(acolumn));
+
+#ifdef WITH_UNICODE
+   {
+       SQLWCHAR *wcatalog = NULL;
+       SQLWCHAR *wschema = NULL;
+       SQLWCHAR *wtable = NULL;
+       SQLWCHAR *wcolumn = NULL;
+       STRLEN wlen;
+       SV *copy;
+       int i;
+
+       if (SvOK(catalog)) {
+           copy = sv_mortalcopy(catalog);
+           SV_toWCHAR(copy);
+           wcatalog = (SQLWCHAR *)SvPV(copy, wlen);
+       }
+       if (SvOK(schema)) {
+           copy = sv_mortalcopy(schema);
+           SV_toWCHAR(copy);
+           wschema = (SQLWCHAR *)SvPV(copy, wlen);
+       }
+       if (SvOK(table)) {
+           copy = sv_mortalcopy(table);
+           SV_toWCHAR(copy);
+           wtable = (SQLWCHAR *)SvPV(copy, wlen);
+       }
+       if (SvOK(column)) {
+           copy = sv_mortalcopy(column);
+           SV_toWCHAR(copy);
+           wcolumn = (SQLWCHAR *)SvPV(copy, wlen);
+       }
+       rc = SQLColumnsW(imp_sth->hstmt,
+			(wcatalog && *wcatalog) ? wcatalog : NULL, SQL_NTS,
+			(wschema && *wschema) ? wschema : NULL, SQL_NTS,
+			(wtable && *wtable) ? wtable : NULL, SQL_NTS,
+			(wcolumn && *wcolumn) ? wcolumn : 0, SQL_NTS
+                      );
+   }
+#else
+   {
+       rc = SQLColumns(imp_sth->hstmt,
+		       (acatalog && *acatalog) ? acatalog : 0, SQL_NTS,
+		       (aschema && *aschema) ? aschema : 0, SQL_NTS,
+		       (atable && *atable) ? atable : 0, SQL_NTS,
+		       (acolumn && *acolumn) ? acolumn : 0, SQL_NTS);
+   }
+#endif /* WITH_UNICODE */
+
+    if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
+        PerlIO_printf(
+            DBIc_LOGPIO(imp_dbh),
+            "    SQLColumns call: cat = %s, schema = %s, table = %s, "
+            "column = %s\n",
+            XXSAFECHAR(acatalog), XXSAFECHAR(aschema), XXSAFECHAR(atable),
+            XXSAFECHAR(acolumn));
     dbd_error(sth, rc, "odbc_columns/SQLColumns");
 
     if (!SQL_SUCCEEDED(rc)) {

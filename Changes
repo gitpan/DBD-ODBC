@@ -2,11 +2,21 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2011-11-22 19:07:56 +0000 (Tue, 22 Nov 2011) $
+As of $LastChangedDate: 2011-11-24 09:26:38 +0000 (Thu, 24 Nov 2011) $
 
 $Revision: 10667 $
 
-=head2 Changes in DBD::ODBC 1.32_4 November XX 2011
+=head2 Changes in DBD::ODBC 1.32_5 November 24 2011
+
+  [ENHANCEMENTS]
+
+  * Enable multiple active statement support in 70execute_array.t for
+    drivers we recognise which support MAS.
+
+  * Change column_info to support Unicode catalog/schema/table/column
+    names.
+
+=head2 Changes in DBD::ODBC 1.32_4 November 22 2011
 
   [BUG FIXES]
 

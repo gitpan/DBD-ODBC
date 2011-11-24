@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 15009 2011-11-18 19:59:13Z mjevans $
+# $Id: ODBC.pm 15016 2011-11-24 09:26:38Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.32_4';
+$DBD::ODBC::VERSION = '1.32_5';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.32_4';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 15009 2011-11-18 19:59:13Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 15016 2011-11-24 09:26:38Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -180,7 +180,7 @@ $DBD::ODBC::VERSION = '1.32_4';
 	# create a "blank" statement handle
 	my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLColumns" });
 
-	_columns($dbh,$sth, $catalog, $schema, $table, $column)
+	_columns2($dbh,$sth, $catalog, $schema, $table, $column)
 	    or return;
 
 	return $sth;
@@ -568,7 +568,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.32_4.
+This documentation refers to DBD::ODBC version 1.32_5.
 
 =head1 SYNOPSIS
 
@@ -1812,7 +1812,8 @@ odbc_execdirect attribute.
 You cannot pass unicode catalog, schema, table and column names into
 metadata calls (like column_info) at present because the XS interface
 uses char * instead of Perl scalars. NOTE: as of DBD::ODBC 1.32_3 Unicode
-is fully supported for input parameters in table_info.
+is fully supported for input parameters in table_info. As of DBD::ODBC
+1.32_5 Unicode is fully supported for input parameters in column_info.
 
 You cannot use the iODBC driver manager with DBD::ODBC built for
 unicode.
