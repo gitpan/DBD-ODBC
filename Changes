@@ -2,9 +2,16 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2011-11-24 09:26:38 +0000 (Thu, 24 Nov 2011) $
+As of $LastChangedDate: 2011-12-11 16:07:07 +0000 (Sun, 11 Dec 2011) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC 1.34_1 December 11 2011
+
+  [ENHANCEMENTS]
+
+  * Added experimental execute_for_fetch support and associated
+    attributes odbc_batch_size and odbc_disable_array_operations.
 
 =head2 Changes in DBD::ODBC 1.33 December 1 2011
 
