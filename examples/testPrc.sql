@@ -1,4 +1,4 @@
--- $Id: testPrc.sql 93 2004-02-19 19:28:16Z jurl $
+-- $Id: testPrc.sql 11680 2008-08-28 08:23:27Z mjevans $
 --
 CREATE PROCEDURE  dbo.testPrc
 @parameter1 int = 22

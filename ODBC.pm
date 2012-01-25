@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 15047 2011-12-11 16:01:35Z mjevans $
+# $Id: ODBC.pm 15097 2012-01-25 19:32:08Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.34_1';
+$DBD::ODBC::VERSION = '1.34_2';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.34_1';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 15047 2011-12-11 16:01:35Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 15097 2012-01-25 19:32:08Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -534,10 +534,10 @@ $DBD::ODBC::VERSION = '1.34_1';
 
         $sth->trace_msg("execute_for_fetch($fetch_tuple_sub, " .
                             ($tuple_status ? $tuple_status : 'undef') .
-                                ") batch_size = $batch_size\n");
+                                ") batch_size = $batch_size\n", 4);
         # Use DBI's execute_for_fetch if ours is disabled
         if ($sth->FETCH('odbc_disable_array_operations')) {
-            $sth->trace_msg("array operations disabled\n");
+            $sth->trace_msg("array operations disabled\n", 4);
             my $sth = shift;
             return $sth->SUPER::execute_for_fetch(@_);
         }
@@ -553,14 +553,14 @@ $DBD::ODBC::VERSION = '1.34_1';
                 $finished = $fetch_tuple_sub->();
                 push @tuple_batch, [ @{$finished || last} ];
             }
-            $sth->trace_msg("Found " . scalar(@tuple_batch) . " rows\n");
+            $sth->trace_msg("Found " . scalar(@tuple_batch) . " rows\n", 4);
             last unless @tuple_batch;
             my $res = odbc_execute_for_fetch($sth,
 					     \@tuple_batch,
 					     scalar(@tuple_batch),
 					     $tuple_batch_status);
             $sth->trace_msg("odbc_execute_array returns " .
-                                ($res ? $res : 'undef') . "\n");
+                                ($res ? $res : 'undef') . "\n", 4);
 
             #print "odbc_execute_array XS returned $res\n";
             # count how many tuples were used
@@ -601,7 +601,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.34_1.
+This documentation refers to DBD::ODBC version 1.34_2.
 
 =head1 SYNOPSIS
 
@@ -1789,6 +1789,14 @@ you may hit memory limits. If you use DBI's execute_for_fetch
 DBD::ODBC uses the ODBC API SQLPutData (see L</odbc_putdata_start>)
 which does not require large amounts of memory as large columns are
 sent in pieces.
+
+=head3 type_info_all
+
+Many ODBC drivers now return 20 columns in type_info_all rather than
+the 19 DBI documents DBI documents. The 20th column is usually called
+"USERTYPE".  Recent MS SQL Server ODBC drivers do this. Fortunately
+this should adversely affect you so long as you are using the keys
+provided at the start of type_info_all.
 
 =head2 Unicode
 

@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_62033.t 15014 2011-11-23 20:21:31Z mjevans $
+# $Id: rt_62033.t 15090 2012-01-20 19:26:23Z mjevans $
 #
 # rt62033 - not really this rt but a bug discovered when looking in to it
 #
@@ -86,7 +86,7 @@ sub doit
 
     if (!$expect) {
         ok($@, 'Error for constraint - just inserted undef into not null column and it appeared to work');
-	note("For some drivers (freeTDS/MS SQL Server for Linux) there is no way out of this so expect further errors");
+        note("For some drivers (freeTDS/MS SQL Server for Linux) there is no way out of this so expect further errors");
     } else {
         ok(!$@, 'Execute ok') or diag($@);
     }

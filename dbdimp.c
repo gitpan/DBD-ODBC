@@ -1,9 +1,9 @@
-/* $Id: dbdimp.c 15045 2011-12-11 15:34:25Z mjevans $
+/* $Id: dbdimp.c 15094 2012-01-23 20:09:58Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
  * portions Copyright (c) 1997-2001 Jeff Urlwin
- * portions Copyright (c) 2007-2011 Martin J. Evans
+ * portions Copyright (c) 2007-2012 Martin J. Evans
  *
  * You may distribute under the terms of either the GNU General Public
  * License or the Artistic License, as specified in the Perl README file.
@@ -512,7 +512,7 @@ void dbd_db_destroy(SV *dbh, imp_dbh_t *imp_dbh)
 
 /*
  * quick dumb function to handle case insensitivity for DSN= or DRIVER=
- * in DSN...note this is becuase strncmpi is not available on all
+ * in DSN...note this is because strncmpi is not available on all
  * platforms using that name (VC++, Debian, etc most notably).
  * Note, also, strupr doesn't seem to have a standard name, either...
  */
@@ -645,7 +645,7 @@ int dbd_db_login6_sv(
       contains DSN or DRIVER, we've little choice but to call
       SQLDriverConnect and need to tag the uid/pwd on the end of the
       connection string (unless they already exist). */
-   if ((SvCUR(dbname) > SQL_MAX_DSN_LENGTH ||
+   if ((SvCUR(dbname) > SQL_MAX_DSN_LENGTH || /* too big for SQLConnect */
         dsnHasDriverOrDSN(SvPV_nolen(dbname))) &&
        !dsnHasUIDorPWD(SvPV_nolen(dbname))) {
 
@@ -1261,12 +1261,12 @@ void dbd_error2(
             if (err_rc == DBDODBC_INTERNAL_ERROR) {
                 strcpy(ErrorMsg, what);
                 strcpy(sqlstate, "HY000");
-		NativeError = 1;
+                NativeError = 1;
                 err_rc = SQL_ERROR;
             } else {
-	        ErrorMsg[ErrorMsgLen] = '\0';
-	        sqlstate[SQL_SQLSTATE_SIZE] = '\0';
-	    }
+                ErrorMsg[ErrorMsgLen] = '\0';
+                sqlstate[SQL_SQLSTATE_SIZE] = '\0';
+            }
             if (DBIc_TRACE(imp_dbh, DBD_TRACING, 0, 3)) {
                 PerlIO_printf(DBIc_LOGPIO(imp_dbh),
                               "    !SQLError(%p,%p,%p) = "
@@ -3327,6 +3327,10 @@ void dbd_st_destroy(SV *sth, imp_sth_t *imp_sth)
     if (imp_sth->out_params_av)
         sv_free((SV*)imp_sth->out_params_av);
 
+    if (imp_sth->param_status_array) {
+      Safefree(imp_sth->param_status_array);
+      imp_sth->param_status_array = NULL;
+    }
     if (imp_sth->all_params_hv) {
         HV *hv = imp_sth->all_params_hv;
         SV *sv;
@@ -6528,21 +6532,21 @@ static   HWND GetConsoleHwnd(void)
  */
 IV odbc_st_execute_for_fetch(
     SV *sth,
-    SV *tuples,
+    SV *tuples,			/* the actual data to bind */
     IV count,			/* count of rows */
-    SV *tuple_status)
+    SV *tuple_status)		/* returned tupe status */
 {
     D_imp_sth(sth);
     D_imp_xxh(sth);
     D_imp_dbh_from_sth;
     SQLRETURN rc;
-    AV *tuples_av, *tuples_status_av;
-    unsigned int p;
-    unsigned long *maxlen;
-    int n_params;
+    AV *tuples_av, *tuples_status_av; /* array ptrs for tuples and tuple_status */
+    unsigned int p;		      /* for loop through parameters */
+    unsigned long *maxlen;	/* array to store max size of each param */
+    int n_params;		/* number of parameters */
     unsigned int row;
     int err_seen = 0;		/* some row errored */
-    int remalloc_svs = 0;   /* remalloc the phs sv arrays */
+    int remalloc_svs = 0;	/* remalloc the phs sv arrays */
 
     if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
         TRACE2(imp_sth, "    +dbd_st_execute_for_fetch(%p) count=%"IVdf"\n",
@@ -6863,7 +6867,6 @@ IV odbc_st_execute_for_fetch(
         char sqlstate[SQL_SQLSTATE_SIZE+1];
         SQLINTEGER native;
         char msg[256];
-        SQLSMALLINT msg_len;
 
         /* NOTE, DBI says we fill tuple_status for each row with what execute
            returns - i.e., row count. It makes more sense for ODBC to fill
@@ -7010,7 +7013,7 @@ static int get_row_diag(SQLSMALLINT recno,
                              0,
                              NULL);
         if (SQL_SUCCEEDED(rc)) {
-	    /* Could return SQL_ROW_NUMBER_UNKNOWN or SQL_NO_ROW_NUMBER */
+            /* Could return SQL_ROW_NUMBER_UNKNOWN or SQL_NO_ROW_NUMBER */
             if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
                 PerlIO_printf(DBIc_LOGPIO(imp_sth), "     diag row=%ld\n", row);
 	    /* few drivers support SQL_DIAG_COLUMN_NUMBER - most return -1 unfortunately
@@ -7021,8 +7024,7 @@ static int get_row_diag(SQLSMALLINT recno,
 				 &col,
 				 0,
 				 NULL);
-				 printf("  row %d col %ld\n", row, col); */
-            if (row == (SQLLEN)recno) return 1;
+				 printf("  row %ld col %ld\n", row, col); */
         } else if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3)) {
             TRACE0(imp_sth, "SQLGetDiagField for SQL_DIAG_ROW_NUMBER failed");
         }

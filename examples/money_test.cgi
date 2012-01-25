@@ -1,5 +1,5 @@
 #!c:/programme/perl/bin/perl.exe -w
-# $Id: money_test.cgi 93 2004-02-19 19:28:16Z jurl $
+# $Id: money_test.cgi 11680 2008-08-28 08:23:27Z mjevans $
 
 
 use strict;				# activate for programming/debugging only

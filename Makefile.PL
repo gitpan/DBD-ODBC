@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 15031 2011-12-01 19:11:16Z mjevans $
+# $Id: Makefile.PL 15089 2012-01-20 19:24:56Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -396,8 +396,7 @@ EOT
             print "odbc_config not found - " .
                 "ok, there are other things I can do\n";
 
-            print "Still trying to guess ODBCHOME - " .
-                "looking for headers now\n";
+            print "Still trying to guess ODBCHOME - looking for headers now\n";
             $odbchome = find_dm_hdr_files();
         }
     }
@@ -428,7 +427,7 @@ EOT
         exit 0;
     }
     die "odbc home ($odbchome) does not refer to a directory.\n"
-	unless -d $odbchome;
+        unless -d $odbchome;
     warn "Using ODBCHOME $odbchome\n";
 
     # $odbcincdir and $odbclibdir will only be set at this point if we
@@ -472,7 +471,10 @@ EOT
     # This is to cater for those insane situations when someone had libiodbc
     # and unixODBC binary packages installed but unixODBC dev package
     # e.g. some people on Debian/Ubuntu
-    if ($opt_x && !$myodbc) {
+    #
+    # PERL_DBD_ODBC_PREFER_UNIXODBC  added for Caelum/Rafael for automated
+    # installs/upgrades from cpan clients
+    if (!$myodbc && ($opt_x || $ENV{PERL_DBD_ODBC_PREFER_UNIXODBC})) {
         ($myodbc, $odbclibdir) = find_unixodbc($odbchome);
     } else {
         ($myodbc, $odbclibdir) = find_iodbc($odbchome) if !$myodbc;
@@ -1067,7 +1069,7 @@ sub find_iodbc
     for my $d(@dirs) {
         print "  Looking for iODBC libs in $d\n";
         my @found;
-        if (@found = glob "$d/*iodbc*") {
+        if (@found = glob "$d/libiodbc*") {
             print "    Found iODBC libs ", join(",", @found), " in $d\n";
             return ('iodbc', $d);
         }
@@ -1092,7 +1094,7 @@ sub find_unixodbc
     for my $d(@dirs) {
         my @found;
         print "  Looking for unixODBC libs in $d\n";
-        if (@found = glob "$d/*odbc*") {
+        if (@found = glob "$d/libodbc*") {
             print "    Found unixODBC libs ", join(",", @found), " in $d\n";
             return ('unixodbc', $d);
         }
