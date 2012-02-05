@@ -8,7 +8,7 @@ DBD::ODBC::FAQ - Frequently Asked Questions for DBD::ODBC
 
 =head1 VERSION
 
-($Revision: 14961 $)
+($Revision: 15115 $)
 
 =head1 QUESTIONS
 
@@ -1175,10 +1175,25 @@ attributes like TYPE the first time you use them.
 
 I reported this issue at http://tracker.firebirdsql.org/browse/ODBC-122.
 
-=head1 AUTHOR
+=head2 Why do I get "symbol lookup error for SQLAllocHandle" on Ubuntu/Debian?
 
-Parts of this document were written by Tim Bunce,
-Jeff Urlwin and Martin J. Evans.
+You've probably got iODBC installed and the Makefile.PL found it before
+unixODBC but on some Ubuntu and Debian distributions iODBC is not installed
+with the symbolic link libiodbc.so e.g., /usr/lib contains
+
+lrwxrwxrwx 1 root root     22 2011-01-04 20:00 libiodbcinst.so.2 -> libiodbcinst.so.2.1.18
+-rw-r--r-- 1 root root  67140 2009-11-11 00:42 libiodbcinst.so.2.1.18
+lrwxrwxrwx 1 root root     18 2011-01-04 20:00 libiodbc.so.2 -> libiodbc.so.2.1.18
+-rw-r--r-- 1 root root 305108 2009-11-11 00:42 libiodbc.so.2.1.18
+
+but no libiodbc.so. You could create the symbolic link:
+
+cd /usr/lib
+sudo ln -s libiodbc.so.2 libiodbc.so
+
+however, you'll probably have other problems so better to use
+unixODBC. Ensure you've installed unixodbc and unixodbc-dev packages
+and re-run Makefile.PL with the -x argument to prefer unixODBC.
 
 =head2 How do I set the application and workstation names for MS SQL Server?
 
@@ -1195,6 +1210,30 @@ To set these add these attributes to the call to DBIs connect like this:
 
   my $h = DBI->connect('dbi:ODBC:DSN=mydsn;APP=appname;WSID=wsname',
                        'dbuser', 'dbpass');
+
+=head2 Why do I get "The specified DSN contains an architecture mismatch between the Driver and Application" on Windows?
+
+You've got a 64 bit Windows.
+
+Your attempting to connect to a SYSTEM DSN.
+
+You are trying to connect to a 64bit SYSTEM DSN from a 32 bit
+application or vice versa. See my initial experience
+http://www.martin-evans.me.uk/node/81.
+
+More confusing is if you use the data_sources method, that calls
+SQLDataSources and the list returned matches the architecture of your
+Perl binary and yet when you attempt to connect to a DSN for the
+wrong architecture you get this error instead of the more sensible
+(and usual) data source not found.
+
+NOTE: User DSNs don't exhibit this - they just seem to pick the right
+driver.
+
+=head1 AUTHOR
+
+Parts of this document were written by Tim Bunce,
+Jeff Urlwin and Martin J. Evans.
 
 =head1 LICENSE
 

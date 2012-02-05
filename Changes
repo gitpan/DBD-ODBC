@@ -2,11 +2,41 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-01-25 19:32:08 +0000 (Wed, 25 Jan 2012) $
+As of $LastChangedDate: 2012-02-03 20:10:24 +0000 (Fri, 03 Feb 2012) $
 
 $Revision: 10667 $
 
-=head2 Changes in DBD::ODBC 1.34_2 January NN 2011
+=head2 Changes in DBD::ODBC 1.34_4 February 5 2012
+
+  [BUG FIXES]
+
+  * When odbc_getdiag* methods were added they installed themselves
+    into DBI but did not set IMP_KEEP_ERR so calling them cleared
+    DBI's errors.
+
+=head2 Changes in DBD::ODBC 1.34_3 February 3 2012
+
+  [BUG FIXES]
+
+  * Linking against unixODBC was working by accident on most UNIX
+    machines and depended on the order of the files in /usr/lib (or
+    wherever) and what files there were (e.g. an archive or a shared
+    object). Same applied to iODBC but it was more broken especially
+    on machines where libiodbc.so.N.N existed but there was no
+    libiodbc.so which could lead to no adding the shared object at
+    all. I doubt anyone really noticed this but I did eventually on
+    Ubuntu where libiodbc.so.N.N existed but libiodbc.so did not.
+
+  [ENHANCEMENTS]
+
+  * Added experimental odbc_getdiagrec and odbc_getdiagrec methods,
+    examples/odbc_diag.pl and examples/params_in_error.pl.
+
+  [DOCUMENTATION]
+
+  * New FAQ entries.
+
+=head2 Changes in DBD::ODBC 1.34_2 January 25 2012
 
   [BUG FIXES]
 

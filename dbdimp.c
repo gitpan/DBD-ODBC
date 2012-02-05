@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 15094 2012-01-23 20:09:58Z mjevans $
+/* $Id: dbdimp.c 15125 2012-02-03 20:10:24Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -3083,13 +3083,15 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
                  */
                 imp_sth->moreResults = 0;
                 /* XXX need to 'finish' here */
-                dbd_st_finish(sth, imp_sth);
+                /*dbd_st_finish(sth, imp_sth);*/
                 return Nullav;
             }
         } else {
             dbd_error(sth, rc, "st_fetch/SQLFetch");
             /* XXX need to 'finish' here */
-            dbd_st_finish(sth, imp_sth);
+            /* MJE commented out the following in 1.34_3 as it prevents
+               calling odbc_get
+            /*dbd_st_finish(sth, imp_sth);*/
             return Nullav;
         }
     }
@@ -7013,7 +7015,7 @@ static int get_row_diag(SQLSMALLINT recno,
                              0,
                              NULL);
         if (SQL_SUCCEEDED(rc)) {
-            /* Could return SQL_ROW_NUMBER_UNKNOWN or SQL_NO_ROW_NUMBER */
+	    /* Could return SQL_ROW_NUMBER_UNKNOWN or SQL_NO_ROW_NUMBER */
             if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
                 PerlIO_printf(DBIc_LOGPIO(imp_sth), "     diag row=%ld\n", row);
 	    /* few drivers support SQL_DIAG_COLUMN_NUMBER - most return -1 unfortunately
@@ -7024,7 +7026,8 @@ static int get_row_diag(SQLSMALLINT recno,
 				 &col,
 				 0,
 				 NULL);
-				 printf("  row %ld col %ld\n", row, col); */
+				 printf("  row %d col %ld\n", row, col); */
+            if (row == (SQLLEN)recno) return 1;
         } else if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3)) {
             TRACE0(imp_sth, "SQLGetDiagField for SQL_DIAG_ROW_NUMBER failed");
         }

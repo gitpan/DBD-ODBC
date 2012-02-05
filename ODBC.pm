@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 15097 2012-01-25 19:32:08Z mjevans $
+# $Id: ODBC.pm 15125 2012-02-03 20:10:24Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.34_2';
+$DBD::ODBC::VERSION = '1.34_4';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.34_2';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 15097 2012-01-25 19:32:08Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 15125 2012-02-03 20:10:24Z mjevans $, 13,2);
 
     require_version DBI 1.21;
 
@@ -42,6 +42,30 @@ $DBD::ODBC::VERSION = '1.34_2';
     $errstr = q{};              # holds error string for DBI::errstr
     $sqlstate = "00000";
     $drh = undef;       # holds driver handle once initialised
+
+    use constant {
+        # header fields in SQLGetDiagField:
+        SQL_DIAG_CURSOR_ROW_COUNT => -1249,
+        SQL_DIAG_DYNAMIC_FUNCTION => 7,
+        SQL_DIAG_DYNAMIC_FUNCTION_CODE => 12,
+        SQL_DIAG_NUMBER => 2,
+        SQL_DIAG_RETURNCODE => 1,
+        SQL_DIAG_ROW_COUNT => 3,
+        # record fields in SQLGetDiagField:
+        SQL_DIAG_CLASS_ORIGIN => 8,
+        SQL_DIAG_COLUMN_NUMBER => -1247,
+        SQL_DIAG_CONNECTION_NAME => 10,
+        SQL_DIAG_MESSAGE_TEXT => 6,
+        SQL_DIAG_NATIVE => 5,
+        SQL_DIAG_ROW_NUMBER => -1248,
+        SQL_DIAG_SERVER_NAME => 11,
+        SQL_DIAG_SQLSTATE => 4,
+        SQL_DIAG_SUBCLASS_ORIGIN => 9
+    };
+    our @EXPORT_DIAGS = qw(SQL_DIAG_CURSOR_ROW_COUNT SQL_DIAG_DYNAMIC_FUNCTION SQL_DIAG_DYNAMIC_FUNCTION_CODE SQL_DIAG_NUMBER SQL_DIAG_RETURNCODE SQL_DIAG_ROW_COUNT SQL_DIAG_CLASS_ORIGIN SQL_DIAG_COLUMN_NUMBER SQL_DIAG_CONNECTION_NAME SQL_DIAG_MESSAGE_TEXT SQL_DIAG_NATIVE SQL_DIAG_ROW_NUMBER SQL_DIAG_SERVER_NAME SQL_DIAG_SQLSTATE SQL_DIAG_SUBCLASS_ORIGIN);
+    our @EXPORT_OK = (@EXPORT_DIAGS);
+    our %EXPORT_TAGS = (
+        diags => \@EXPORT_DIAGS);
 
     sub parse_trace_flag {
         my ($class, $name) = @_;
@@ -56,23 +80,28 @@ $DBD::ODBC::VERSION = '1.34_2';
     }
 
     sub driver{
-	return $drh if $drh;
-	my($class, $attr) = @_;
+        return $drh if $drh;
+        my($class, $attr) = @_;
 
-	$class .= "::dr";
+        $class .= "::dr";
 
-	# not a 'my' since we use it above to prevent multiple drivers
+        # not a 'my' since we use it above to prevent multiple drivers
 
-	$drh = DBI::_new_drh($class, {
-	    'Name' => 'ODBC',
-	    'Version' => $VERSION,
-	    'Err'    => \$DBD::ODBC::err,
-	    'Errstr' => \$DBD::ODBC::errstr,
-	    'State' => \$DBD::ODBC::sqlstate,
-	    'Attribution' => 'DBD::ODBC by Jeff Urlwin, Tim Bunce and Martin J. Evans',
+        $drh = DBI::_new_drh($class, {
+            'Name' => 'ODBC',
+            'Version' => $VERSION,
+            'Err'    => \$DBD::ODBC::err,
+            'Errstr' => \$DBD::ODBC::errstr,
+            'State' => \$DBD::ODBC::sqlstate,
+            'Attribution' => 'DBD::ODBC by Jeff Urlwin, Tim Bunce and Martin J. Evans',
 	    });
         DBD::ODBC::st->install_method("odbc_lob_read");
-	return $drh;
+        # don't clear errors - IMA_KEEP_ERR = 0x00000004
+        DBD::ODBC::st->install_method("odbc_getdiagrec", { O=>0x00000004 });
+        DBD::ODBC::db->install_method("odbc_getdiagrec", { O=>0x00000004 });
+        DBD::ODBC::db->install_method("odbc_getdiagfield", { O=>0x00000004 });
+        DBD::ODBC::st->install_method("odbc_getdiagfield", { O=>0x00000004 });
+        return $drh;
     }
 
     sub CLONE { undef $drh }
@@ -601,7 +630,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.34_2.
+This documentation refers to DBD::ODBC version 1.34_4.
 
 =head1 SYNOPSIS
 
@@ -960,6 +989,76 @@ situation was very specific since dates were being bound as dates when
 SQLDescribeParam was called and chars without and the data format was
 not a supported date format.
 
+=head2 Private methods common to connection and statement handles
+
+=head3 odbc_getdiagrec
+
+  @diags = $handle->odbc_getdiagrec($record_number);
+
+NOTE: This is an experimental method and may change.
+
+Introduced in 1.34_3.
+
+This is just a wrapper around the ODBC API SQLGetDiagRec. When a
+method on a connection or statement handle fails if there are any ODBC
+diagnostics you can use this method to retrieve them. Records start at
+1 and there may be more than 1. It returns an array containing the
+state, native and error message text or an empty array if the requested
+diagnostic record does not exist. To get all diagnostics available
+keep incrementing $record_number until odbc_getdiagrec returns an
+empty array.
+
+All of the state, native and message text are already passed to DBI
+via its set_err method so this method does not really tell you
+anything you cannot already get from DBI except when there is more
+than one diagnostic.
+
+You may find this useful in an error handler as you can get the ODBC
+diagnostics as they are and not how DBD::ODBC was forced to fit them
+into the DBI's system.
+
+NOTE: calling this method does not clear DBI's error values as usually
+happens.
+
+=head3 odbc_getdiagrec
+
+  $diag = $handle->odbc_getdiagfield($record, $identifier);
+
+NOTE: This is an experimental method and may change.
+
+This is just a wrapper around the ODBC API SQLGetDiagField. When a
+method on a connection or statement handle fails if there are any
+ODBC diagnostics you can use this method to retrieve the individual
+diagnostic fields. As with L</odbc_getdiagrec> records start at 1. The
+identifier is one of:
+
+  SQL_DIAG_CURSOR_ROW_COUNT
+  SQL_DIAG_DYNAMIC_FUNCTION
+  SQL_DIAG_DYNAMIC_FUNCTION_CODE
+  SQL_DIAG_NUMBER
+  SQL_DIAG_RETURNCODE
+  SQL_DIAG_ROW_COUNT
+  SQL_DIAG_CLASS_ORIGIN
+  SQL_DIAG_COLUMN_NUMBER
+  SQL_DIAG_CONNECTION_NAME
+  SQL_DIAG_MESSAGE_TEXT
+  SQL_DIAG_NATIVE
+  SQL_DIAG_ROW_NUMBER
+  SQL_DIAG_SERVER_NAME
+  SQL_DIAG_SQLSTATE
+  SQL_DIAG_SUBCLASS_ORIGIN
+
+DBD::ODBC exports these constants as 'diags' e.g.,
+
+  use DBD::ODBC qw(:diags);
+
+Of particular interest is SQL_DIAG_COLUMN_NUMBER as it will tell you
+which bound column or parameter is in error (assuming your driver
+supports it). See params_in_error in the examples dir.
+
+NOTE: calling this method does not clear DBI's error values as usually
+happens.
+
 =head2 Private connection attributes
 
 =head3 odbc_err_handler
@@ -1244,6 +1343,24 @@ with using DBI's default implementation. If these difference cause you
 a problem you can set odbc_disable_array_operations to true and DBD::ODBC
 will revert to DBI's implementations of the array methods.
 
+=head2 Private statement attributes
+
+=head3 odbc_more_results
+
+Use this attribute to determine if there are more result sets
+available.  SQL Server supports this feature.  Use this as follows:
+
+  do {
+     my @row;
+     while (@row = $sth->fetchrow_array()) {
+        # do stuff here
+     }
+  } while ($sth->{odbc_more_results});
+
+Note that with multiple result sets and output parameters (i.e,. using
+bind_param_inout), don't expect output parameters to be bound until ALL
+result sets have been retrieved.
+
 =head2 Private statement methods
 
 =head3 odbc_lob_read
@@ -1300,24 +1417,6 @@ NOTE: If your select contains multiple lobs you cannot read part of
 the first lob, the second lob then return to the first lob. You must
 read all lobs in order and completely or read part of a lob and then
 do no further calls to odbc_lob_read.
-
-=head2 Private statement attributes
-
-=head3 odbc_more_results
-
-Use this attribute to determine if there are more result sets
-available.  SQL Server supports this feature.  Use this as follows:
-
-  do {
-     my @row;
-     while (@row = $sth->fetchrow_array()) {
-        # do stuff here
-     }
-  } while ($sth->{odbc_more_results});
-
-Note that with multiple result sets and output parameters (i.e,. using
-bind_param_inout), don't expect output parameters to be bound until ALL
-result sets have been retrieved.
 
 =head2 Private DBD::ODBC Functions
 
@@ -1735,7 +1834,7 @@ SQLDisconnect returns state 25000 (transaction in progress).
 
 =head3 execute_for_fetch and execute_array
 
-From version 1.34_01 DBD::ODBC implements its own execute_for_fetch
+From version 1.34_1 DBD::ODBC implements its own execute_for_fetch
 which binds arrays of parameters and can send multiple rows
 (L</odbc_batch_size>) of parameters through the ODBC driver in one go
 (this overrides DBI's default execute_for_fetch). This is much faster
