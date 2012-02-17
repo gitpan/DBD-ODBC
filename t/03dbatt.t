@@ -1,5 +1,5 @@
 #!perl -w -I./t
-# $Id: 03dbatt.t 12168 2008-12-16 09:48:08Z mjevans $
+# $Id: 03dbatt.t 15144 2012-02-13 09:23:24Z mjevans $
 
 use Test::More;
 use strict;
@@ -109,7 +109,7 @@ $rows = 0;
 $dbh->{PrintError} = 0;
 my @tables = $dbh->tables;
 
-cmp_ok($#tables, '>', 0, "tables returns array");
+cmp_ok(@tables, '>', 0, "tables returns array");
 $rows = 0;
 if ($sth = $dbh->column_info(undef, undef, $ODBCTEST::table_name, undef)) {
     while (@row = $sth->fetchrow()) {

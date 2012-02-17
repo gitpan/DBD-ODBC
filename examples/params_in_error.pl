@@ -1,4 +1,4 @@
-# $Id: params_in_error.pl 15125 2012-02-03 20:10:24Z mjevans $
+# $Id: params_in_error.pl 15129 2012-02-05 12:59:18Z mjevans $
 #
 # Code to demonstrate new (experimental) odbc_getdiag* and how you can find
 # the bound parameter/column in error

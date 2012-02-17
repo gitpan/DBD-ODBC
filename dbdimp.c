@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 15125 2012-02-03 20:10:24Z mjevans $
+/* $Id: dbdimp.c 15166 2012-02-16 21:01:43Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -1335,10 +1335,12 @@ void dbd_error2(
             if (DBIc_TRACE(imp_xxh, DBD_TRACING, 0, 3))
                 TRACE1(imp_dbh,
                        "    !!SQLError returned %d unexpectedly.\n", rc);
-            DBIh_SET_ERR_CHAR(
-                h, imp_xxh, Nullch, 1,
-                "    Unable to fetch information about the error",
-                "IM008", Nullch);
+            if (!PL_dirty) {           /* not in global destruction */
+                DBIh_SET_ERR_CHAR(
+                    h, imp_xxh, Nullch, 1,
+                    "    Unable to fetch information about the error",
+                    "IM008", Nullch);
+            }
         }
         /* climb up the tree each time round the loop		*/
         if (hstmt != SQL_NULL_HSTMT) hstmt = SQL_NULL_HSTMT;
@@ -2658,11 +2660,11 @@ int dbd_st_execute(
         TRACE1(imp_dbh, "    +dbd_st_execute(%p)\n", sth);
 
     if (SQL_NULL_HDBC == imp_dbh->hdbc) {
-		DBIh_SET_ERR_CHAR(sth, imp_xxh, Nullch, 1,
+        DBIh_SET_ERR_CHAR(sth, imp_xxh, Nullch, 1,
                           "Database handle has been disconnected",
                           Nullch, Nullch);
-		return -2;
-	}
+	return -2;
+    }
 
     /*
      * if the handle is active, we need to finish it here.
@@ -2983,7 +2985,16 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
     /* that dbd_describe() executed sucessfuly so the memory buffers	*/
     /* are allocated and bound.						*/
     if ( !DBIc_ACTIVE(imp_sth) ) {
-        dbd_error(sth, DBDODBC_INTERNAL_ERROR, "no select statement currently executing");
+      /*dbd_error(sth, DBDODBC_INTERNAL_ERROR, "no select statement currently executing");*/
+	/* The following issues a warning (instead of the error above)
+	   when a selectall_* did not actually return a result-set e.g.,
+	   if someone passed a create table to selectall_*. There is some
+	   debate as to what should happen here. 
+	   See http://www.nntp.perl.org/group/perl.dbi.dev/2011/06/msg6606.html
+	   and rt 68720  and rt_68720.t */
+	  DBIh_SET_ERR_CHAR(sth, imp_xxh,
+		   "0", 0, "no select statement currently executing", "", "fetch");
+
         return Nullav;
     }
 
@@ -3265,12 +3276,11 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
                 return Nullav;
             }
         }
-#endif /* DBISTATE_VERSION > 94 */
+#endif /* DBIXS_REVISION > 13590 */
 
     } /* end of loop through bound columns */
     return av;
 }
-
 
 
 

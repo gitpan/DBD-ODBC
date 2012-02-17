@@ -101,6 +101,7 @@ t/40UnicodeRoundTrip.t
 t/41Unicode.t
 t/50_odbc_utf8_on.t
 t/70execute_array.t
+t/80_odbc_diags.t
 t/ODBCTEST.pm
 t/UChelp.pm
 t/pod.t
@@ -119,7 +120,6 @@ t/rt_62033.t
 t/rt_63550.t
 t/sql_type_cast.t
 t/odbc_describe_parameter.t
-t/rt_68720.t
 unicode_helper.c
 unicode_helper.h
 if_you_are_taking_over_this_code.txt

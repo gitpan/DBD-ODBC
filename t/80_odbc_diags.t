@@ -1,6 +1,6 @@
-# $Id: odbc_diag.pl 15139 2012-02-11 11:32:30Z mjevans $
+# $Id: 80_odbc_diags.t 15158 2012-02-14 20:59:34Z mjevans $
 #
-# Demonstrate the experimental odbc_getdiagrec and odbc_getdiagfield
+# Test the experimental odbc_getdiagrec and odbc_getdiagfield
 #
 use strict;
 use warnings;
@@ -8,6 +8,16 @@ use DBI;
 use Data::Dumper;
 use Test::More;
 use DBD::ODBC qw(:diags);
+
+my $has_test_nowarnings = 1;
+eval "require Test::NoWarnings";
+$has_test_nowarnings = undef if $@;
+
+BEGIN {
+   if (!defined $ENV{DBI_DSN}) {
+      plan skip_all => "DBI_DSN is undefined";
+   }
+}
 
 # header fields:
 #define SQL_DIAG_CURSOR_ROW_COUNT			(-1249)
@@ -38,30 +48,36 @@ sub get_fields {
     foreach (@hdr_fields, @record_fields) {
         eval {
             my $x = $h->odbc_getdiagfield($record, $_);
-            diag("$_ = " . ($x ? $x : 'undef') . "\n");
+            note("$_ = " . ($x ? $x : 'undef') . "\n");
         };
         if ($@) {
-            diag("diag field $_ errored\n");
+            note("diag field $_ errored\n");
         }
     }
 }
 
-my $h = DBI->connect("dbi:ODBC:DSN=SQLite",undef,undef,
-                     {RaiseError => 1, PrintError => 0});
+my $h = DBI->connect();
+unless($h) {
+   BAIL_OUT("Unable to connect to the database ($DBI::errstr)\nTests skipped.\n");
+   exit 0;
+}
+$h->{RaiseError} = 1;
+$h->{PrintError} = 0;
+
 my ($s, @diags);
 
 @diags = $h->odbc_getdiagrec(1);
 is(scalar(@diags), 0, 'no dbh diags after successful connect') or explain(@diags);
 
 my $ok = eval {
-    $h->get_info(9999);
+    $h->get_info(9999);		# should fail as there is no 9999 info value
     1;
 };
 
 ok(!$ok, "SQLGetInfo fails");
 @diags = $h->odbc_getdiagrec(1);
 is(scalar(@diags), 3, '   and 3 diag fields returned');
-diag(Data::Dumper->Dump([\@diags], [qw(diags)]));
+note(Data::Dumper->Dump([\@diags], [qw(diags)]));
 
 get_fields($h, 1);
 
@@ -78,8 +94,11 @@ ok(!$ok, "select on non-existant table fails");
 my $hd = $s || $h;
 @diags = $hd->odbc_getdiagrec(1);
 is(scalar(@diags), 3, '   and 3 diag fields returned');
-diag(Data::Dumper->Dump([\@diags], [qw(diags)]));
+note(Data::Dumper->Dump([\@diags], [qw(diags)]));
 
 get_fields($hd, 1);
+
+Test::NoWarnings::had_no_warnings()
+  if ($has_test_nowarnings);
 
 done_testing();

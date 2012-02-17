@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: odbc_describe_parameter.t 14885 2011-06-07 18:34:55Z mjevans $
+# $Id: odbc_describe_parameter.t 15144 2012-02-13 09:23:24Z mjevans $
 #
 # Test odbc_describe_parameters
 # Should default to on but you can turn it off in the prepare or at the
@@ -102,9 +102,12 @@ sub default
         #7
         # for drivers which don't have SQLDescribeParam the type will
         # be defaulted to SQL_VARCHAR or SQL_WVARCHAR
-        ok(($pts->{$params[0]}->{TYPE} == 4) ||
-           ($pts->{$params[0]}->{TYPE} == -9) ||
-           ($pts->{$params[0]}->{TYPE} == 12), 'integer parameter');
+        ok(($pts->{$params[0]}->{TYPE} == SQL_INTEGER) ||
+           ($pts->{$params[0]}->{TYPE} == SQL_LONGVARCHAR) ||
+           ($pts->{$params[0]}->{TYPE} == SQL_WLONGVARCHAR) ||
+           ($pts->{$params[0]}->{TYPE} == SQL_WVARCHAR) ||
+           ($pts->{$params[0]}->{TYPE} == SQL_VARCHAR), 'integer parameter')
+            or diag("Param type: " . $pts->{$params[0]}->{TYPE});
     };
 
 
