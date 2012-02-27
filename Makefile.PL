@@ -221,7 +221,7 @@ if ($opt_g) {
    }
 }
 if ($opt_w) {
-    $opts{CCFLAGS} = '-Wint-to-pointer-cast -fno-strict-aliasing';
+    $opts{CCFLAGS} = '-Wall -Wint-to-pointer-cast -fno-strict-aliasing';
 }
 if (defined($opt_u) && $opt_u) {
     $opts{DEFINE} .= ' -DWITH_UNICODE';
