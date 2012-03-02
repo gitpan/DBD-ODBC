@@ -2,9 +2,16 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-02-17 14:42:44 +0000 (Fri, 17 Feb 2012) $
+As of $LastChangedDate: 2012-02-27 09:09:09 +0000 (Mon, 27 Feb 2012) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC 1.34_7 March 2 2012
+
+  [BUG FIXES]
+
+  * Fixed more compiler errors highlighed by a smoker using MS Visual
+    C where some code come before a variable definition.
 
 =head2 Changes in DBD::ODBC 1.34_6 February 27 2012
 
