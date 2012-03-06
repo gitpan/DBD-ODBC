@@ -2,9 +2,13 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-02-27 09:09:09 +0000 (Mon, 27 Feb 2012) $
+As of $LastChangedDate: 2012-03-02 11:09:04 +0000 (Fri, 02 Mar 2012) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC 1.35 March 6 2012
+
+  Full release of the 1.34 development releases
 
 =head2 Changes in DBD::ODBC 1.34_7 March 2 2012
 
