@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 12blob.t 12744 2009-05-05 13:07:46Z mjevans $
+# $Id: 12blob.t 15226 2012-03-17 08:33:35Z mjevans $
 #
 # blob tests
 # currently tests you can insert a clob with various odbc_putdata_start settings
@@ -71,7 +71,7 @@ while (my @row = $sth->fetchrow) {
     }
 }
 SKIP: {
-    skip "ODBC Driver/Database has not got a big enough type", 18
+    skip "ODBC Driver/Database has not got a big enough type", 21
         if (!$type_name);
 
     #diag("Using type $type_name");

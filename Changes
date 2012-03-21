@@ -2,9 +2,81 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-03-02 11:09:04 +0000 (Fri, 02 Mar 2012) $
+As of $LastChangedDate: 2012-03-21 14:28:06 +0000 (Wed, 21 Mar 2012) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC 1.36_1 March 21 2012
+
+  [BUG FIXES]
+
+  * Fixed 12blob.t skip count when driver does not have a big enough
+    varchar column to run the test.
+
+  * Work around problems hit during the test suite in DB2 driver which
+    only allows rows of size up to the page size and varchars of 4K.
+
+  * Fix bug in execute_for_fetch where it would ignore the parameters
+    processed when creating the ArrayTupleStatus and hence could
+    attempt to call SQLGetDiagRec on a parameter row which was not
+    executed. See the logs in rt 75687 which show this although this
+    is not a fix for this rt.
+
+  * The code wasn't catching success with info from SQLExecute in
+    execute_for_fetch.
+
+  * Add support for drivers (DB2 in this case) which return
+    SQL_PARAM_DIAG_UNAVAILABLE in bound parameter status array when
+    running execute_for_fetch. Any driver returning doing
+    SQL_PARC_NO_BATCH from SQLGetInfo(SQL_PARAM_ARRAY_ROW_COUNTS)
+    might do this.
+
+  * Fix test code for execute_for_fetch to a) handle drivers doing
+    SQL_PARC_NO_BATCH and b) add "not null" to primary key fields for
+    drivers like DB2 which require it.
+
+  [CHANGE IN BEHAVIOUR]
+
+  * In execute_for_fetch set the parameter status array to all 9999
+    (which is invalid) so we can see if the ODBC driver actually sets
+    them and we can warn if they don't.
+
+  * For freeTDS default odbc_disable_array_operations to 1 as no
+    version of the freeTDS driver can be found that works. I was
+    requested to do this by the dbix-class guys. I may revert this
+    later if freeTDS is fixed.
+
+  * as above for MS Access. It is a shame I cannot find any way of
+    finding out if a driver is capable of array operations.
+
+  [ENHANCEMENTS]
+
+  * execute_for_fetch code now checks the
+    ODBC_DISABLE_ARRAY_OPERATIONS environment variable which can
+    be set to 1 or 0 to override the internal default.
+
+  [DOCUMENTATION]
+
+  * Fixed ColAttributes example in pod which used a $dbh instead of a
+    $sth.
+
+  * Fixed DescribeCol example in pod which used a $dbh instead of a
+    $sth.
+
+  * new FAQ on SQLRowCount, freeTDS and execute_for_fetch
+
+  * Fix typo shown in rt 75860.
+
+  [OTHER]
+
+  * Reduced usage of D_imp_xxx to avoid calls to dbih_getcom2.  See
+    thread on dbi-dev at
+    http://www.mail-archive.com/dbi-dev@perl.org/msg06675.html
+
+  * Changed the 70execute_array.t test to run it twice, once using
+    DBI's methods and once using the native one in DBD::ODBC.
+
+  * Made the 2 unicode tests work with DB2 ODBC driver.
 
 =head2 Changes in DBD::ODBC 1.35 March 6 2012
 
@@ -53,7 +125,7 @@ $Revision: 10667 $
 
   [DOCUMENTATION]
 
-  * dbc_getdiagfield was incorrectly named odbc_getdiagrec in the pod
+  * odbc_getdiagfield was incorrectly named odbc_getdiagrec in the pod
 
   * add DBI version required for StrictlyTyped and DiscardString to
     pod

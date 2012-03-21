@@ -19,7 +19,8 @@ examples/column_info.pl
 examples/DbiTest.pl
 examples/DbiTest2.pl
 examples/dml_counts.pl
-examples/execute_for_fetch.pl
+examples/execute_for_dbi.pl
+examples/execute_for_native.pl
 examples/getinfo.pl
 examples/identity.pl
 examples/joetest7.pl
@@ -100,9 +101,11 @@ t/30Oracle.t
 t/40UnicodeRoundTrip.t
 t/41Unicode.t
 t/50_odbc_utf8_on.t
-t/70execute_array.t
+t/70execute_array_dbi.t
+t/70execute_array_native.t
 t/80_odbc_diags.t
 t/ODBCTEST.pm
+t/ExecuteArray.pm
 t/UChelp.pm
 t/pod.t
 t/pod-coverage.t

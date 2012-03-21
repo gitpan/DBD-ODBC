@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 15193 2012-03-02 11:09:04Z mjevans $
+# $Id: ODBC.pm 15244 2012-03-21 14:28:06Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.35';
+$DBD::ODBC::VERSION = '1.36_1';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.35';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 15193 2012-03-02 11:09:04Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 15244 2012-03-21 14:28:06Z mjevans $, 13,2);
 
     require_version DBI 1.609;
 
@@ -177,44 +177,44 @@ $DBD::ODBC::VERSION = '1.35';
             odbc_putdata_start             => undef, # sth and dbh
             odbc_column_display_size       => undef, # sth and dbh
             odbc_utf8_on                   => undef, # sth and dbh
-	    odbc_driver_complete           => undef,
-	    odbc_batch_size                => undef,
+            odbc_driver_complete           => undef,
+            odbc_batch_size                => undef,
             odbc_disable_array_operations  => undef, # sth and dbh
-               };
+        };
     }
 
     sub prepare {
-	my($dbh, $statement, @attribs)= @_;
+        my($dbh, $statement, @attribs)= @_;
 
-	# create a 'blank' sth
-	my $sth = DBI::_new_sth($dbh, {
-	    'Statement' => $statement,
+        # create a 'blank' sth
+        my $sth = DBI::_new_sth($dbh, {
+            'Statement' => $statement,
 	    });
 
-	# Call ODBC func in ODBC.xs file.
-	# (This will actually also call SQLPrepare for you.)
-	# and populate internal handle data.
+        # Call ODBC func in ODBC.xs file.
+        # (This will actually also call SQLPrepare for you.)
+        # and populate internal handle data.
 
-	DBD::ODBC::st::_prepare($sth, $statement, @attribs)
-	    or return;
+        DBD::ODBC::st::_prepare($sth, $statement, @attribs)
+              or return;
 
-	return $sth;
+        return $sth;
     }
 
     sub column_info {
-	my ($dbh, $catalog, $schema, $table, $column) = @_;
+        my ($dbh, $catalog, $schema, $table, $column) = @_;
 
-	$catalog = q{} if (!$catalog);
-	$schema = q{} if (!$schema);
-	$table = q{} if (!$table);
-	$column = q{} if (!$column);
-	# create a "blank" statement handle
-	my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLColumns" });
+        $catalog = q{} if (!$catalog);
+        $schema = q{} if (!$schema);
+        $table = q{} if (!$table);
+        $column = q{} if (!$column);
+        # create a "blank" statement handle
+        my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLColumns" });
 
-	_columns($dbh,$sth, $catalog, $schema, $table, $column)
-	    or return;
+        _columns($dbh,$sth, $catalog, $schema, $table, $column)
+            or return;
 
-	return $sth;
+        return $sth;
     }
 
     sub columns {
@@ -565,7 +565,11 @@ $DBD::ODBC::VERSION = '1.35';
                             ($tuple_status ? $tuple_status : 'undef') .
                                 ") batch_size = $batch_size\n", 4);
         # Use DBI's execute_for_fetch if ours is disabled
-        if ($sth->FETCH('odbc_disable_array_operations')) {
+        my $override = (defined($ENV{ODBC_DISABLE_ARRAY_OPERATIONS}) ?
+                            $ENV{ODBC_DISABLE_ARRAY_OPERATIONS} : -1);
+        if ((($sth->FETCH('odbc_disable_array_operations') == 1) &&
+                 ($override != 0)) ||
+                     $override == 1) {
             $sth->trace_msg("array operations disabled\n", 4);
             my $sth = shift;
             return $sth->SUPER::execute_for_fetch(@_);
@@ -598,7 +602,7 @@ $DBD::ODBC::VERSION = '1.35';
                 foreach (@$tuple_batch_status) {
                     $tuple_count++ unless $_ == 7; # SQL_PARAM_UNUSED
                     next if ref($_);
-		    $_ = -1;	# we don't know individual row counts
+                    $_ = -1;	# we don't know individual row counts
                 }
 		if ($tuple_status) {
 		    push @$tuple_status, @$tuple_batch_status
@@ -630,7 +634,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.35.
+This documentation refers to DBD::ODBC version 1.36_1.
 
 =head1 SYNOPSIS
 
@@ -1377,13 +1381,13 @@ future e.g., it may support automatic concatenation of the lob
 parts onto the end of the C<$lob> with the addition of an extra flag
 or destination offset as in DBI's undocumented blob_read.
 
-The type the lob is retrieved as may be overriden in C<%attr> using
-C<TYPE =E<gt> sql_type>. C<%attr> is optional and if omitted defaults to
-SQL_C_BINARY for binary columns and SQL_C_CHAR/SQL_C_WCHAR for other
-column types depending on whether DBD::ODBC is built with unicode
-support. C<$chrs_or_bytes_read> will by the bytes read when the column
-types SQL_C_CHAR or SQL_C_BINARY are used and characters read if the
-column type is SQL_C_WCHAR.
+The type the lob is retrieved as may be overridden in C<%attr> using
+C<TYPE =E<gt> sql_type>. C<%attr> is optional and if omitted defaults
+to SQL_C_BINARY for binary columns and SQL_C_CHAR/SQL_C_WCHAR for
+other column types depending on whether DBD::ODBC is built with
+unicode support. C<$chrs_or_bytes_read> will by the bytes read when
+the column types SQL_C_CHAR or SQL_C_BINARY are used and characters
+read if the column type is SQL_C_WCHAR.
 
 When built with unicode support C<$length> specifes the amount of
 buffer space to be used when retrieving the lob data but as it is
@@ -1562,7 +1566,7 @@ NAME, TYPE, PRECISION, SCALE, NULLABLE etc).>
 See the ODBC specification for the SQLColAttributes API.
 You call SQLColAttributes like this:
 
-  $dbh->func($column, $ftype, "ColAttributes");
+  $sth->func($column, $ftype, "ColAttributes");
 
   SQL_COLUMN_COUNT = 0
   SQL_COLUMN_NAME = 1
@@ -1592,12 +1596,12 @@ use DBI's NAME and NAME_xx attributes for portability.
 =head3 DescribeCol
 
 B<This private function is now superceded by DBI's statement attributes
-NAME, TYPE, PRECISION, SCLARE, NULLABLE etc).>
+NAME, TYPE, PRECISION, SCALE, NULLABLE etc).>
 
 See the ODBC specification for the SQLDescribeCol API.
 You call SQLDescribeCol like this:
 
-  @info = $dbh->func($column, "DescribeCol");
+  @info = $sth->func($column, "DescribeCol");
 
 The returned array contains the column attributes in the order described
 in the ODBC specification for SQLDescribeCol.
@@ -1892,6 +1896,21 @@ you may hit memory limits. If you use DBI's execute_for_fetch
 DBD::ODBC uses the ODBC API SQLPutData (see L</odbc_putdata_start>)
 which does not require large amounts of memory as large columns are
 sent in pieces.
+
+o A lot of drivers have bugs with arrays of parameters (see the ODBC
+FAQ). e.g., as of 18-MAR-2012 I've seen the latest SQLite ODBC driver
+seg fault and freeTDS 8/0.91 returns the wrong row count for batches.
+
+o B<DO NOT> attempt to do an insert/update/delete and a select in the
+same SQL with execute_array e.g.,
+
+  SET IDENTITY_INSERT mytable ON
+  insert into mytable (id, name) values (?,?)
+  SET IDENTITY_INSERT mytable OFF
+  SELECT SCOPE_IDENTITY()
+
+It just won't/can't work although you may not have noticed when using
+DBI's inbuilt execute_* methods. See rt 75687.
 
 =head3 type_info_all
 
