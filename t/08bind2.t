@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 08bind2.t 12606 2009-03-13 13:14:20Z mjevans $
+# $Id: 08bind2.t 15305 2012-05-19 14:09:50Z mjevans $
 
 use Test::More;
 use strict;
@@ -37,7 +37,7 @@ unless($dbh) {
 
 SKIP:
 {
-   skip "SQLDescribeParam not supported using " . $dbh->get_info(17) . "\n", 3, unless $dbh->func(58, 'GetFunctions');
+   #skip "SQLDescribeParam not supported using " . $dbh->get_info(6) . "\n", 3, unless $dbh->func(58, 'GetFunctions');
 
    $dbh->{RaiseError} = 0;
    $dbh->{PrintError} = 0;

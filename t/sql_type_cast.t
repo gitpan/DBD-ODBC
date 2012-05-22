@@ -1,7 +1,9 @@
 #!/usr/bin/perl -w -I./t
-# $Id: sql_type_cast.t 14890 2011-06-22 19:33:10Z mjevans $
+# $Id: sql_type_cast.t 15313 2012-05-21 10:23:31Z mjevans $
 #
 # Test sql_type_cast via DiscardString and StrictlyTyped
+# NOTE: as of post 1.37 you don't need DiscardString when binding SQL_INTEGER
+# columns as DBD::ODBC binds them as SQL_C_LONG and uses sv_setiv.
 #
 use Test::More;
 use strict;
@@ -21,7 +23,7 @@ $| = 1;
 my $has_test_nowarnings = 1;
 eval "require Test::NoWarnings";
 $has_test_nowarnings = undef if $@;
-my $tests = 9;
+my $tests = 13;
 $tests += 1 if $has_test_nowarnings;
 plan tests => $tests;
 
@@ -57,8 +59,9 @@ sub is_iv {
    my $sv = svref_2object(my $ref = \$_[0]);
    my $flags = $sv->FLAGS;
 
-   my $x = $sv->PV;
-  
+   # See http://www.perlmonks.org/?node_id=971411
+   my $x = $sv->can('PV') ? $sv->PV : undef;
+
    if (wantarray) {
        return ($flags & SVf_IOK, $x);
    } else {
@@ -117,6 +120,7 @@ BAIL_OUT("Failed to insert test data") if $ev;
 $sth = $dbh->prepare(q/select a from PERL_DBD_drop_me/);
 $sth->execute;
 my ($r) = $sth->fetchrow;
+is($r, 100, "correct value returned");
 
 #my $j1 = encode_json [$r];
 is(is_iv($r), 0, "! ivok no bind") or Dump($r);
@@ -128,6 +132,7 @@ is(is_iv($r), 0, "! ivok no bind") or Dump($r);
 $sth->bind_col(1, \$r);
 $sth->execute;
 $sth->fetch;
+is($r, 100, "correct value returned Bind");
 #my $j2 = encode_json [$r];
 is(is_iv($r), 0, "! ivok bind") or Dump($r);
 
@@ -135,25 +140,33 @@ is(is_iv($r), 0, "! ivok bind") or Dump($r);
 # try binding specifying an integer type
 # expect IOK
 #
-$sth->bind_col(1, \$r, {TYPE => SQL_INTEGER});
+# NB need to re-prepare as you cannot change the bind type after a
+# column is bound
+$sth = $dbh->prepare(q/select a from PERL_DBD_drop_me/);
 $sth->execute;
+$sth->bind_col(1, \$r, {TYPE => SQL_NUMERIC});
 $sth->fetch;
+is($r, 100, "correct value returned SQL_NUMERIC") or Dump($r);
 #my $j2 = encode_json [$r];
 my ($iv, $pv) = is_iv($r);
 ok($iv, "ivok bind integer") or Dump($r);
-ok($pv, "pv not null bind integer") or Dump($r);
+ok($pv, "PV bind integer") or Dump($r);
 
 #
 # try binding specifying an integer type and say discard the pv
 # expect IOK
 #
-$sth->bind_col(1, \$r, {TYPE => SQL_INTEGER, DiscardString => 1});
+# NB need to re-prepare as you cannot change the bind type after a
+# column is bound
+$sth = $dbh->prepare(q/select a from PERL_DBD_drop_me/);
 $sth->execute;
+$sth->bind_col(1, \$r, {TYPE => SQL_NUMERIC, DiscardString => 1});
 $sth->fetch;
+is($r, 100, "correct value returned SQL_NUMERIC|DiscardString");
 #my $j2 = encode_json [$r];
 ($iv, $pv) = is_iv($r);
 ok($iv, "ivok bind integer discard") or Dump($r);
-ok(!$pv, "pv null bind integer discard") or Dump($r);
+ok(!$pv, "not PV bind integer discard") or Dump($r);
 
 # cannot do the following since the driver will whinge the type cannot
 # be cast to an integer

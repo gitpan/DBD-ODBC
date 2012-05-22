@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 15262 2012-03-31 15:24:05Z mjevans $
+/* $Id: dbdimp.c 15317 2012-05-22 08:28:43Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -2185,15 +2185,27 @@ static const char *S_SqlCTypeToString (SWORD sqltype)
 #define s_c(x) case x: return #x
    switch(sqltype) {
       s_c(SQL_C_CHAR);
+      s_c(SQL_C_LONG);
+      s_c(SQL_C_SLONG);
+      s_c(SQL_C_ULONG);
       s_c(SQL_C_WCHAR);
       s_c(SQL_C_BIT);
+      s_c(SQL_C_TINYINT);
       s_c(SQL_C_STINYINT);
       s_c(SQL_C_UTINYINT);
+      s_c(SQL_C_SHORT);
       s_c(SQL_C_SSHORT);
       s_c(SQL_C_USHORT);
+      s_c(SQL_C_NUMERIC);
+      s_c(SQL_C_DEFAULT);
+      s_c(SQL_C_SBIGINT);
+      s_c(SQL_C_UBIGINT);
+/*      s_c(SQL_C_BOOKMARK); duplicate case */
+      s_c(SQL_C_GUID);
       s_c(SQL_C_FLOAT);
       s_c(SQL_C_DOUBLE);
       s_c(SQL_C_BINARY);
+/*      s_c(SQL_C_VARBOOKMARK); duplicate case */
       s_c(SQL_C_DATE);
       s_c(SQL_C_TIME);
       s_c(SQL_C_TIMESTAMP);
@@ -2205,7 +2217,6 @@ static const char *S_SqlCTypeToString (SWORD sqltype)
    my_snprintf(s_buf, sizeof(s_buf), "(CType %d)", sqltype);
    return s_buf;
 }
-
 
 
 
@@ -2500,9 +2511,9 @@ int dbd_describe(SV *sth, imp_sth_t *imp_sth, int more)
 # endif
 #endif /* WITH_UNICODE */
           case SQL_LONGVARBINARY:
-	    fbh->ftype = SQL_C_BINARY;
-	    fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth);
-	    break;
+            fbh->ftype = SQL_C_BINARY;
+            fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth);
+            break;
 #ifdef SQL_WLONGVARCHAR
           case SQL_WLONGVARCHAR:	/* added for SQLServer 7 ntext type */
 # if defined(WITH_UNICODE)
@@ -2521,24 +2532,38 @@ int dbd_describe(SV *sth, imp_sth_t *imp_sth, int more)
             }
             break;
           case SQL_LONGVARCHAR:
-	    fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
-	    break;
-          case MS_SQLS_XML_TYPE:
             fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
             break;
+          case MS_SQLS_XML_TYPE: {
+              /* XML columns are inherently Unicode so bind them as such and in this case
+                 double the size of LongReadLen as we count LongReadLen as characters
+                 not bytes */
+#ifdef WITH_UNICODE
+              fbh->ftype = SQL_C_WCHAR;
+              fbh->ColDisplaySize =
+                  DBIc_LongReadLen(imp_sth) * sizeof(SQLWCHAR) + sizeof(SQLWCHAR);
+#else
+              fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth) + 1;
+#endif
+              break;
+          }
 #ifdef TIMESTAMP_STRUCT	/* XXX! */
           case SQL_TIMESTAMP:
           case SQL_TYPE_TIMESTAMP:
-	    fbh->ftype = SQL_C_TIMESTAMP;
-	    fbh->ColDisplaySize = sizeof(TIMESTAMP_STRUCT);
+            fbh->ftype = SQL_C_TIMESTAMP;
+            fbh->ColDisplaySize = sizeof(TIMESTAMP_STRUCT);
 	    break;
 #endif
+          case SQL_INTEGER:
+            fbh->ftype = SQL_C_LONG;
+            fbh->ColDisplaySize = sizeof(SQLINTEGER);
+            break;
         }
 
         colbuf_bytes_reqd += fbh->ColDisplaySize;
         /*
          *  We later align columns in the buffer on integer boundaries so we
-         *  we need to tak account of this here. The last % is to avoid adding
+         *  we need to take account of this here. The last % is to avoid adding
          *  sizeof(int) if we are already aligned.
          */
         colbuf_bytes_reqd +=
@@ -2598,13 +2623,6 @@ static SQLRETURN bind_columns(
     for(i=0, fbh = imp_sth->fbh;
         i < num_fields && SQL_SUCCEEDED(rc); i++, fbh++)
     {
-        if (fbh->req_type != 0) {
-            if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 5))
-                TRACE2(imp_sth, "     Overriding bound sql type %d with requested type %"IVdf"\n",
-                       fbh->ftype, fbh->req_type);
-            fbh->ftype = (SWORD)fbh->req_type;
-        }
-
         if (!(fbh->bind_flags & ODBC_TREAT_AS_LOB)) {
 
             fbh->data = rbuf_ptr;
@@ -2629,8 +2647,11 @@ static SQLRETURN bind_columns(
                 dbd_error(h, rc, "describe/SQLBindCol");
                 break;
             }
+            /* Save the fact this column is now bound and hence the type
+               can not be changed */
+            fbh->bound = 1;
         } else if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4)) {
-            TRACE1(imp_sth, "      TreatAsLOB bind_flags = %lu\n",
+            TRACE1(imp_sth, "      TreatAsLOB bind_flags = %lx\n",
                    fbh->bind_flags);
         }
     }
@@ -3251,7 +3272,10 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
                 }
                 break;
 #endif /* WITH_UNICODE */
-              default:
+              case SQL_INTEGER:
+                 sv_setiv(sv, *((SQLINTEGER *)fbh->data));
+                 break;
+             default:
                 if (ChopBlanks && fbh->datalen > 0 &&
                     ((fbh->ColSqlType == SQL_CHAR) ||
                      (fbh->ColSqlType == SQL_WCHAR))) {
@@ -3281,14 +3305,23 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
 #if DBIXS_REVISION > 13590
         /* If a bind type was specified we use DBI's sql_type_cast
            to cast it - currently only number types are handled */
-        if ((fbh->req_type == SQL_INTEGER) ||
+        if (
+            /*(fbh->req_type == SQL_INTEGER) || not needed as we've already done a sv_setiv*/
             (fbh->req_type == SQL_NUMERIC) ||
             (fbh->req_type == SQL_DECIMAL)) {
             int sts;
             char errstr[256];
 
+            if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4))
+                TRACE3(imp_sth, "    sql_type_case %s %"IVdf" %lx\n",  neatsvpv(sv, fbh->datalen+5), fbh->req_type, fbh->bind_flags);
+
+
             sts = DBIc_DBISTATE(imp_sth)->sql_type_cast_svpv(
-                aTHX_ sv, fbh->req_type, fbh->bind_flags, NULL);
+                aTHX_ sv, fbh->req_type, (U32)fbh->bind_flags, NULL);
+
+            if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4))
+                TRACE1(imp_sth, "    sql_type_cast=%d\n",  sts);
+
             if (sts == 0) {
                 sprintf(errstr,
                         "over/under flow converting column %d to type %"IVdf"",
@@ -3299,7 +3332,7 @@ AV *dbd_st_fetch(SV *sth, imp_sth_t *imp_sth)
             }
             else if (sts == -2) {
                 sprintf(errstr,
-                        "unsupported bind type %"IVdf" for column %d",
+                        "unsupported bind type %"IVdf" for column %d in sql_type_cast_svpv",
                         fbh->req_type, i+1);
                 DBIh_SET_ERR_CHAR(sth, (imp_xxh_t*)imp_sth, Nullch, 1,
                                   errstr, Nullch, Nullch);
@@ -3604,7 +3637,7 @@ static int rebind_param(
     if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4)) {
         PerlIO_printf(
             DBIc_LOGPIO(imp_dbh),
-            "    +rebind_param %s %.100s (size svCUR=%d/SvLEN=%d/max=%ld) "
+            "    +rebind_param %s %.100s (size svCUR=%d/SvLEN=%d/max=%"IVdf") "
             "svtype %u, value type:%d sql type:%d\n",
             phs->name, neatsvpv(phs->sv, 0),
             SvOK(phs->sv) ? SvCUR(phs->sv) : -1,
@@ -4107,7 +4140,50 @@ int dbd_st_bind_col(
         croak("cannot bind to non-existent field %d", field);
     }
 
-    imp_sth->fbh[field-1].req_type = type;
+    /* Don't allow anyone to change the bound type after the column is bound
+       or horrible things could happen e.g., say you just call SQLBindCol
+       without a type it will probably default to SQL_C_CHAR but if you
+       later called bind_col specifying SQL_INTEGER the code here would
+       interpret the buffer as a 4 byte integer but in reality it would be
+       written as a char*.
+
+       We issue a warning but don't change the actual type.
+    */
+
+    if (imp_sth->fbh[field-1].bound && type && imp_sth->fbh[field-1].bound != type) {
+        DBIh_SET_ERR_CHAR(
+            sth, (imp_xxh_t*)imp_sth,
+            "0", 0, "you cannot change the bind column type after the column is bound",
+            "", "fetch");
+        return 1;
+    }
+
+    /* The first problem we have is that SQL_xxx values DBI defines are not
+       the same as SQL_C_xxx values we pass the SQLBindCol and in some cases
+       there is no C equivalent e.g., SQL_DECIMAL - there is no C type for these.
+
+       The second problem we have is that values passed to SQLBindCol cause the
+       ODBC driver to return different C types OR structures e.g., SQL_NUMERIC
+       returns a structure.
+
+       We're not binding columns as C structures as they are too hard to convert
+       into Perl scalars - we'll just use SQL_C_CHAR/SQL_C_WCHAR for these.
+
+       There is an exception for timestamps as the code later will bind as a
+       timestamp if it spots the column is a timestamp and pull the structure
+       apart.
+
+       We do however store the requested type if it SQL_DOUBLE/SQL_NUMERIC so
+       we can use it with sql_type_cast_svpv i.e., if you know the column is a double or
+       numeric we still retrieve it as a char string but then if DiscardString or StrictlyTyped
+       if specified we'lll call sql_type_cast_svpv.
+
+    */
+    if (type == SQL_DOUBLE ||
+        type == SQL_NUMERIC) {
+        imp_sth->fbh[field-1].req_type = type;
+    }
+    
     imp_sth->fbh[field-1].bind_flags = 0; /* default to none */
 
     /* DBIXS 13590 added StrictlyTyped and DiscardString attributes */
@@ -4185,7 +4261,7 @@ int dbd_bind_ph(
        PerlIO_printf(
            DBIc_LOGPIO(imp_dbh),
            "    +dbd_bind_ph(%p, name=%s, value=%.200s, attribs=%s, "
-           "sql_type=%d(%s), is_inout=%d, maxlen=%ld\n",
+           "sql_type=%d(%s), is_inout=%d, maxlen=%"IVdf"\n",
            sth, name, SvOK(newvalue) ? neatsvpv(newvalue, 0) : "undef",
            attribs ? SvPV_nolen(attribs) : "", sql_type,
            S_SqlTypeToString(sql_type), is_inout, maxlen);
@@ -4238,9 +4314,9 @@ int dbd_bind_ph(
    } else if (maxlen && maxlen > phs->maxlen) {
        if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4))
            PerlIO_printf(DBIc_LOGPIO(imp_dbh),
-                         "!attempt to change param %s maxlen (%ld->%ld)\n",
+                         "!attempt to change param %s maxlen (%"IVdf"->%"IVdf")\n",
                          phs->name, phs->maxlen, maxlen);
-       croak("Can't change param %s maxlen (%ld->%ld) after first bind",
+       croak("Can't change param %s maxlen (%"IVdf"->%"IVdf") after first bind",
              phs->name, phs->maxlen, maxlen);
    }
 
@@ -6795,7 +6871,7 @@ IV odbc_st_execute_for_fetch(
         }
         if (!phs->strlen_or_ind_array) {
             if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4))
-                TRACE2(imp_sth, "    allocating %ld for p%d ind array\n",
+                TRACE2(imp_sth, "    allocating %"IVdf" for p%u ind array\n",
                        count * sizeof(SQLULEN), p);
             phs->strlen_or_ind_array = (SQLLEN *)safemalloc(count * 2 * sizeof(SQLLEN));
         }
@@ -7147,4 +7223,5 @@ static int get_row_diag(SQLSMALLINT recno,
     return 0;
 
 }
+
 /* end */
