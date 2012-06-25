@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 15310 2012-05-20 18:27:22Z mjevans $
+# $Id: ODBC.pm 15328 2012-06-08 10:45:16Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.38_2';
+$DBD::ODBC::VERSION = '1.38_3';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.38_2';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 15310 2012-05-20 18:27:22Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 15328 2012-06-08 10:45:16Z mjevans $, 13,2);
 
     require_version DBI 1.609;
 
@@ -650,7 +650,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.38_2.
+This documentation refers to DBD::ODBC version 1.38_3.
 
 =head1 SYNOPSIS
 
@@ -1843,7 +1843,7 @@ The DBI specification post 1.608 says in bind_param:
   The data type is 'sticky' in that bind values passed to execute()
   are bound with the data type specified by earlier bind_param()
   calls, if any.  Portable applications should not rely on being able
-  to change the data type after the first C<bind_param> call.
+  to change the data type after the first bind_param call.
 
 DBD::ODBC does allow a parameter to be rebound with another data type as
 ODBC inherently allows this. Therefore you can do:
@@ -1947,7 +1947,7 @@ DBI's inbuilt execute_* methods. See rt 75687.
 =head3 type_info_all
 
 Many ODBC drivers now return 20 columns in type_info_all rather than
-the 19 DBI documents DBI documents. The 20th column is usually called
+the 19 DBI documents. The 20th column is usually called
 "USERTYPE".  Recent MS SQL Server ODBC drivers do this. Fortunately
 this should not adversely affect you so long as you are using the keys
 provided at the start of type_info_all.

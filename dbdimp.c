@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 15317 2012-05-22 08:28:43Z mjevans $
+/* $Id: dbdimp.c 15321 2012-05-24 10:22:38Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -156,7 +156,7 @@ int dbd_st_finish(SV *sth, imp_sth_t *imp_sth);
 #define ODBC_DRIVER_COMPLETE           0x8345
 #define ODBC_BATCH_SIZE                0x8346
 #define ODBC_ARRAY_OPERATIONS          0x8347
-#define ODBC_TAF_CALLBACK           0x8348
+#define ODBC_TAF_CALLBACK              0x8348
 
 /* This is the bind type for parameters we fall back to if the bind_param
    method was not given a parameter type and SQLDescribeParam is not supported
@@ -4490,7 +4490,6 @@ static db_params S_db_fetchOptions[] =  {
    { "odbc_driver_complete", ODBC_DRIVER_COMPLETE },
    { "odbc_batch_size", ODBC_BATCH_SIZE},
    { "odbc_array_operations", ODBC_ARRAY_OPERATIONS },
-   { "odbc_taf_callback", ODBC_TAF_CALLBACK },
    { NULL }
 };
 

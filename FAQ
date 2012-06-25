@@ -8,7 +8,7 @@ DBD::ODBC::FAQ - Frequently Asked Questions for DBD::ODBC
 
 =head1 VERSION
 
-($Revision: 15235 $)
+($Revision: 15325 $)
 
 =head1 QUESTIONS
 
@@ -346,6 +346,9 @@ from Control Panel, Administrative Tools, Data Sources is the 64bit
 one and data sources created here will not be visible or useable from
 32bit applications. The ODBC administrator you need to use for 32bit
 applications can be found at X:\windows\syswow64\odbcad32.exe.
+
+You can find more about this than you'd probably care to know
+at http://www.easysoft.com/developer/interfaces/odbc/64-bit.html
 
 =head2 How do I use DBD::ODBC with web servers under Win32.
 

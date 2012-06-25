@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 15305 2012-05-19 14:09:50Z mjevans $
+ * $Id: dbdimp.h 15321 2012-05-24 10:22:38Z mjevans $
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
  * portions Copyright (c) 1994,1995,1996  Tim Bunce
