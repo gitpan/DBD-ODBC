@@ -4,9 +4,19 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-05-27 12:09:52 +0100 (Sun, 27 May 2012) $
+As of $LastChangedDate: 2012-07-07 13:13:39 +0100 (Sat, 07 Jul 2012) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC 1.39 July 7 2012
+
+  [BUG FIXES]
+
+  Manifest mentioned 2 files in examples which do not exist - they
+  should have been execute_for_fetch.pl.
+
+  execute_for_fetch.pl example had not be changed since
+  odbc_disable_array_operations became odbc_array_operations.
 
 =head2 Changes in DBD::ODBC 1.38_3 June 25 2012
 
