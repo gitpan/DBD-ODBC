@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 15117 2012-02-02 19:53:02Z mjevans $
+# $Id: Makefile.PL 15343 2012-07-10 21:14:20Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -221,7 +221,7 @@ if ($opt_g) {
    }
 }
 if ($opt_w) {
-    $opts{CCFLAGS} = '-Wint-to-pointer-cast -fno-strict-aliasing';
+    $opts{CCFLAGS} = '-Wint-to-pointer-cast -fno-strict-aliasing -Wall';
 }
 if (defined($opt_u) && $opt_u) {
     $opts{DEFINE} .= ' -DWITH_UNICODE';
@@ -1044,7 +1044,7 @@ sub find_dm_hdr_files
                  '/usr/local/easysoft/unixODBC');
     unshift @paths, $opt_o if $opt_o;
     unshift @paths, $ENV{ODBCHOME} if $ENV{ODBCHOME};
-    
+
     foreach my $dir(@paths) {
         my $path = File::Spec->catdir($dir, 'include');
         print "  trying $path\n";
@@ -1103,6 +1103,8 @@ sub find_unixodbc
     push @dirs, split(' ', $Config{libspath});
     # add found odbc home if not added already
     push @dirs, "$home/lib" if !defined($opt_o) && !defined($ENV{ODBCHOME});
+    # for debian/ubuntu 12 thanks to Maestro(Geoff Darling, mitsi)  for finding:
+    push @dirs, "/usr/lib/i386-linux-gnu/";
 
     for my $d(@dirs) {
         my @found;
