@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_62033.t 15090 2012-01-20 19:26:23Z mjevans $
+# $Id: rt_62033.t 15377 2012-09-05 13:49:46Z mjevans $
 #
 # rt62033 - not really this rt but a bug discovered when looking in to it
 #
@@ -8,6 +8,8 @@
 #
 use Test::More;
 use strict;
+eval "require Test::NoWarnings";
+my $has_test_nowarnings = ($@ ? undef : 1);
 
 use DBI qw(:sql_types);
 use_ok('ODBCTEST');
@@ -28,6 +30,9 @@ END {
             $dbh->do(q/drop table PERL_DBD_RT_62033/);
         };
     }
+    Test::NoWarnings::had_no_warnings()
+          if ($has_test_nowarnings);
+    done_testing();
 }
 
 $dbh = DBI->connect();
@@ -132,5 +137,4 @@ eval {
     $dbh->do('drop table PERL_DBD_RT_62033');
 };
 
-done_testing();
 

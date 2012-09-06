@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl -w
 #
-# $Id: Makefile.PL 15343 2012-07-10 21:14:20Z mjevans $
+# $Id: Makefile.PL 15375 2012-09-05 09:55:42Z mjevans $
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.

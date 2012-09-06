@@ -4,11 +4,19 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-09-04 16:19:11 +0100 (Tue, 04 Sep 2012) $
+As of $LastChangedDate: 2012-09-05 14:49:46 +0100 (Wed, 05 Sep 2012) $
 
 $Revision: 10667 $
 
-=head2 Changes in DBD::ODBC 1.40_1 July 10 2012
+=head2 Changes in DBD::ODBC 1.40_2 September 5 2012
+
+  [MISCELLANEOUS]
+
+  New test cases added for some rts.
+
+  Added Test::NoWarnings to some tests where it was missing.
+
+=head2 Changes in DBD::ODBC 1.40_1 September 4 2012
 
   [BUG FIXES]
 

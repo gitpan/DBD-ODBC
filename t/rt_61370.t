@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_61370.t 15317 2012-05-22 08:28:43Z mjevans $
+# $Id: rt_61370.t 15377 2012-09-05 13:49:46Z mjevans $
 #
 # rt 61370
 #
@@ -9,6 +9,8 @@
 #
 use Test::More;
 use strict;
+eval "require Test::NoWarnings";
+my $has_test_nowarnings = ($@ ? undef : 1);
 
 #my $has_test_more_utf8 = 1;
 #eval "require Test::More::UTF8";
@@ -38,6 +40,9 @@ END {
             $dbh->do(q/drop table PERL_DBD_RT_61370/);
         };
     }
+    Test::NoWarnings::had_no_warnings()
+          if ($has_test_nowarnings);
+    done_testing();
 }
 
 $dbh = DBI->connect();
@@ -69,17 +74,14 @@ my ($ev, $sth);
 # this needs to be MS SQL Server and not the OOB driver
 if ($dbms_name !~ /Microsoft SQL Server/) {
     note('Not Microsoft SQL Server');
-    done_testing();
     exit 0;
 }
 if ($driver_name =~ /esoobclient/) {
     note("Easysoft OOB");
-    done_testing();
     exit 0;
 }
 if (!$dbh->{odbc_has_unicode}) {
     note('DBD::ODBC not built with unicode support');
-    done_testing();
     exit 0;
 }
 eval {
@@ -153,5 +155,4 @@ eval {
     $dbh->do('drop table PERL_DBD_RT_61370');
 };
 
-done_testing();
 

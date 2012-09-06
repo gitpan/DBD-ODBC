@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_63550.t 14569 2010-12-14 16:20:49Z mjevans $
+# $Id: rt_63550.t 15377 2012-09-05 13:49:46Z mjevans $
 #
 # rt_53550 - check Statement is accessible in error handler from do method
 #
@@ -9,12 +9,21 @@ use strict;
 use DBI qw(:sql_types);
 use_ok('ODBCTEST');
 
+eval "require Test::NoWarnings";
+my $has_test_nowarnings = ($@ ? undef : 1);
+
 my $dbh;
 
 BEGIN {
    if (!defined $ENV{DBI_DSN}) {
       plan skip_all => "DBI_DSN is undefined";
    }
+}
+
+END {
+    Test::NoWarnings::had_no_warnings()
+          if ($has_test_nowarnings);
+    done_testing();
 }
 
 $dbh = DBI->connect();
@@ -39,5 +48,4 @@ $dbh->{HandleError} = \&_err_handler;
 
 $dbh->do("select * from PERL_DBD_RT63550");
 
-done_testing();
 
