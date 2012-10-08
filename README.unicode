@@ -1,8 +1,11 @@
 #
-# $Id: README.unicode 14904 2011-07-11 13:21:06Z mjevans $
+# $Id: README.unicode 15416 2012-10-03 17:33:00Z mjevans $
 #
 # Author Martin J. Evans (mjevans at cpan dot org)
 #
+
+This document is historical now. If all you want to know is what Unicode
+is supported by DBD::ODBC read the DBD::ODBC pod.
 
 The original Unicode support was written by Alexander Foken and posted
 as a patch. You can find Alexander's original README document in

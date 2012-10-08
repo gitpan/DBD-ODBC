@@ -1,4 +1,4 @@
-# $Id: ODBC.pm 15375 2012-09-05 09:55:42Z mjevans $
+# $Id: ODBC.pm 15438 2012-10-08 21:07:54Z mjevans $
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.40_2';
+$DBD::ODBC::VERSION = '1.40_3';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.40_2';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 15375 2012-09-05 09:55:42Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id: ODBC.pm 15438 2012-10-08 21:07:54Z mjevans $, 13,2);
 
     require_version DBI 1.609;
 
@@ -510,14 +510,14 @@ $DBD::ODBC::VERSION = '1.40_2';
 	return $sth;
     }
 
-    sub GetTypeInfo {
-	my ($dbh, $sqltype) = @_;
-	# create a "blank" statement handle
-	my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLGetTypeInfo" });
-	# print "SQL Type is $sqltype\n";
-	_GetTypeInfo($dbh, $sth, $sqltype) or return;
-	return $sth;
-    }
+#    sub GetTypeInfo {
+#	my ($dbh, $sqltype) = @_;
+#	# create a "blank" statement handle
+#	my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLGetTypeInfo" });
+#	# print "SQL Type is $sqltype\n";
+#	_GetTypeInfo($dbh, $sth, $sqltype) or return;
+#	return $sth;
+#    }
 
     sub type_info_all {
 	my ($dbh, $sqltype) = @_;
@@ -650,7 +650,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.40_2.
+This documentation refers to DBD::ODBC version 1.40_3.
 
 =head1 SYNOPSIS
 
@@ -1200,6 +1200,13 @@ README.unicode file for further details.
 After calling the connect method this will be the ODBC driver's
 out connection string - see documentation on SQLDriverConnect.
 
+Typically, applications (like MS Access and many others) which build a connection string via
+dialogs and possibly SQLBrowseConnect eventually end up with a successful ODBC connection
+to the ODBC driver and database. The odbc_out_connect_string provides a string
+which you can pass to SQLDriverConnect (DBI's connect prefixed with dbi:ODBC:") which
+will connect you to the same datasource at a later date. You may also want to see
+L</odbc_driver_complete>.
+
 =head3 odbc_version
 
 This was added prior to the move to ODBC 3.x to allow the caller to
@@ -1466,10 +1473,11 @@ which returns the C<SQL_DRIVER_NAME>.
 This function returns a scalar value, which can be a numeric or string
 value depending on the information value requested.
 
-=head3 SQLGetTypeInfo
+=head3 GetTypeInfo
 
 B<This private function is now superceded by DBI's type_info and
-type_info_all methods.>
+type_info_all methods however as it is used by those methods it
+still exists.>
 
 This function maps to the ODBC SQLGetTypeInfo API and the argument
 should be a SQL type number (e.g. SQL_VARCHAR) or
@@ -1618,16 +1626,10 @@ use DBI's NAME and NAME_xx attributes for portability.
 
 =head3 DescribeCol
 
-B<This private function is now superceded by DBI's statement attributes
-NAME, TYPE, PRECISION, SCALE, NULLABLE etc).>
+Removed in DBD::ODBC 1.40_3
 
-See the ODBC specification for the SQLDescribeCol API.
-You call SQLDescribeCol like this:
-
-  @info = $sth->func($column, "DescribeCol");
-
-The returned array contains the column attributes in the order described
-in the ODBC specification for SQLDescribeCol.
+Use the DBI's statement attributes NAME, TYPE, PRECISION, SCALE,
+NULLABLE etc instead.
 
 =head2 Additional bind_col attributes
 
@@ -1987,8 +1989,11 @@ The ODBC specification supports wide character versions (a postfix of
 character version of SQLDriverConnect.
 
 In ODBC on Windows the wide characters are defined as SQLWCHARs (2
-bytes) and are UCS-2. On non-Windows, the main driver managers I know
-of have implemented the wide character APIs differently:
+bytes) and are UCS-2 (but UTF-16 is accepted by some drivers now e.g.,
+MS SQL Server 2012 and the new collation suffix _SC which stands for
+Supplementary Character Support). On non-Windows, the main driver
+managers I know of have implemented the wide character APIs
+differently:
 
 =over
 
@@ -1996,7 +2001,7 @@ of have implemented the wide character APIs differently:
 
 unixODBC mimics the Windows ODBC API precisely meaning the wide
 character versions expect and return 2-byte characters in
-UCS-2.
+UCS-2 or UTF-16.
 
 unixODBC will happily recognise ODBC drivers which only have the ANSI
 versions of the ODBC API and those that have the wide versions
@@ -2093,7 +2098,7 @@ As of DBD::ODBC 1.32_3 meta data calls accept Unicode strings.
 Since version 1.16_4, the default parameter bind type is SQL_WVARCHAR
 for unicode builds of DBD::ODBC. This only affects ODBC drivers which
 do not support SQLDescribeParam and only then if you do not
-specifically set a sql type on the bind_param method call.
+specifically set a SQL type on the bind_param method call.
 
 The above Unicode support has been tested with the SQL Server, Oracle
 9.2+ and Postgres drivers on Windows and various Easysoft ODBC drivers
@@ -2178,14 +2183,12 @@ API currently uses UCS-2 it does not support Unicode characters with
 code points above 0xFFFF (if you know better I'd like to hear from
 you). However, because DBD::ODBC uses UTF-16 encoding you can still
 insert Unicode characters above 0xFFFF into your database and retrieve
-them back correctly but they will not being treated as a single
+them back correctly but they may not being treated as a single
 Unicode character in your database e.g., a "select length(a_column)
-from table" with a single Unicode character above 0xFFFF will most
-likely return 2 and not 1 so you cannot use database functions on that
+from table" with a single Unicode character above 0xFFFF may
+return 2 and not 1 so you cannot use database functions on that
 data like upper/lower/length etc but you can at least save the data in
-your database and get it back. This is a fudge and I cannot say I'm
-overjoyed by it but it is what the majority of people who use
-DBD::ODBC have requested.
+your database and get it back.
 
 When built for unicode, DBD::ODBC will always call SQLDriverConnectW
 (and not SQLDriverConnect) even if a) your connection string is not

@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_78838.t 15378 2012-09-06 15:18:49Z mjevans $
+# $Id: rt_78838.t 15380 2012-09-07 13:20:19Z mjevans $
 #
 # rt 78838
 #
@@ -41,7 +41,6 @@ ok($dbms_name, "got DBMS name: $dbms_name"); # 2
 # this needs to be MS SQL Server
 if ($dbms_name !~ /Microsoft SQL Server/) {
     note('Not Microsoft SQL Server');
-    done_testing();
     exit 0;
 }
 

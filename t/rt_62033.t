@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_62033.t 15377 2012-09-05 13:49:46Z mjevans $
+# $Id: rt_62033.t 15380 2012-09-07 13:20:19Z mjevans $
 #
 # rt62033 - not really this rt but a bug discovered when looking in to it
 #
@@ -58,7 +58,6 @@ my ($ev, $sth);
 # this needs to be MS SQL Server
 if ($dbms_name !~ /Microsoft SQL Server/) {
     note('Not Microsoft SQL Server');
-    done_testing();
     exit 0;
 }
 eval {

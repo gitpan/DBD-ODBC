@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_79397.t 15378 2012-09-06 15:18:49Z mjevans $
+# $Id: rt_79397.t 15380 2012-09-07 13:20:19Z mjevans $
 #
 # rt 79397
 #
@@ -48,7 +48,6 @@ ok($driver_version, "got DRIVER version $driver_version"); # 5
 # this needs to be MS SQL Server
 if ($dbms_name !~ /Microsoft SQL Server/) {
     note('Not Microsoft SQL Server');
-    done_testing();
     exit 0;
 }
 my $sth = $dbh->prepare(q/SELECT :foo, :bar/);

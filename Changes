@@ -4,11 +4,47 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-09-05 14:49:46 +0100 (Wed, 05 Sep 2012) $
+As of $LastChangedDate: 2012-10-08 22:17:10 +0100 (Mon, 08 Oct 2012) $
 
 $Revision: 10667 $
 
-=head2 Changes in DBD::ODBC 1.40_2 September 5 2012
+=head2 Changes in DBD::ODBC 1.40_3 September 17 2012
+
+  [BUG FIXES]
+
+  Oops, changes to some rt tests fail when not run to MS SQL Server
+  and they should not be run for other drivers - there was a double
+  done_testing call.
+
+  [CHANGE IN BEHAVIOUR]
+
+  As I warned literally years ago DBD::ODBC's private function
+  DescribeCol has been removed. You can use DBI's statement attributes
+  like NAME, PRECISION etc, instead. All test code has been changed to
+  remove calls to DescribeCol and GetTypeInfo.
+
+  [MISCELLANEOUS]
+
+  New example sqlserver_supplementary_chrs.pl added which shows that
+  in MS SQL Server 2012 you can now store unicode characters
+  over 0xFFFF (ones which are surrogate pairs).
+
+  More documentation for odbc_out_connect_string.
+
+  Minor changes to sqlserver_supplementart_chrs.pl example.
+
+=head2 Changes in DBD::ODBC 1.40_2 September 6 2012
+
+  [BUG FIXES]
+
+  Fixed rt 78838 - bind_param does not correctly stringify blessed
+  objects when connected to MS SQL Server
+
+  Fix issue in dbd_bind_ph where if you passed a sql type and were
+  also attempting to change from in to out or vice versa or increasing
+  the size of an output bound param it would not spot this error.
+
+  Allowed the test cases to spot DB2 driver as libXXXdb2.
 
   [MISCELLANEOUS]
 

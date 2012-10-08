@@ -1,7 +1,13 @@
-$Id: README.af 14904 2011-07-11 13:21:06Z mjevans $
+$Id: README.af 15416 2012-10-03 17:33:00Z mjevans $
 
 =for humans
 This file is written in the POD format, use pod2html or similar to view it.
+
+=head1 NOTE
+
+This file is now really historical. Unicode support in DBD::ODBC has
+matured greatly since Alexander's initial patch although I greatly
+appreciate it.
 
 =head1 Unicode patch for DBD::ODBC 1.13
 

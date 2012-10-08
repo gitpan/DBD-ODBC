@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 07bind.t 14736 2011-03-06 14:53:21Z mjevans $
+# $Id: 07bind.t 15438 2012-10-08 21:07:54Z mjevans $
 
 use Test::More;
 
@@ -205,10 +205,10 @@ UPDATE $ODBCTEST::table_name SET COL_C = ? WHERE COL_A = ?
     foreach (@data) {
 	# change the data...
 	$_->[2] .= "  " . $_->[2];
-	@row = ODBCTEST::get_type_for_column($dbh, 'COL_C');
-	$sth->bind_param(1, $_->[2], { TYPE => $row[1] });
-	@row = ODBCTEST::get_type_for_column($dbh, 'COL_A');
-	$sth->bind_param(2, $_->[0], { TYPE => $row[1] });
+	my $row = ODBCTEST::get_type_for_column($dbh, 'COL_C');
+	$sth->bind_param(1, $_->[2], { TYPE => $row->{DATA_TYPE} });
+	$row = ODBCTEST::get_type_for_column($dbh, 'COL_A');
+	$sth->bind_param(2, $_->[0], { TYPE => $row->{DATA_TYPE} });
 
 	return 0 unless $sth->execute;
     }

@@ -1,5 +1,5 @@
 #!perl -w -I./t
-# $Id: 03dbatt.t 15144 2012-02-13 09:23:24Z mjevans $
+# $Id: 03dbatt.t 15438 2012-10-08 21:07:54Z mjevans $
 
 use Test::More;
 use strict;
@@ -176,7 +176,6 @@ print $DBI::errstr;
 # ------------------------------------------------------------
 sub commitTest {
     my $dbh = shift;
-    my @row;
     my $rc = -2;
     my $sth;
 
@@ -195,9 +194,9 @@ sub commitTest {
 	return -1;
     }
 
-    @row = ODBCTEST::get_type_for_column($dbh, 'COL_D');
+    my $row = ODBCTEST::get_type_for_column($dbh, 'COL_D');
     my $dateval;
-    if (ODBCTEST::isDateType($row[1])) {
+    if (ODBCTEST::isDateType($row->{DATA_TYPE})) {
        $dateval = "{d '1997-01-01'}";
     } else {
        $dateval = "{ts '1997-01-01 00:00:00'}";

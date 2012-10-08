@@ -1,4 +1,4 @@
-$Id: README.windows 13987 2010-05-14 16:03:36Z mjevans $
+$Id: README.windows 15416 2012-10-03 17:33:00Z mjevans $
 
 Building DBD::ODBC on Windows
 =============================
@@ -87,7 +87,7 @@ Missing SQLLEN/SQLULEN definitions
 ==================================
 
 MS changed the ODBC header files and introduced SQLLEN/SQLULEN types
-whicha re required to build on 64 bit platforms so DBD::ODBC now needs
+which are required to build on 64 bit platforms so DBD::ODBC now needs
 them.
 
 If you find you are missing definitions for SQLLEN/SQLULEN you need
