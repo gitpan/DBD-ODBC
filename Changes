@@ -4,11 +4,15 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-10-08 22:17:10 +0100 (Mon, 08 Oct 2012) $
+As of $LastChangedDate: 2012-10-23 09:35:03 +0100 (Tue, 23 Oct 2012) $
 
 $Revision: 10667 $
 
-=head2 Changes in DBD::ODBC 1.40_3 September 17 2012
+=head2 Changes in DBD::ODBC 1.41 October 23 2012
+
+  A full release of the 1.40 development release series.
+
+=head2 Changes in DBD::ODBC 1.40_3 October 8 2012
 
   [BUG FIXES]
 
@@ -30,8 +34,6 @@ $Revision: 10667 $
   over 0xFFFF (ones which are surrogate pairs).
 
   More documentation for odbc_out_connect_string.
-
-  Minor changes to sqlserver_supplementart_chrs.pl example.
 
 =head2 Changes in DBD::ODBC 1.40_2 September 6 2012
 
