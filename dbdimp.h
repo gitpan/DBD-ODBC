@@ -1,5 +1,5 @@
 /*
- * $Id: dbdimp.h 15373 2012-09-04 15:19:11Z mjevans $
+ * $Id: dbdimp.h 15491 2012-11-28 17:35:35Z mjevans $
  * Copyright (c) 1997-2001 Jeff Urlwin
  * portions Copyright (c) 1997  Thomas K. Wenrich
  * portions Copyright (c) 1994,1995,1996  Tim Bunce
@@ -119,6 +119,13 @@ struct imp_dbh_st {
     int odbc_array_operations;	/* enable/disable inbuilt execute_for_fetch etc */
     /*int (*taf_callback_fn)(SQLHANDLE connection, int type, int event);*/
     SV *odbc_taf_callback;
+    /* If the driver does not support SQLDescribeParam or SQLDescribeParam
+       fails we fall back on a default type. However, some databases need
+       that type to be different depending on the length of the column.
+       MS SQL Server needs to switch from VARCHAR to LONGVARCHAR at 4000
+       bytes whereas MS Access at 256. We set the switch point once we know
+       the database. */
+    int switch_to_longvarchar;
 };
 
 /* Define sth implementor data structure */

@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 15438 2012-10-08 21:07:54Z mjevans $
+/* $Id: dbdimp.c 15491 2012-11-28 17:35:35Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -2467,7 +2467,7 @@ int dbd_describe(SV *sth, imp_sth_t *imp_sth, int more)
         {
           case SQL_VARBINARY:
           case SQL_BINARY:
-	    fbh->ftype = SQL_C_BINARY;
+            fbh->ftype = SQL_C_BINARY;
             if (fbh->ColDef == 0) {             /* cope with varbinary(max) */
                 fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth);
             }
@@ -6343,6 +6343,9 @@ static int post_connect(
     SWORD dbvlen;
     UWORD supported;
 
+    /* default this now before we may change it below */
+    imp_dbh->switch_to_longvarchar = ODBC_SWITCH_TO_LONGVARCHAR;
+
     if (DBIc_TRACE(imp_dbh, CONNECTION_TRACING, 0, 0))
         TRACE0(imp_dbh, "Turning autocommit on\n");
 
@@ -6386,8 +6389,10 @@ static int post_connect(
             imp_dbh->driver_type = DT_SQL_SERVER_NATIVE_CLIENT;
         } else if (strcmp(imp_dbh->odbc_driver_name, "odbcjt32.dll") == 0) {
             imp_dbh->driver_type = DT_MS_ACCESS_JET;
+            imp_dbh->switch_to_longvarchar = 255;
         } else if (strcmp(imp_dbh->odbc_driver_name, "ACEODBC.DLL") == 0) {
             imp_dbh->driver_type = DT_MS_ACCESS_ACE;
+            imp_dbh->switch_to_longvarchar = 255;
         } else if (strcmp(imp_dbh->odbc_driver_name, "esoobclient") == 0) {
             imp_dbh->driver_type = DT_ES_OOB;
         } else if (strcmp(imp_dbh->odbc_driver_name, "OdbcFb") == 0) {
@@ -6659,6 +6664,9 @@ static int post_connect(
 static SQLSMALLINT default_parameter_type(
     char *why, imp_sth_t *imp_sth, phs_t *phs)
 {
+    struct imp_dbh_st *imp_dbh = NULL;
+    imp_dbh = (struct imp_dbh_st *)(DBIc_PARENT_COM(imp_sth));
+
     if (imp_sth->odbc_default_bind_type != 0) {
         return imp_sth->odbc_default_bind_type;
     } else {
@@ -6677,7 +6685,7 @@ static SQLSMALLINT default_parameter_type(
                TRACE2(imp_sth, "%s, sv is not OK, defaulting to %d\n",
                       why, ODBC_BACKUP_BIND_TYPE_VALUE);
             return ODBC_BACKUP_BIND_TYPE_VALUE;
-        } else if (SvCUR(phs->sv) > ODBC_SWITCH_TO_LONGVARCHAR) {
+        } else if (SvCUR(phs->sv) > imp_dbh->switch_to_longvarchar) {
            if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
                TRACE3(imp_sth, "%s, sv=%d bytes, defaulting to %d\n",
                       why, SvCUR(phs->sv), ODBC_BACKUP_LONG_BIND_TYPE_VALUE);

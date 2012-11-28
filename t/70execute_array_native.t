@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 70execute_array_native.t 15260 2012-03-31 15:00:11Z mjevans $
+# $Id: 70execute_array_native.t 15453 2012-10-25 09:05:48Z mjevans $
 # loads of execute_array and execute_for_fetch tests using DBD::ODBC's native methods
 
 use Test::More;
@@ -82,3 +82,10 @@ $ea->error($dbh, {array_context => 0, raise => 0});
 $ea->row_wise($dbh, {array_context => 1, raise => 1});
 
 $ea->update($dbh, {array_context => 1, raise => 1});
+
+# do all the error ones again without specifying ArrayTupleStatus
+$ea->error($dbh, {array_context => 1, raise => 1, notuplestatus => 1});
+$ea->error($dbh, {array_context => 0, raise => 1, notuplestatus => 1});
+$ea->error($dbh, {array_context => 1, raise => 0, notuplestatus => 1});
+$ea->error($dbh, {array_context => 0, raise => 0, notuplestatus => 1});
+

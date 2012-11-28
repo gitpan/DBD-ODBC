@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: sql_type_cast.t 15313 2012-05-21 10:23:31Z mjevans $
+# $Id: sql_type_cast.t 15490 2012-11-28 14:26:44Z mjevans $
 #
 # Test sql_type_cast via DiscardString and StrictlyTyped
 # NOTE: as of post 1.37 you don't need DiscardString when binding SQL_INTEGER
@@ -106,7 +106,7 @@ ok(!$ev, 'create test table with integer');
 BAIL_OUT("Failed to create test table") if $ev;
 
 eval {
-    $dbh->do(q/insert into PERL_DBD_drop_me (a) values(100)/);
+    $dbh->do(q/insert into PERL_DBD_drop_me (a) values('100')/);
 };
 $ev = $@;
 #3
