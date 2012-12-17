@@ -1,4 +1,4 @@
-/* $Id: dbdimp.c 15491 2012-11-28 17:35:35Z mjevans $
+/* $Id: dbdimp.c 15509 2012-12-12 17:01:50Z mjevans $
  *
  * portions Copyright (c) 1994,1995,1996,1997  Tim Bunce
  * portions Copyright (c) 1997 Thomas K. Wenrich
@@ -6919,7 +6919,7 @@ IV odbc_st_execute_for_fetch(
             sv = *sv_p;
             /*check to see if value sv is a null (undef) if it is upgrade it*/
             if (!SvOK(sv))	{
-                if (SvUPGRADE(sv, SVt_PV)){} /* For GCC not to warn on unused result */
+                (void)SvUPGRADE(sv, SVt_PV);
             }
             else {
                 (void)SvPV(sv, sv_len);
@@ -7036,7 +7036,7 @@ IV odbc_st_execute_for_fetch(
             sv = *sv_p;
             /*check to see if value sv is a null (undef) if it is upgrade it*/
             if (!SvOK(sv))	{
-                if (SvUPGRADE(sv, SVt_PV)){} /* For GCC not to warn on unused result */
+                (void)SvUPGRADE(sv, SVt_PV);
                 phs->strlen_or_ind_array[row] = SQL_NULL_DATA;
             }
             else {

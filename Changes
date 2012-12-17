@@ -4,9 +4,16 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-11-28 17:35:35 +0000 (Wed, 28 Nov 2012) $
+As of $LastChangedDate: 2012-12-12 17:01:50 +0000 (Wed, 12 Dec 2012) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC 1.42_2 December 17 2012
+
+  [MISCELLANEOUS]
+
+  Changed any use of if SvUPGRADE to remove the if test as per email
+  from Dave Mitchell and posting at http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/2012-12/msg00424.html.
 
 =head2 Changes in DBD::ODBC 1.42_1 December 12 2012
 
