@@ -4,9 +4,19 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2012-12-12 17:01:50 +0000 (Wed, 12 Dec 2012) $
+As of $LastChangedDate: 2013-01-17 15:54:03 +0000 (Thu, 17 Jan 2013) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC 1.42_3 January 17 2013
+
+  [ENHANCEMENTS]
+
+  Added odbc_trace_file and odbc_trace attributes to the connect
+  method so you can now enable ODBC API tracing from the connect
+  method instead of having to use the ODBC Driver Manager. These also
+  only enable ODBC API tracing in the application which made the call
+  unlike the ODBC Driver Manager settings.
 
 =head2 Changes in DBD::ODBC 1.42_2 December 17 2012
 
