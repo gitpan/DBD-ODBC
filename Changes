@@ -4,9 +4,16 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2013-01-17 15:54:03 +0000 (Thu, 17 Jan 2013) $
+As of $LastChangedDate: 2013-01-21 12:07:49 +0000 (Mon, 21 Jan 2013) $
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC 1.42_4 January 21 2013
+
+  [ENHANCEMENTS]
+
+  odbc_trace and odbc_trace_file are now full connection attributes
+  so you can set them any time you like, not just in connect.
 
 =head2 Changes in DBD::ODBC 1.42_3 January 17 2013
 
