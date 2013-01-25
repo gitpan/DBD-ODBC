@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_46597.t 13407 2009-10-21 20:31:52Z mjevans $
+# $Id: rt_46597.t 15564 2013-01-25 09:43:46Z mjevans $
 use Test::More;
 use strict;
 
@@ -8,13 +8,13 @@ $| = 1;
 my $has_test_nowarnings = 1;
 eval "require Test::NoWarnings";
 $has_test_nowarnings = undef if $@;
-my $tests = 7;
+my $tests = 6;
 $tests += 1 if $has_test_nowarnings;
 plan tests => $tests;
 
 use DBI qw(:sql_types);
 use_ok('ODBCTEST');             # 1
-use_ok('Data::Dumper');         # 2
+#use_ok('Data::Dumper');         # 2
 
 my $dbh;
 

@@ -1,11 +1,11 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_39841.t 12710 2009-04-20 15:21:32Z mjevans $
+# $Id: rt_39841.t 15564 2013-01-25 09:43:46Z mjevans $
 #
 # Test fix for rt 39841 - problem with SQLDecribeParam in MS SQL Server
 #
 use Test::More;
 use strict;
-use Data::Dumper;
+#use Data::Dumper;
 $| = 1;
 
 my $has_test_nowarnings = 1;

@@ -1,5 +1,5 @@
 #!/usr/bin/perl -I./t -w
-# $Id: 30Oracle.t 11714 2008-09-01 19:24:09Z mjevans $
+# $Id: 30Oracle.t 15564 2013-01-25 09:43:46Z mjevans $
 
 use Test::More;
 $| = 1;
@@ -7,7 +7,7 @@ $| = 1;
 my $has_test_nowarnings = 1;
 eval "require Test::NoWarnings";
 $has_test_nowarnings = undef if $@;
-my $tests = 5;
+my $tests = 4;
 $tests += 1 if $has_test_nowarnings;
 plan tests => $tests;
 
@@ -15,7 +15,7 @@ plan tests => $tests;
 # can't seem to get the imports right this way
 use DBI qw(:sql_types);
 use_ok('ODBCTEST');
-use_ok('Data::Dumper');
+#use_ok('Data::Dumper');
 
 # to help ActiveState's build process along by behaving (somewhat) if a dsn is not provided
 BEGIN {

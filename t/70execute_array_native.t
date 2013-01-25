@@ -1,10 +1,10 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 70execute_array_native.t 15453 2012-10-25 09:05:48Z mjevans $
+# $Id: 70execute_array_native.t 15564 2013-01-25 09:43:46Z mjevans $
 # loads of execute_array and execute_for_fetch tests using DBD::ODBC's native methods
 
 use Test::More;
 use strict;
-use Data::Dumper;
+#use Data::Dumper;
 use Config;
 
 $| = 1;

@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 10handler.t 11680 2008-08-28 08:23:27Z mjevans $
+# $Id: 10handler.t 15564 2013-01-25 09:43:46Z mjevans $
 
 use Test::More;
 use strict;
@@ -8,12 +8,11 @@ $| = 1;
 my $has_test_nowarnings = 1;
 eval "require Test::NoWarnings";
 $has_test_nowarnings = undef if $@;
-my $tests = 11;
+my $tests = 10;
 $tests += 1 if $has_test_nowarnings;
 plan tests => $tests;
 
 use_ok('ODBCTEST');
-use_ok('Data::Dumper');
 
 BEGIN {
    if (!defined $ENV{DBI_DSN}) {

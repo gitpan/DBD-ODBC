@@ -1,8 +1,8 @@
 #!/usr/bin/perl -I./t
-# $Id: 05meth.t 14852 2011-05-12 18:32:46Z mjevans $
+# $Id: 05meth.t 15564 2013-01-25 09:43:46Z mjevans $
 
 ## TBd: these tests don't seem to be terribly useful
-use sigtrap;
+#use sigtrap;
 use Test::More;
 use strict;
 
@@ -123,5 +123,5 @@ print $DBI::errstr;
 # make sure there is an invalid transaction state error at the end here.
 # (XXX not reliable, iodbc-2.12 with "INTERSOLV dBase IV ODBC Driver" == -1)
 #print "# DBI::err=$DBI::err\nnot " if $DBI::err ne "25000";
-#print "ok 7\n"; 
+#print "ok 7\n";
 
