@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 10handler.t 15564 2013-01-25 09:43:46Z mjevans $
+# $Id: 10handler.t 15581 2013-03-06 11:54:44Z mjevans $
 
 use Test::More;
 use strict;
@@ -59,7 +59,7 @@ my $eval = $@;
 ok($handler_called >= 1, 'Error handler called');
 ok($errstate, 'Error handler called - state seen');
 ok($errmsg, 'Error handler called - message seen');
-ok($errnative, 'Error handler called - native seen');
+ok(defined($errnative), 'Error handler called - native seen');
 ok(!defined($evalret), 'Error handler called - error passed on');
 ok($eval, 'Error handler called - error propagated');
 
