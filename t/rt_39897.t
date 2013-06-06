@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_39897.t 13148 2009-07-29 16:23:27Z mjevans $
+# $Id$
 #
 # test for rt 39897. DBD::ODBC 1.17 was accidentally changed to apply
 # LongReadLen to SQL_VARCHAR columns. 1.16 and earlier only use LongTruncOk

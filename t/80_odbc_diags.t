@@ -1,4 +1,4 @@
-# $Id: 80_odbc_diags.t 15158 2012-02-14 20:59:34Z mjevans $
+# $Id$
 #
 # Test the experimental odbc_getdiagrec and odbc_getdiagfield
 #

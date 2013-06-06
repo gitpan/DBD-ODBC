@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_43384.t 15564 2013-01-25 09:43:46Z mjevans $
+# $Id$
 use Test::More;
 use strict;
 

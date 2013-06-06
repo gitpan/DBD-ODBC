@@ -1,4 +1,4 @@
-# $Id: ExecuteArray.pm 15453 2012-10-25 09:05:48Z mjevans $
+# $Id$
 package ExecuteArray;
 use Test::More;
 use Data::Dumper;

@@ -1,9 +1,9 @@
-# $Id: ODBC.pm 15565 2013-01-25 09:44:03Z mjevans $
+# $Id$
 #
 # Copyright (c) 1994,1995,1996,1998  Tim Bunce
 # portions Copyright (c) 1997-2004  Jeff Urlwin
 # portions Copyright (c) 1997  Thomas K. Wenrich
-# portions Copyright (c) 2007-2012 Martin J. Evans
+# portions Copyright (c) 2007-2013 Martin J. Evans
 #
 # You may distribute under the terms of either the GNU General Public
 # License or the Artistic License, as specified in the Perl README file.
@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.43';
+$DBD::ODBC::VERSION = '1.44_1';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -32,7 +32,7 @@ $DBD::ODBC::VERSION = '1.43';
 
     @ISA = qw(Exporter DynaLoader);
 
-    # my $Revision = substr(q$Id: ODBC.pm 15565 2013-01-25 09:44:03Z mjevans $, 13,2);
+    # my $Revision = substr(q$Id$, 13,2);
 
     require_version DBI 1.609;
 
@@ -653,13 +653,13 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.43.
+This documentation refers to DBD::ODBC version 1.44_1.
 
 =head1 SYNOPSIS
 
   use DBI;
 
-  $dbh = DBI->connect('dbi:ODBC:DSN', 'user', 'password');
+  $dbh = DBI->connect('dbi:ODBC:DSN=mydsn', 'user', 'password');
 
 See L<DBI> for more information.
 
@@ -676,15 +676,12 @@ C<perldoc DBD::ODBC::FAQ>.
 
 =head2 Important note about the tests
 
-Please note that some tests may fail or report they are unsupported on
-this platform.  Notably Oracle's ODBC driver will fail the "advanced"
-binding tests in t/08bind2.t.  These tests run perfectly under SQL
-Server 2000. This is normal and expected.  Until Oracle fixes their
-drivers to do the right thing from an ODBC perspective, it's going to
-be tough to fix the issue.  The workaround for Oracle is to bind date
-types with SQL_TIMESTAMP.  Also note that some tests may be skipped,
-such as t/09multi.t, if your driver doesn't seem to support returning
-multiple result sets.  This is normal.
+DBD::ODBC is unlike most other DBDs in that it connects to literally
+dozens of possible ODBC Drivers. It is practically impossible for me
+to test every one and so some tests may fail with some ODBC Drivers.
+This does not mean DBD::ODBC will not work with your ODBC Driver but
+it is worth reporting any test failures on rt.cpan.org or to the
+dbi-users mailing list.
 
 =head2 DBI attribute handling
 
@@ -693,7 +690,7 @@ DBI specification.
 
 =head3 ReadOnly (boolean)
 
-DBI documents the C<ReadOnly> attribute as being settleable and
+DBI documents the C<ReadOnly> attribute as being settable and
 retrievable on connection and statement handles. In ODBC setting
 ReadOnly to true causes the connection attribute C<SQL_ATTR_ACCESS_MODE>
 to be set to C<SQL_MODE_READ_ONLY> and setting it to false will set the
@@ -2333,44 +2330,23 @@ SQL type to the end of the C<bind_param> method.
 
 =head2 Version Control
 
-DBD::ODBC source code is under version control at svn.perl.org.  If
-you would like to use the "bleeding" edge version, you can get the
-latest from svn.perl.org via Subversion version control.  Note there
-is no guarantee that this version is any different than what you get
-from the tarball from CPAN, but it might be :)
-
-You may read about Subversion at L<http://subversion.tigris.org>
-
-You can get a subversion client from there and check dbd-odbc out via:
-
-   svn checkout http://svn.perl.org/modules/dbd-odbc/trunk <your directory name here>
-
-Which will pull all the files from the subversion trunk to your
-specified directory. If you want to see what has changed since the
-last release of DBD::ODBC read the Changes file or use "svn log" to
-get a list of checked in changes.
+DBD::ODBC source code was under version control at svn.perl.org
+until April 2013 when svn.perl.org was closed down and it is now on
+github at https://github.com/mjegh/DBD-ODBC.git.
 
 =head2 Contributing
 
-There are seven main ways you may help with the development and
+There are a number of ways you may help with the development and
 maintenance of this module:
 
 =over
 
 =item Submitting patches
 
-Please use Subversion (see above) to get the latest version of
-DBD::ODBC from the trunk and submit any patches against that.
+Please send me a git pull request or email a unified diff.
 
-Please, before submitting a patch:
-
-   svn update
-   <try and included a test which demonstrates the fix/change working>
-   <test your patch>
-   svn diff > describe_my_diffs.patch
-
-and send the resulting file to me and cc the dbi-users@perl.org
-mailing list (if you are not a member - why not!).
+Please try and include a test which demonstrates the fix/change
+working.
 
 =item Reporting installs
 
@@ -2586,5 +2562,14 @@ Jeff Urlwin and Martin J. Evans - see the source.
 =head1 SEE ALSO
 
 L<DBI>
+
+DBD::ODBC can be used with many ODBC drivers to many different
+databases.  If you want a generic DBD for multiple databases DBD::ODBC
+is probably for you.  If you are only accessing a single database then
+you might want to look for DBD::my_database (e.g. DBD::Oracle) as
+database specific DBDs often have more functionality.
+
+L<DBIx::LogAny> or L<DBIx::Log4perl> for logging DBI method calls, SQL,
+parameters and results.
 
 =cut

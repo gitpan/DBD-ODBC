@@ -1,5 +1,5 @@
 #!perl.exe -w
-# $Id: testspmulti.pl 11680 2008-08-28 08:23:27Z mjevans $
+# $Id$
 
 use strict;
 use DBI;

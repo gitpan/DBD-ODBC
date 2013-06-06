@@ -1,5 +1,5 @@
 #!/usr/bin/perl -I./t
-# $Id: 05meth.t 15564 2013-01-25 09:43:46Z mjevans $
+# $Id$
 
 ## TBd: these tests don't seem to be terribly useful
 #use sigtrap;

@@ -1,4 +1,4 @@
-# $Id: execute_for_fetch.pl 15339 2012-06-26 10:13:40Z mjevans $
+# $Id$
 #
 # Demonstrate DBD::ODBC's execute_for_fetch.
 # By default DBD::ODBC has its own execute_for_fetch which should always

@@ -1,4 +1,4 @@
-# $Id: cancel_big_fetch.pl 14631 2011-01-03 16:48:35Z mjevans $
+# $Id$
 # demonstrates that not fetching all of a result-set makes can make
 # a difference. More recent MS SQL Server drivers are better at this so don't
 # be surprised if this shows no difference between the 2 variations.

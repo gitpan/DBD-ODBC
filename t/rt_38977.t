@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_38977.t 13874 2010-03-24 14:22:58Z mjevans $
+# $Id$
 #
 # rt 38977 and 48304
 #

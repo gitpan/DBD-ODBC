@@ -1,4 +1,4 @@
-# $Id: unicode_params.pl 14904 2011-07-11 13:21:06Z mjevans $
+# $Id$
 # Quick demo of inserting and retrieving unicode strings
 # NOTE: your DBD::ODBC really needs to be built with unicode
 # and this script will warn if not. You can comment the die out and it

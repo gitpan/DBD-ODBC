@@ -1,5 +1,5 @@
 #!/usr/bin/perl -I./t -w
-# $Id: 30Oracle.t 15564 2013-01-25 09:43:46Z mjevans $
+# $Id$
 
 use Test::More;
 $| = 1;

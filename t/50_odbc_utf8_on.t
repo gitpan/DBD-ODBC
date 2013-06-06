@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 50_odbc_utf8_on.t 13487 2009-11-12 09:49:38Z mjevans $
+# $Id$
 
 use Test::More;
 use strict;

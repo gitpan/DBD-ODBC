@@ -1,7 +1,7 @@
 --- #YAML:1.0
 name: DBD-ODBC
 abstract: ODBC DBD for Perl DBI
-version: 1.43
+version: 1.44_1
 version_from: ODBC.pm
 author:
   - Martin J. Evans <mjevans@cpan.org>
@@ -39,7 +39,7 @@ resources:
   license: http://dev.perl.org/licenses/
   bugtracker: http://rt.cpan.org/Public/Dist/Display.html?Name=DBD-ODBC
   MailingList: http://dbi.perl.org/support
-  repository: http://svn.perl.org/modules/dbd-odbc
+  repository: https://github.com/mjegh/DBD-ODBC.git
 installdirs:  site
 keywords:
   - ODBC

@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: testfunc.pl 14631 2011-01-03 16:48:35Z mjevans $
+# $Id$
 
 
 # use strict;

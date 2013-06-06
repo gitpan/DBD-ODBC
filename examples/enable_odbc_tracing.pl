@@ -1,4 +1,4 @@
-# $Id: enable_odbc_tracing.pl 15562 2013-01-21 12:07:49Z mjevans $
+# $Id$
 # Shows how to enable ODBC API tracing for this Perl script.
 # NOTE: the ODBC Driver manager does the actual tracing
 use strict;

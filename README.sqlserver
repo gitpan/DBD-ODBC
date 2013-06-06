@@ -1,4 +1,4 @@
-# $Id: README.sqlserver 15416 2012-10-03 17:33:00Z mjevans $
+# $Id$
 
 It is proving near impossible to workaround all the different bugs in
 the various SQL Server ODBC drivers and SQL Server Native Client

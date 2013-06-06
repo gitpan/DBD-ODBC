@@ -1,5 +1,5 @@
 /*
- * $Id: unicode_helper.c 15000 2011-11-15 16:09:32Z mjevans $
+ * $Id$
  */
 #ifdef WITH_UNICODE
 

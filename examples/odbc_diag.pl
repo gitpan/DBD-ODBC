@@ -1,4 +1,4 @@
-# $Id: odbc_diag.pl 15139 2012-02-11 11:32:30Z mjevans $
+# $Id$
 #
 # Demonstrate the experimental odbc_getdiagrec and odbc_getdiagfield
 #

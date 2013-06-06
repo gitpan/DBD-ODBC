@@ -1,4 +1,4 @@
-# $Id: lob_read.pl 14632 2011-01-03 16:49:11Z mjevans $
+# $Id$
 #
 # Example of DBD::ODBC's lob_read
 #

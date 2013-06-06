@@ -1,4 +1,4 @@
-# $Id: sqlserver_supplementary_chrs.pl 15440 2012-10-08 21:17:10Z mjevans $
+# $Id$
 #
 # Quick example demonstrating you can insert and retrieve
 # supplementary characters from MS SQL Server 2012 - it won't work before this version

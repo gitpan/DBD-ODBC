@@ -1,4 +1,4 @@
-# $Id: backup_restore.pl 14631 2011-01-03 16:48:35Z mjevans $
+# $Id$
 # backup and restore a MS SQL Server database
 # needs to loop over odbc_more_results or the procedure does not finish
 use DBI;

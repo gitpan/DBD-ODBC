@@ -4,9 +4,23 @@
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2013-01-25 09:44:03 +0000 (Fri, 25 Jan 2013) $
+As of $LastChangedDate$
 
 $Revision: 10667 $
+
+=head2 Changes in DBD::ODBC 1.44_1 April ?? 2013
+
+  Moved from subversion to github as svn.perl.org is closing down.
+  Changed docs to show new repository.
+
+  [BUG FIXES]
+
+  Fixed RT 84450 - Database Handle Attribute Fetch broken. Thanks to
+  Stephen Oberholtzer for finding and supplying patch.
+
+  Fixed problem with attributes on bind_col not being sticky. You'll
+  probably only see this if you are using fetchall_arrayref with a
+  slice and setting TYPE or attributes in bind_col first.
 
 =head2 Changes in DBD::ODBC 1.43 March 6 2013
 
@@ -14,7 +28,7 @@ $Revision: 10667 $
 
   plus:
 
-  [Bug FIXES]
+  [BUG FIXES]
 
   Minor fix to 10handler.t test suite which relied on a native error
   being true instead of defined.

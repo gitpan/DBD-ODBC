@@ -1,8 +1,8 @@
-$Id: README 15416 2012-10-03 17:33:00Z mjevans $
+$Id$
 
 DBD::ODBC -- DBD module interfacing the ODBC databases.
 
-   $Id: README 15416 2012-10-03 17:33:00Z mjevans $
+   $Id$
 
    DBD::ODBC is Copyright (C) 1994,1995,1996,1997,1998  Tim Bunce
    portions Copyright (C) 1997,1998,1999,2000,2001,2002 Jeff Urlwin

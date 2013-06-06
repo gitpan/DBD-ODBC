@@ -1,4 +1,4 @@
-# $Id: temp_table.pl 14631 2011-01-03 16:48:35Z mjevans $
+# $Id$
 #
 # To access temporary tables in MS SQL Server they need to be created via
 # SQLExecDirect

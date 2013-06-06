@@ -1,4 +1,4 @@
-# $Id: multiple_active_stmts.pl 14639 2011-01-12 13:42:24Z mjevans $
+# $Id$
 # Various ways of enabling Multiple Active Statements support in
 # MS SQL Server - what you use depends on your driver.
 #

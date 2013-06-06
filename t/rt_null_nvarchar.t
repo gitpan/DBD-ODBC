@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_null_nvarchar.t 13028 2009-07-09 18:53:25Z mjevans $
+# $Id$
 #
 # test varbinary(MAX) and varchar(MAX) types in SQL Server
 # Mostly rt_38977 with additional:

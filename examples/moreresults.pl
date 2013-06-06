@@ -1,5 +1,5 @@
 #!perl -w
-# $Id: moreresults.pl 11680 2008-08-28 08:23:27Z mjevans $
+# $Id$
 
 #
 # Sorry -- this test is pretty specific to MSSQL Server and Sybase...

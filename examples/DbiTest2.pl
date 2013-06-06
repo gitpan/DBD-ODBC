@@ -1,5 +1,5 @@
 use strict;
-# $Id: DbiTest2.pl 14631 2011-01-03 16:48:35Z mjevans $
+# $Id$
 
 use warnings;
 

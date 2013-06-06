@@ -1,4 +1,4 @@
-# $Id: dml_counts.pl 14730 2011-03-04 09:17:50Z mjevans $
+# $Id$
 #
 # Multiple ways of getting DML counts
 # Provided for:

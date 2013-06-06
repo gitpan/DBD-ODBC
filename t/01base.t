@@ -1,5 +1,5 @@
 #!perl -w
-# $Id: 01base.t 11680 2008-08-28 08:23:27Z mjevans $
+# $Id$
 
 use Test::More;
 use strict;

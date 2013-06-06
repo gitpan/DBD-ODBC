@@ -1,4 +1,4 @@
-# $Id: driver_complete.pl 14960 2011-10-22 15:30:16Z mjevans $
+# $Id$
 # shows how (in Windows) you can set the odbc_driver_complete flag,
 # pass incomplete connection strings and be prompted for completion
 use strict;

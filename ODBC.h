@@ -1,5 +1,5 @@
 /*
- * $Id: ODBC.h 15509 2012-12-12 17:01:50Z mjevans $
+ * $Id$
  * Copyright (c) 1994,1995,1996,1997  Tim Bunce
  *
  * You may distribute under the terms of either the GNU General Public

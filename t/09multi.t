@@ -1,5 +1,5 @@
 #!/usr/bin/perl -I./t -w
-# $Id: 09multi.t 11680 2008-08-28 08:23:27Z mjevans $
+# $Id$
 
 use Test::More;
 eval "require Test::NoWarnings";

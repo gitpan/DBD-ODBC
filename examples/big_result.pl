@@ -1,4 +1,4 @@
-# $Id: big_result.pl 14631 2011-01-03 16:48:35Z mjevans $
+# $Id$
 # create a table with lots of big rows and see how long it takes to
 # get it back
 # run once with any command line argument (to create and populate the table)

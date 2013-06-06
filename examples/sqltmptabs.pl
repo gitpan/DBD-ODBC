@@ -1,5 +1,5 @@
 use DBI;
-# $Id: sqltmptabs.pl 14631 2011-01-03 16:48:35Z mjevans $
+# $Id$
 # For MS SQL Server temp tables are only visible if you create them with "do"
 
 my $dbh = DBI->connect($ENV{DBI_DSN}, $ENV{DBI_USER}, $ENV{DBI_PASS}, { RaiseError => 1});

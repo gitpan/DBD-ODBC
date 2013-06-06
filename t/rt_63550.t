@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: rt_63550.t 15377 2012-09-05 13:49:46Z mjevans $
+# $Id$
 #
 # rt_53550 - check Statement is accessible in error handler from do method
 #

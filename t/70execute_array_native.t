@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w -I./t
-# $Id: 70execute_array_native.t 15564 2013-01-25 09:43:46Z mjevans $
+# $Id$
 # loads of execute_array and execute_for_fetch tests using DBD::ODBC's native methods
 
 use Test::More;

@@ -1,4 +1,4 @@
-# $Id: unicode_sql.pl 14904 2011-07-11 13:21:06Z mjevans $
+# $Id$
 #
 # Small example showing how you can insert unicode inline in the SQL
 #

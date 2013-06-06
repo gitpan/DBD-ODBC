@@ -1,4 +1,4 @@
-# $Id: set_nocount_on.pl 14960 2011-10-22 15:30:16Z mjevans $
+# $Id$
 # shows what happens in MS SQL Server when set nocount on is set
 # according to MS setting it on reduces network traffic since a count
 # off the affected/selected rows is not returned to the driver.

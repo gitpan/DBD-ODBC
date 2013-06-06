@@ -1,5 +1,5 @@
 /*
- * $Id: unicode_helper.h 12855 2009-06-17 09:55:33Z mjevans $
+ * $Id$
  */
 #ifdef WITH_UNICODE
 

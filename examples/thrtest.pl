@@ -1,5 +1,5 @@
 
-# $Id: thrtest.pl 11680 2008-08-28 08:23:27Z mjevans $
+# $Id$
 
 use 5.008 ;
 use threads ;

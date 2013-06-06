@@ -1,5 +1,5 @@
 #/usr/bin/perl -w
-# $Id: longbin.pl 11680 2008-08-28 08:23:27Z mjevans $
+# $Id$
 
 use strict;
 use DBI qw (:sql_types);

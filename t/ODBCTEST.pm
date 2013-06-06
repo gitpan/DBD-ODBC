@@ -1,5 +1,5 @@
 #
-# $Id: ODBCTEST.pm 15438 2012-10-08 21:07:54Z mjevans $
+# $Id$
 #
 # Package ODBCTEST
 #
