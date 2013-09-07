@@ -124,8 +124,8 @@ require 5.004;
       $rc = -1;
 
       unless ($sth = $dbh->table_info()) {
-	 # diag("Can't list tables: $DBI::errstr\n");
-	 return -1;
+          diag("Can't list tables: $DBI::errstr\n");
+          return -1;
       }
 	# TABLE_QUALIFIER,TABLE_OWNER,TABLE_NAME,TABLE_TYPE,REMARKS
       while ($row = $sth->fetchrow_hashref()) {

@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.44_1';
+$DBD::ODBC::VERSION = '1.44_2';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -255,27 +255,29 @@ $DBD::ODBC::VERSION = '1.44_1';
 
 
     sub table_info {
- 	my ($dbh, $catalog, $schema, $table, $type) = @_;
+        my ($dbh, $catalog, $schema, $table, $type) = @_;
 
-	if ($#_ == 1) {
-	   my $attrs = $_[1];
-	   $catalog = $attrs->{TABLE_CAT};
-	   $schema = $attrs->{TABLE_SCHEM};
-	   $table = $attrs->{TABLE_NAME};
-	   $type = $attrs->{TABLE_TYPE};
+        if ($#_ == 1) {
+            my $attrs = $_[1];
+            $catalog = $attrs->{TABLE_CAT};
+            $schema = $attrs->{TABLE_SCHEM};
+            $table = $attrs->{TABLE_NAME};
+            $type = $attrs->{TABLE_TYPE};
  	}
+        # the following was causing a problem
+        # changing undef to '' makes a big difference to SQLTables
+        # as SQLTables has special cases for empty string calls
+        #$catalog = q{} if (!$catalog);
+        #$schema = q{} if (!$schema);
+        #$table = q{} if (!$table);
+        #$type = q{} if (!$type);
 
-	$catalog = q{} if (!$catalog);
-	$schema = q{} if (!$schema);
-	$table = q{} if (!$table);
-	$type = q{} if (!$type);
+        # create a "blank" statement handle
+        my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLTables" });
 
-	# create a "blank" statement handle
-	my $sth = DBI::_new_sth($dbh, { 'Statement' => "SQLTables" });
-
-	DBD::ODBC::st::_tables($dbh,$sth, $catalog, $schema, $table, $type)
-	      or return;
-	return $sth;
+        DBD::ODBC::st::_tables($dbh,$sth, $catalog, $schema, $table, $type)
+              or return;
+        return $sth;
     }
 
     sub primary_key_info {
@@ -653,7 +655,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.44_1.
+This documentation refers to DBD::ODBC version 1.44_2.
 
 =head1 SYNOPSIS
 
@@ -1050,7 +1052,7 @@ attribute.
 Thanks to Andrew Brown for the original patch.
 
 DBD developer note: Here lies a bag of worms. Firstly, SQL_ROWSET_SIZE
-is an ODBC 2 attribute and is usally a statement attribute not a
+is an ODBC 2 attribute and is usually a statement attribute not a
 connection attribute. However, in ODBC 2.0 you could set statement
 attributes on a connection handle and it acted as a default for all
 subsequent statement handles created under that connection handle. If
@@ -1448,7 +1450,7 @@ SQLRowCount. It is the same as execute normally returns e.g., 0E0 (for
 
 =head3 odbc_lob_read
 
-  $chrs_or_bytes_read = $sth->lob_read($column_no, \$lob, $length, \%attr);
+  $chrs_or_bytes_read = $sth->odbc_lob_read($column_no, \$lob, $length, \%attr);
 
 Reads C<$length> bytes from the lob at column C<$column_no> returning
 the lob into C<$lob> and the number of bytes or characters read into
@@ -1468,7 +1470,7 @@ unicode support. C<$chrs_or_bytes_read> will by the bytes read when
 the column types SQL_C_CHAR or SQL_C_BINARY are used and characters
 read if the column type is SQL_C_WCHAR.
 
-When built with unicode support C<$length> specifes the amount of
+When built with unicode support C<$length> specifies the amount of
 buffer space to be used when retrieving the lob data but as it is
 returned as SQLWCHAR characters this means you at most retrieve
 C<$length/2> characters. When those retrieved characters are encoded
@@ -1496,7 +1498,7 @@ NOTE: You can retrieve only part of a lob but you will probably have
 to call finish on the statement handle before you do anything else
 with that statement. When only retrieving part of a large lob you
 could see a small delay when you call finish as some protocols used
-by ODBC drivers send the lob down the socket synchonously and there is
+by ODBC drivers send the lob down the socket synchronously and there is
 no way to stop it (this means the ODBC driver needs to read all the
 lob from the socket even though you never retrieved it all yourself).
 
@@ -1722,7 +1724,7 @@ performed an error will be raised.
 
 This is probably not a lot of use with DBD::ODBC as if you ask for say
 an SQL_INTEGER and the data is not able to be converted to an integer
-the ODBC driver will problably return "Invalid character value for
+the ODBC driver will probably return "Invalid character value for
 cast specification (SQL-22018)".
 
 NOTE: For StrictlyTyped you need at least DBI 1.611.
@@ -1741,7 +1743,7 @@ strings (after modification) passed to the prepare and do methods.
 
 From DBI 1.617 DBI also defines ENC (encoding), CON (connection) TXN
 (transaction) and DBD (DBD only) trace flags. DBI's ENC and CON trace
-flags are synonomous with DBD::ODBC's odbcunicode and odbcconnection
+flags are synonymous with DBD::ODBC's odbcunicode and odbcconnection
 trace flags though I may remove the DBD::ODBC ones in the
 future. DBI's DBD trace flag allows output of only DBD::ODBC trace
 messages without DBI's trace messages.
@@ -2332,7 +2334,7 @@ SQL type to the end of the C<bind_param> method.
 
 DBD::ODBC source code was under version control at svn.perl.org
 until April 2013 when svn.perl.org was closed down and it is now on
-github at https://github.com/mjegh/DBD-ODBC.git.
+github at https://github.com/perl5-dbi/DBD-ODBC.git.
 
 =head2 Contributing
 
