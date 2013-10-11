@@ -1,3 +1,5 @@
+use strict;
+
 =encoding utf8
 
 =head1 NAME
@@ -8,7 +10,52 @@ As of $LastChangedDate$
 
 $Revision: 10667 $
 
-=head2 Changes in DBD::ODBC 1.44_2 September 3 2013
+=head2 Changes in DBD::ODBC 1.44_3 October 11 2013
+
+  [CHANGE IN BEHAVIOUR]
+
+  If you attempt to set the ReadOnly attribute and the underlying
+  ODBC driver does not support this (SQL_SUCCESS_WITH_INFO and "option
+  value changed" is returned) a warning is issued. However, until RT
+  89015 "You cannot issue a warning in the STORE method" in DBI is
+  resolved you won't get this warning. As DBI 1.628 it is not
+  resolved. I've only seen the SQLite ODBC driver do this.
+
+  If you set ReadOnly and the underlying ODBC driver does not
+  support this then any subsequent attempts to fetch the ReadOnly
+  attribute will return the value you set.
+
+  [BUG FIXES]
+
+  The 82_table_info test assumed all database and ODBC Drivers
+  supported catalogs and schemas (some don't). Use get_info to
+  find out if catalogs and schemas are supported before
+  running these tests.
+
+  The rt_79190.t could incorrectly fail if your test DSN contained
+  the DRIVER attribute.
+
+  [MISCELLANEOUS]
+
+  Added RedHat spec file to examples courtesy of Michiel Beijen.
+
+  Added "use strict" to FAQ/Changes etc to quieten kwalitee test.
+
+  Added a workaround in the test suite for a probable bug in the
+  postgres ODBC driver which does not return COLUMN_SIZE from
+  SQLGetTypeInfo. It also issues a warning.  See
+  http://www.postgresql.org/message-id/524EF455.6050409@ntlworld.com
+
+=head2 Changes in DBD::ODBC 1.44_3 September 7 2013
+
+  [MISCELLANEOUS]
+
+  Skip 70execute_array_native.t test if MS Access - even if behind an
+  ODBC Bridge.
+
+  Fixed some compiler warnings when attempting to print/trace SvCUR.
+
+=head2 Changes in DBD::ODBC 1.44_2 September 7 2013
 
   [BUG FIXES]
 

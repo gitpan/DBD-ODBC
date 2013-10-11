@@ -28,7 +28,7 @@
  *   http://perl.active-venture.com/pod/perlapi-svfunctions.html
  * Formatted Printing of IVs, UVs, and NVs
  *   http://perldoc.perl.org/perlguts.html#Formatted-Printing-of-IVs,-UVs,-and-NVs
- *   http://cpansearch.perl.org/src/RURBAN/illguts-0.36/index.html
+ *   http://cpansearch.perl.org/src/RURBAN/illguts-0.44/index.html
  * Internal replacements for standard C library functions:
  * http://search.cpan.org/~jesse/perl-5.12.1/pod/perlclib.pod
  * http://search.cpan.org/dist/Devel-PPPort/PPPort.pm
@@ -326,9 +326,9 @@ static void odbc_handle_outparams(imp_sth_t *imp_sth, int debug)
                       PerlIO_printf(
                           DBIc_LOGPIO(imp_sth),
                           "    outparam %s = '%s'\t(len %ld), is numeric end"
-                          " of buffer = %d\n",
+                          " of buffer = %ld\n",
                           phs->name, SvPV(sv,PL_na), (long)phs->strlen_or_ind,
-                          p - pstart);
+                          (long)(p - pstart));
                   }
                   SvCUR_set(sv, p - pstart);
               }
@@ -1704,7 +1704,7 @@ int dbd_st_tables(
        SV *copy;
 
        if (SvOK(catalog)) {
-           /*printf("CATALOG OK %d /%s/\n", SvCUR(catalog), SvPV_nolen(catalog));*/
+           /*printf("CATALOG OK %"IVdf" /%s/\n", SvCUR(catalog), SvPV_nolen(catalog));*/
 
            copy = sv_mortalcopy(catalog);
            SV_toWCHAR(copy);
@@ -2896,8 +2896,8 @@ int dbd_st_execute(
          * (value_len = 0).
          */
         if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 5))
-            TRACE2(imp_dbh, "    SQLParamData needs phs %p, sending %i bytes\n",
-                   phs, len);
+            TRACE2(imp_dbh, "    SQLParamData needs phs %p, sending %"UVuf" bytes\n",
+                   phs, (UV)len);
         ptr = SvPV(phs->sv, len);
         rc = SQLPutData(imp_sth->hstmt, ptr, len);
         if (!SQL_SUCCEEDED(rc)) {
@@ -3716,11 +3716,11 @@ static int rebind_param(
     if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4)) {
         PerlIO_printf(
             DBIc_LOGPIO(imp_dbh),
-            "    +rebind_param %s %.100s (size svCUR=%d/SvLEN=%d/max=%"IVdf") "
+            "    +rebind_param %s %.100s (size SvCUR=%"UVuf"/SvLEN=%"UVuf"/max=%"IVdf") "
             "svtype:%u, value type:%d, sql type:%d\n",
             phs->name, neatsvpv(phs->sv, 0),
-            SvOK(phs->sv) ? SvCUR(phs->sv) : -1,
-            SvOK(phs->sv) ? SvLEN(phs->sv) : -1 ,phs->maxlen,
+            SvOK(phs->sv) ? (UV)SvCUR(phs->sv) : -1,
+            SvOK(phs->sv) ? (UV)SvLEN(phs->sv) : -1 ,phs->maxlen,
             SvTYPE(phs->sv), phs->value_type, phs->sql_type);
     }
 
@@ -3804,9 +3804,9 @@ static int rebind_param(
     if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4)) {
         PerlIO_printf(
             DBIc_LOGPIO(imp_dbh),
-            "      bind %s %.100s value_len=%d maxlen=%ld null=%d)\n",
+            "      bind %s %.100s value_len=%"UVuf" maxlen=%ld null=%d)\n",
             phs->name, neatsvpv(phs->sv, value_len),
-            value_len,(long)phs->maxlen, SvOK(phs->sv) ? 0 : 1);
+            (UV)value_len,(long)phs->maxlen, SvOK(phs->sv) ? 0 : 1);
     }
 
     /*
@@ -4476,8 +4476,8 @@ long destoffset;
    if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4))
       PerlIO_printf(
           DBIc_LOGPIO(imp_sth),
-          "SQLGetData(...,off=%ld, len=%ld)->rc=%d,len=%ld SvCUR=%d\n",
-          destoffset, len, rc, (long)retl, SvCUR(bufsv));
+          "SQLGetData(...,off=%ld, len=%ld)->rc=%d,len=%ld SvCUR=%"UVuf"\n",
+          destoffset, len, rc, (long)retl, (UV)SvCUR(bufsv));
 
    if (!SQL_SUCCEEDED(rc)) {
       dbd_error(sth, rc, "dbd_st_blob_read/SQLGetData");
@@ -4502,7 +4502,7 @@ long destoffset;
    *SvEND(bufsv) = '\0'; /* consistent with perl sv_setpvn etc */
 
    if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 4))
-       TRACE1(imp_sth, "    blob_read: SvCUR=%d\n", SvCUR(bufsv));
+       TRACE1(imp_sth, "    blob_read: SvCUR=%"UVuf"\n", (UV)SvCUR(bufsv));
 
    return 1;
 }
@@ -4919,11 +4919,34 @@ int dbd_db_STORE_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv, SV *valuesv)
     if (bSetSQLConnectionOption) {
         rc = SQLSetConnectAttr(imp_dbh->hdbc, pars->fOption,
                                vParam, attr_length);
-
         if (!SQL_SUCCEEDED(rc)) {
             dbd_error(dbh, rc, "db_STORE/SQLSetConnectAttr");
             return FALSE;
         }
+        else if ((SQL_SUCCESS_WITH_INFO == rc) &&
+                   (pars->fOption == SQL_ATTR_ACCESS_MODE)) {
+            char state[SQL_SQLSTATE_SIZE+1];
+            SQLINTEGER native;
+            char msg[256];
+            SQLSMALLINT msg_len;
+
+            /* If we attempted to set SQL_ATTR_ACCESS_MODE, save the result
+               to return from FETCH, even if it didn't work */
+            if (vParam == (SQLPOINTER)pars->atrue) {
+                imp_dbh->read_only = 1;
+            } else {
+                imp_dbh->read_only = 0;
+            }
+
+            (void)SQLGetDiagRec(SQL_HANDLE_DBC, imp_dbh->hdbc, 1,
+                                (SQLCHAR *)state, &native, msg, sizeof(msg), &msg_len);
+
+            DBIh_SET_ERR_CHAR(
+                dbh, (imp_xxh_t*)imp_dbh, "0" /* warning state */, 1,
+                msg,
+                state, Nullch);
+        }
+
         if (pars->fOption == SQL_ROWSET_SIZE)
             imp_dbh->rowset_size = (SQLULEN)vParam;
 
@@ -5082,6 +5105,13 @@ SV *dbd_db_FETCH_attrib(SV *dbh, imp_dbh_t *imp_dbh, SV *keysv)
           char strval[256];
           SQLUINTEGER uval = 0;
           SQLINTEGER retstrlen;
+
+          if ((pars->fOption == SQL_ATTR_ACCESS_MODE) &&
+              (imp_dbh->read_only != -1)) {
+
+              retsv = newSViv(imp_dbh->read_only);
+              break;
+          }
 
           /*
            * The remainders we support are ODBC attributes like
@@ -6401,22 +6431,21 @@ static int set_odbc_version(
 
 
 
-/************************************************************************/
-/*                                                                      */
-/*  post_connect                                                        */
-/*  ============                                                        */
-/*                                                                      */
-/*  Operations to perform immediately after we have connected.          */
-/*                                                                      */
-/*  NOTE: prior to DBI subversion version 11605 (fixed post 1.607)      */
-/*    DBD_ATTRIB_DELETE segfaulted so instead of calling:               */
-/*    DBD_ATTRIB_DELETE(attr, "odbc_cursortype",                        */
-/*                      strlen("odbc_cursortype"));                     */
-/*    we do the following:                                              */
-/*      hv_delete((HV*)SvRV(attr), "odbc_cursortype",                   */
-/*                strlen("odbc_cursortype"), G_DISCARD);                */
-/*                                                                      */
-/************************************************************************/
+/*
+ *  post_connect
+ *  ==========
+ *
+ *  Operations to perform immediately after we have connected.
+ *
+ *  NOTE: prior to DBI subversion version 11605 (fixed post 1.607)
+ *    DBD_ATTRIB_DELETE segfaulted so instead of calling:
+ *    DBD_ATTRIB_DELETE(attr, "odbc_cursortype",
+ *                      strlen("odbc_cursortype"));
+ *    we do the following:
+ *      hv_delete((HV*)SvRV(attr), "odbc_cursortype",
+ *                strlen("odbc_cursortype"), G_DISCARD);
+ */
+
 static int post_connect(
     SV *dbh,
     imp_dbh_t *imp_dbh,
@@ -6586,6 +6615,8 @@ static int post_connect(
     imp_dbh->odbc_query_timeout = -1;
     imp_dbh->odbc_putdata_start = 32768;
     imp_dbh->odbc_batch_size = 10;
+    imp_dbh->read_only = -1;                    /* show not set yet */
+
     /*printf("odbc_batch_size defaulted to %d\n", imp_dbh->odbc_batch_size);*/
     imp_dbh->odbc_column_display_size = 2001;
     imp_dbh->odbc_utf8_on = 0;
@@ -6771,13 +6802,13 @@ static SQLSMALLINT default_parameter_type(
             return ODBC_BACKUP_BIND_TYPE_VALUE;
         } else if (SvCUR(phs->sv) > imp_dbh->switch_to_longvarchar) {
            if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
-               TRACE3(imp_sth, "%s, sv=%d bytes, defaulting to %d\n",
-                      why, SvCUR(phs->sv), ODBC_BACKUP_LONG_BIND_TYPE_VALUE);
+               TRACE3(imp_sth, "%s, sv=%"UVuf" bytes, defaulting to %d\n",
+                      why, (UV)SvCUR(phs->sv), ODBC_BACKUP_LONG_BIND_TYPE_VALUE);
             return ODBC_BACKUP_LONG_BIND_TYPE_VALUE;
         } else {
            if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
-               TRACE3(imp_sth, "%s, sv=%d bytes, defaulting to %d\n",
-                      why, SvCUR(phs->sv), ODBC_BACKUP_BIND_TYPE_VALUE);
+               TRACE3(imp_sth, "%s, sv=%"UVuf" bytes, defaulting to %d\n",
+                      why, (UV)SvCUR(phs->sv), ODBC_BACKUP_BIND_TYPE_VALUE);
             return ODBC_BACKUP_BIND_TYPE_VALUE;
         }
     }
@@ -6914,7 +6945,7 @@ IV odbc_st_execute_for_fetch(
     rc = SQLSetStmtAttr(imp_sth->hstmt, SQL_ATTR_PARAM_BIND_TYPE,
                         (SQLPOINTER)SQL_PARAM_BIND_BY_COLUMN, 0);
     if (!SQL_SUCCEEDED(rc)) {
-        dbd_error(sth, rc, "odbc_st_execute_for_fetch/SQL_ATTR_BIND_TYPE");
+        dbd_error(sth, rc, "odbc_st_execute_for_fetch/SQL_ATTR_PARAM_BIND_TYPE");
         return -2;
     }
 
@@ -7398,7 +7429,6 @@ static int get_row_diag(SQLSMALLINT recno,
     return 0;
 
 }
-
 
 
 

@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.44_2';
+$DBD::ODBC::VERSION = '1.44_3';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -655,7 +655,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.44_2.
+This documentation refers to DBD::ODBC version 1.44_3.
 
 =head1 SYNOPSIS
 
@@ -1938,6 +1938,16 @@ DBD::ODBC's own execute_for_fetch but quite a few ODBC drivers just
 cannot handle it. As such, from DBD::ODBC 1.36_2 the default was
 changed to not use DBD::ODBC's execute_for_fetch (i.e., you need to
 enable it with odbc_array_operations).
+
+NOTE: Some ODBC drivers don't support setting SQL_ATTR_PARAMSET_SIZE >
+1, and hence cannot support binding arrays of parameters. The only way
+to detect this is to attempt to set SQL_ATTR_PARAMSET_SIZE to a value
+greater than 1 and it is too late once someone has called
+execute_for_fetch. I don't want to add test code on each connect to
+test for this as it will affect everyone, even those not using the
+native execute_for_fetch so for now it is a suck it and see. For your
+information MS Access which does not support arrays of parameters
+errors with HY092, "Invalid attribute/option identifier".
 
 However, there are a small number of differences between using
 DBD::ODBC's execute_for_fetch compared with using DBI's default
