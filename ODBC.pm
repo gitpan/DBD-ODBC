@@ -19,7 +19,7 @@ require 5.008;
 # see discussion on dbi-users at
 # http://www.nntp.perl.org/group/perl.dbi.dev/2010/07/msg6096.html and
 # http://www.dagolden.com/index.php/369/version-numbers-should-be-boring/
-$DBD::ODBC::VERSION = '1.44_3';
+$DBD::ODBC::VERSION = '1.44_4';
 
 {
     ## no critic (ProhibitMagicNumbers ProhibitExplicitISA)
@@ -95,6 +95,7 @@ $DBD::ODBC::VERSION = '1.44_3';
         return DBI::parse_trace_flags($class, $flags);
     }
 
+    my $methods_are_installed = 0;
     sub driver{
         return $drh if $drh;
         my($class, $attr) = @_;
@@ -111,13 +112,16 @@ $DBD::ODBC::VERSION = '1.44_3';
             'State' => \$DBD::ODBC::sqlstate,
             'Attribution' => 'DBD::ODBC by Jeff Urlwin, Tim Bunce and Martin J. Evans',
 	    });
-        DBD::ODBC::st->install_method("odbc_lob_read");
-        DBD::ODBC::st->install_method("odbc_rows", { O=>0x00000000 });
-        # don't clear errors - IMA_KEEP_ERR = 0x00000004
-        DBD::ODBC::st->install_method("odbc_getdiagrec", { O=>0x00000004 });
-        DBD::ODBC::db->install_method("odbc_getdiagrec", { O=>0x00000004 });
-        DBD::ODBC::db->install_method("odbc_getdiagfield", { O=>0x00000004 });
-        DBD::ODBC::st->install_method("odbc_getdiagfield", { O=>0x00000004 });
+        if (!$methods_are_installed) {
+            DBD::ODBC::st->install_method("odbc_lob_read");
+            DBD::ODBC::st->install_method("odbc_rows", { O=>0x00000000 });
+            # don't clear errors - IMA_KEEP_ERR = 0x00000004
+            DBD::ODBC::st->install_method("odbc_getdiagrec", { O=>0x00000004 });
+            DBD::ODBC::db->install_method("odbc_getdiagrec", { O=>0x00000004 });
+            DBD::ODBC::db->install_method("odbc_getdiagfield", { O=>0x00000004 });
+            DBD::ODBC::st->install_method("odbc_getdiagfield", { O=>0x00000004 });
+            $methods_are_installed++;
+        }
         return $drh;
     }
 
@@ -655,7 +659,7 @@ DBD::ODBC - ODBC Driver for DBI
 
 =head1 VERSION
 
-This documentation refers to DBD::ODBC version 1.44_3.
+This documentation refers to DBD::ODBC version 1.44_4.
 
 =head1 SYNOPSIS
 
@@ -1409,7 +1413,15 @@ files for short periods of ODBC activity.
 =head3 odbc_more_results
 
 Use this attribute to determine if there are more result sets
-available.  SQL Server supports this feature.  Use this as follows:
+available.
+
+Any ODBC Driver which batches results or counts of inserts/updates
+will need you to loop on odbc_more_results until there are no more
+results. e.g., if you are performing multiple selects in a procedure or
+multiple inserts/updates/deletes then you will probably need to loop on
+odbc_more_results.
+
+Use odbc_more_results as follows:
 
   do {
      my @row;
@@ -1421,6 +1433,11 @@ available.  SQL Server supports this feature.  Use this as follows:
 Note that with multiple result sets and output parameters (i.e,. using
 bind_param_inout), don't expect output parameters to written to until ALL
 result sets have been retrieved.
+
+Under the hood this attribute causes a call to the ODBC API
+SQLMoreResults and then any result set, insert/update/delete or output
+parameters are described by DBD::ODBC and the statement handle will be
+ready for processing the new result.
 
 =head2 Private statement methods
 
