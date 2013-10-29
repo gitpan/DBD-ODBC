@@ -2909,12 +2909,15 @@ int dbd_st_execute(
     }
 
     /*
-     * Call dbd_error regardless of the value of rc so we can
-     * get any status messages that are desired.
+     * Call dbd_error if we get SQL_SUCCESS_WITH_INFO as there may
+     * be some status msgs for us.
      */
-    dbd_error(sth, rc, "st_execute/SQLExecute");
+    if (SQL_SUCCESS_WITH_INFO == rc) {
+        dbd_error(sth, rc, "st_execute/SQLExecute");
+    }
+
     if (!SQL_SUCCEEDED(rc) && rc != SQL_NO_DATA) {
-        /* dbd_error(sth, rc, "st_execute/SQLExecute"); */
+        dbd_error(sth, rc, "st_execute/SQLExecute");
         if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
             TRACE1(imp_dbh, "    -dbd_st_execute(%p)=-2\n", sth);
         return -2;
@@ -4559,6 +4562,7 @@ static db_params S_db_options[] =  {
    { "odbc_utf8_on", ODBC_UTF8_ON, PARAM_READWRITE, PARAM_TYPE_CUSTOM },
    { "odbc_old_unicode", ODBC_OLD_UNICODE, PARAM_READWRITE, PARAM_TYPE_CUSTOM },
    { "odbc_has_unicode", ODBC_HAS_UNICODE, PARAM_READ, PARAM_TYPE_CUSTOM },
+   {"odbc_out_connect_string", ODBC_OUTCON_STR, PARAM_READ, PARAM_TYPE_CUSTOM},
    { "odbc_describe_parameters", ODBC_DESCRIBE_PARAMETERS, PARAM_READWRITE, PARAM_TYPE_CUSTOM },
    { "odbc_batch_size", ODBC_BATCH_SIZE, PARAM_READWRITE, PARAM_TYPE_CUSTOM },
    { "odbc_array_operations", ODBC_ARRAY_OPERATIONS, PARAM_READWRITE, PARAM_TYPE_CUSTOM },

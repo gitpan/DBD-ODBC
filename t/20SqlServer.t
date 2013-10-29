@@ -1,6 +1,4 @@
 #!/usr/bin/perl -w -I./t
-# $Id$
-
 use Test::More;
 use strict;
 
@@ -9,29 +7,30 @@ $| = 1;
 my $has_test_nowarnings = 1;
 eval "require Test::NoWarnings";
 $has_test_nowarnings = undef if $@;
-my $tests = 64;
+my $tests = 67;
 $tests += 1 if $has_test_nowarnings;
 plan tests => $tests;
 
 my $dbh;
 
-# use_ok('DBI', qw(:sql_types));
-# can't seem to get the imports right this way
 use DBI qw(:sql_types);
+use DBI::Const::GetInfoType;
+
 use_ok('ODBCTEST');
-#use_ok('Data::Dumper');
 
 BEGIN {
-    plan skip_all => "DBI_DSN is undefined"
-        if (!defined $ENV{DBI_DSN});
+    plan skip_all => "DBI_DSN is undefined" if (!defined $ENV{DBI_DSN});
 }
+
 END {
+    # tidy up
     if ($dbh) {
         local $dbh->{PrintError} = 0;
         local $dbh->{PrintWarn} = 0;
         eval {
             $dbh->do(q/drop procedure PERL_DBD_PROC1/);
             $dbh->do(q/drop procedure PERL_DBD_PROC2/);
+            $dbh->do(q/drop table PERL_DBD_TABLE1/);
         };
     }
     Test::NoWarnings::had_no_warnings()
@@ -47,14 +46,14 @@ sub getinfo
 {
     my $dbh = shift;
 
-    $dbms_name = $dbh->get_info(17);
+    $dbms_name = $dbh->get_info($GetInfoType{SQL_DBMS_NAME});
     ok($dbms_name, "got DBMS name: $dbms_name");
-    $dbms_version = $dbh->get_info(18);
+    $dbms_version = $dbh->get_info($GetInfoType{SQL_DBMS_VER});
     ok($dbms_version, "got DBMS version: $dbms_version");
     $m_dbmsversion = $dbms_version;
     $m_dbmsversion =~ s/^(\d+).*/$1/;
     ok($m_dbmsversion, "got DBMS major version: $m_dbmsversion");
-    $driver_name = $dbh->get_info(6);
+    $driver_name = $dbh->get_info($GetInfoType{SQL_DRIVER_NAME});
     ok($driver_name, "got Driver Name: $driver_name");
 }
 
@@ -227,7 +226,7 @@ unless($dbh) {
 }
 my $sth;
 
-my $dbname = $dbh->get_info(17); # DBI::SQL_DBMS_NAME
+my $dbname = $dbh->get_info($GetInfoType{SQL_DBMS_NAME});
 SKIP: {
    skip "Microsoft SQL Server tests not supported using $dbname", 63
        unless ($dbname =~ /Microsoft SQL Server/i);
@@ -445,39 +444,50 @@ BEGIN
 END
 EOT
    $dbh->{RaiseError} = 0;
+   # NOTE: MS SQL native client for linux fails this test because
+   # SQLExecute returns SQL_NO_DATA even though the proc never did
+   # a searched update/delete - AND it works on the same Windows driver.
    eval {$dbh->do($proc1)} or diag($@);
    my $sth = $dbh->prepare ('{call PERL_DBD_PROC1 (?)}');
    my $success = -1;
 
    $sth->bind_param (1, 99, SQL_INTEGER);
-   $sth->execute();
-   $success = -1;
-   while (my @data = $sth->fetchrow_array()) {($success) = @data;}
-   is($success, 100, 'procedure outputs results as result set');
+   my $cres = $sth->execute();
+   ok(defined($cres), "execute for non searched update via procedure");
+   if (!defined($cres)) {
+       note("Your driver has a bug which means it is probably incorrectly returning SQL_NO_DATA from a non-searched update");
+   }
+ SKIP: {
+       skip "execute failed - probably SQL_NO_DATA bug", 4 if !defined($cres);
+       ok($cres eq '0E0' || $cres == -1, "0/unknown rows updated");
 
-   $sth->bind_param (1, 10, SQL_INTEGER);
-   $sth->execute();
-   $success = -1;
-   while (my @data = $sth->fetchrow_array()) {($success) = @data;}
-   is($success,10, 'procedure outputs results as result set2');
+       $success = -1;
+       while (my @data = $sth->fetchrow_array()) {($success) = @data;}
+       is($success, 100, 'procedure outputs results as result set');
 
-   $sth->bind_param (1, 111, SQL_INTEGER);
-   $sth->execute();
-   $success = -1;
-   do {
-      my @data;
-      while (@data = $sth->fetchrow_array()) {
-	 if ($#data == 0) {
-	    ($success) = @data;
-	 }
-      }
-   } while ($sth->{odbc_more_results});
-   is($success, 111, 'procedure outputs results as result set 3');
+       $sth->bind_param (1, 10, SQL_INTEGER);
+       $sth->execute();
+       $success = -1;
+       while (my @data = $sth->fetchrow_array()) {($success) = @data;}
+       is($success,10, 'procedure outputs results as result set2');
 
+       $sth->bind_param (1, 111, SQL_INTEGER);
+       $sth->execute();
+       $success = -1;
+       do {
+           my @data;
+           while (@data = $sth->fetchrow_array()) {
+               if ($#data == 0) {
+                   ($success) = @data;
+               }
+           }
+       } while ($sth->{odbc_more_results});
+       is($success, 111, 'procedure outputs results as result set 3');
+   };
 
-#
-# special tests for even stranger cases...
-#
+   #
+   # special tests for even stranger cases...
+   #
    eval {$dbh->do("DROP PROCEDURE PERL_DBD_PROC1");};
    $proc1 = <<EOT;
    CREATE PROCEDURE PERL_DBD_PROC1 (\@i INT) AS
@@ -511,36 +521,42 @@ EOT
    $success = -1;
 
    $sth->bind_param (1, 99, SQL_INTEGER);
-   $sth->execute();
-   $success = -1;
-   while (my @data = $sth->fetchrow_array()) {($success) = @data;}
-   is($success, 100, "force rebind test part 2");
+   $cres = $sth->execute();
+   ok(defined($cres), "execute for non searched update via procedure, force_rebind");
+   if (!defined($cres)) {
+       note("Your driver has a bug which means it is probably incorrectly returning SQL_NO_DATA from a non-searched update");
+   }
+ SKIP: {
+       skip "execute failed - probably SQL_NO_DATA bug", 3 if !defined($cres);
+       $success = -1;
+       while (my @data = $sth->fetchrow_array()) {($success) = @data;}
+       is($success, 100, "force rebind test part 2");
 
-   $sth->bind_param (1, 10, SQL_INTEGER);
-   $sth->execute();
-   $success = -1;
-   while (my @data = $sth->fetchrow_array()) {($success) = @data;}
-   is($success, 10, "force rebind test part 3");
+       $sth->bind_param (1, 10, SQL_INTEGER);
+       $sth->execute();
+       $success = -1;
+       while (my @data = $sth->fetchrow_array()) {($success) = @data;}
+       is($success, 10, "force rebind test part 3");
 
-   $sth->bind_param (1, 111, SQL_INTEGER);
-   $sth->execute();
-   $success = -1;
-   do {
-      my @data;
-      while (@data = $sth->fetchrow_array()) {
-	 if ($#data == 0) {
-	    ($success) = @data;
-	 } else {
-	    # diag("Data: ", join(',', @data), "\n");
-	 }
-      }
-   } while ($sth->{odbc_more_results});
-   is($success, 111, "force rebind test part 4");
+       $sth->bind_param (1, 111, SQL_INTEGER);
+       $sth->execute();
+       $success = -1;
+       do {
+           my @data;
+           while (@data = $sth->fetchrow_array()) {
+               if ($#data == 0) {
+                   ($success) = @data;
+               } else {
+                   # diag("Data: ", join(',', @data), "\n");
+               }
+           }
+       } while ($sth->{odbc_more_results});
+       is($success, 111, "force rebind test part 4");
 
-   # ensure the attribute is automatically set.
-   # the multiple result sets will trigger this.
-   is($sth->{odbc_force_rebind}, 1, "forced rebind final");
-
+       # ensure the attribute is automatically set.
+       # the multiple result sets will trigger this.
+       is($sth->{odbc_force_rebind}, 1, "forced rebind final");
+   }
 
    #
    # more special tests
@@ -627,6 +643,8 @@ AS
    $dbh->{odbc_async_exec} = 0;
    is($dbh->{odbc_async_exec}, 0, "reset async exec");
 
+   $dbh->do(q/delete from PERL_DBD_TABLE1/);
+   $dbh->do(q/insert into PERL_DBD_TABLE1 values(1, 1)/);
    $dbh->{odbc_exec_direct} = 1;
    is($dbh->{odbc_exec_direct}, 1, "test setting odbc_exec_direct");
    $sth2 = $dbh->prepare("print 'START' select count(*) from PERL_DBD_TABLE1 print 'END'");
