@@ -176,6 +176,7 @@ int dbd_st_finish(SV *sth, imp_sth_t *imp_sth);
 
 static int  rebind_param(SV *sth, imp_sth_t *imp_sth, imp_dbh_t *imp_dbh, phs_t *phs);
 static void get_param_type(SV *sth, imp_sth_t *imp_sth, imp_dbh_t *imp_dbh, phs_t *phs);
+static void check_for_unicode_param(imp_sth_t *imp_sth, phs_t *phs);
 
 DBISTATE_DECLARE;
 
@@ -1426,11 +1427,14 @@ void dbd_error2(
        error message */
 
     if (!error_found && (err_rc != SQL_NO_DATA_FOUND)) {
+        /* DON'T REMOVE "No error found" from the string below
+           people rely on it as the state was IM008 and I changed it
+           to HY000 */
         if (DBIc_TRACE(imp_xxh, DBD_TRACING, 0, 3))
             TRACE1(imp_dbh, "    ** No error found %d **\n", err_rc);
         DBIh_SET_ERR_CHAR(
             h, imp_xxh, Nullch, 1,
-            "    Unable to fetch information about the error", "IM008", Nullch);
+            "    Unable to fetch information about the error", "HY000", Nullch);
     }
 
 }
@@ -1678,7 +1682,16 @@ int dbd_st_tables(
     }
 
     if (SvOK(catalog)) acatalog = SvPV_nolen(catalog);
+    if (!imp_dbh->catalogs_supported) {
+        acatalog = NULL;
+        *catalog = PL_sv_undef;
+    }
     if (SvOK(schema)) aschema = SvPV_nolen(schema);
+    if (!imp_dbh->schema_usage) {
+        aschema = NULL;
+        *schema = PL_sv_undef;
+    }
+
     if (SvOK(table)) atable = SvPV_nolen(table);
     if (SvOK(table_type)) atype = SvPV_nolen(table_type);
 
@@ -2589,8 +2602,8 @@ int dbd_describe(SV *sth, imp_sth_t *imp_sth, int more)
 # if defined(WITH_UNICODE)
             fbh->ftype = SQL_C_WCHAR;
             /* MS SQL returns bytes, Oracle returns characters ... */
-            fbh->ColLength*=sizeof(SQLWCHAR);
-            fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
+            fbh->ColLength *= sizeof(SQLWCHAR);
+            fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth) + 1;
 # else  /* !WITH_UNICODE */
             fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth) + 1;
 # endif	/* WITH_UNICODE */
@@ -2598,11 +2611,11 @@ int dbd_describe(SV *sth, imp_sth_t *imp_sth, int more)
 #endif  /* SQL_WLONGVARCHAR */
           case SQL_VARCHAR:
             if (fbh->ColDef == 0) {
-                fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
+                fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth) + 1;
             }
             break;
           case SQL_LONGVARCHAR:
-            fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth)+1;
+            fbh->ColDisplaySize = DBIc_LongReadLen(imp_sth) + 1;
             break;
           case MS_SQLS_XML_TYPE: {
               /* XML columns are inherently Unicode so bind them as such and in this case
@@ -3591,7 +3604,7 @@ static void get_param_type(
        /* As SQLDescribeParam is not supported by the ODBC driver we need to
           default a SQL type to bind the parameter as. The default is either
           the value set with odbc_default_bind_type or a fallback of
-          SQL_VARCHAR. */
+          SQL_VARCHAR/SQL_WVARCHAR depending on your data and whether we are unicode build. */
        phs->sql_type = default_parameter_type(
            "SQLDescribeParam not supported", imp_sth, phs);
    } else if (!imp_sth->odbc_describe_parameters) {
@@ -3653,8 +3666,10 @@ static void get_param_type(
                           (unsigned long)phs->param_size);
                phs->sql_type = SQL_VARCHAR;
                break;
-             default:
-               phs->sql_type = phs->described_sql_type;
+  	     default: {
+             check_for_unicode_param(imp_sth, phs);
+	       break;
+	     }
            }
        }
    } else if (phs->describe_param_called) {
@@ -3662,6 +3677,7 @@ static void get_param_type(
            TRACE1(imp_dbh,
                   "      SQLDescribeParam already run and returned rc=%d\n",
                   phs->describe_param_status);
+       check_for_unicode_param(imp_sth, phs);
    }
 
    if (phs->requested_type != 0) {
@@ -4562,7 +4578,7 @@ static db_params S_db_options[] =  {
    { "odbc_utf8_on", ODBC_UTF8_ON, PARAM_READWRITE, PARAM_TYPE_CUSTOM },
    { "odbc_old_unicode", ODBC_OLD_UNICODE, PARAM_READWRITE, PARAM_TYPE_CUSTOM },
    { "odbc_has_unicode", ODBC_HAS_UNICODE, PARAM_READ, PARAM_TYPE_CUSTOM },
-   {"odbc_out_connect_string", ODBC_OUTCON_STR, PARAM_READ, PARAM_TYPE_CUSTOM},
+   { "odbc_out_connect_string", ODBC_OUTCON_STR, PARAM_READ, PARAM_TYPE_CUSTOM},
    { "odbc_describe_parameters", ODBC_DESCRIBE_PARAMETERS, PARAM_READWRITE, PARAM_TYPE_CUSTOM },
    { "odbc_batch_size", ODBC_BATCH_SIZE, PARAM_READWRITE, PARAM_TYPE_CUSTOM },
    { "odbc_array_operations", ODBC_ARRAY_OPERATIONS, PARAM_READWRITE, PARAM_TYPE_CUSTOM },
@@ -6563,6 +6579,41 @@ static int post_connect(
             TRACE1(imp_dbh, "MAX_COLUMN_NAME_LEN = %d\n",
                    imp_dbh->max_column_name_len);
     }
+
+    /* find catalog usage */
+    {
+        char yesno[10];
+
+        rc = SQLGetInfo(imp_dbh->hdbc, SQL_CATALOG_NAME,
+                        yesno,
+                        (SQLSMALLINT) sizeof(yesno), &dbvlen);
+        if (!SQL_SUCCEEDED(rc)) {
+            dbd_error(dbh, rc, "post_connect/SQLGetInfo(SQL_CATALOG_NAME)");
+            imp_dbh->catalogs_supported = 0;
+        } else if (yesno[0] == 'Y') {
+            imp_dbh->catalogs_supported = 1;
+        } else {
+            imp_dbh->catalogs_supported = 0;
+        }
+        if (DBIc_TRACE(imp_dbh, CONNECTION_TRACING, 0, 0))
+            TRACE1(imp_dbh, "SQL_CATALOG_NAME = %d\n",
+                       imp_dbh->catalogs_supported);
+    }
+
+    /* find schema usage */
+    {
+        rc = SQLGetInfo(imp_dbh->hdbc, SQL_SCHEMA_USAGE,
+                        &imp_dbh->schema_usage,
+                        (SQLSMALLINT) sizeof(imp_dbh->schema_usage), &dbvlen);
+        if (!SQL_SUCCEEDED(rc)) {
+            dbd_error(dbh, rc, "post_connect/SQLGetInfo(SQL_SCHEMA_USAGE)");
+            imp_dbh->schema_usage = 0;
+        }
+        if (DBIc_TRACE(imp_dbh, CONNECTION_TRACING, 0, 0))
+            TRACE1(imp_dbh, "SQL_SCHEMA_USAGE = %lu\n",
+                   (unsigned long)imp_dbh->schema_usage);
+    }
+
 #ifdef WITH_UNICODE
     imp_dbh->max_column_name_len = imp_dbh->max_column_name_len *
         sizeof(SQLWCHAR) + 2;
@@ -6780,14 +6831,28 @@ static int post_connect(
 
 
 
+/*
+ * Called when we don't know what to bind a parameter as. This can happen for all sorts
+ * of reasons like:
+ *
+ * o SQLDescribeParam is not supported
+ * o odbc_describe_parameters is set to 0 (in other words telling us not to describe)
+ * o SQLDescribeParam was called and failed
+ * o SQLDescribeParam was called but returned an unrecognised parameter type
+ *
+ * If the data to bind is unicode (SvUTF8 is true) it is bound as SQL_WCHAR
+ * or SQL_WLONGVARCHAR depending on its size. Otherwise it is bound as
+ * SQL_VARCHAR/SQL_LONGVARCHAR.
+ */
 static SQLSMALLINT default_parameter_type(
     char *why, imp_sth_t *imp_sth, phs_t *phs)
 {
+    SQLSMALLINT sql_type;
     struct imp_dbh_st *imp_dbh = NULL;
     imp_dbh = (struct imp_dbh_st *)(DBIc_PARENT_COM(imp_sth));
 
     if (imp_sth->odbc_default_bind_type != 0) {
-        return imp_sth->odbc_default_bind_type;
+        sql_type = imp_sth->odbc_default_bind_type;
     } else {
         /* MS Access can return an invalid precision error in the 12blob
            test unless the large value is bound as an SQL_LONGVARCHAR
@@ -6800,22 +6865,35 @@ static SQLSMALLINT default_parameter_type(
           Of course, being SQL Server, it also has this problem with the
           newer varchar(8000)! */
         if (!SvOK(phs->sv)) {
+	  sql_type = ODBC_BACKUP_BIND_TYPE_VALUE;
            if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
                TRACE2(imp_sth, "%s, sv is not OK, defaulting to %d\n",
-                      why, ODBC_BACKUP_BIND_TYPE_VALUE);
-            return ODBC_BACKUP_BIND_TYPE_VALUE;
+                      why, sql_type);
         } else if (SvCUR(phs->sv) > imp_dbh->switch_to_longvarchar) {
+#if defined(WITH_UNICODE)
+	   if (SvUTF8(phs->sv))
+	     sql_type = SQL_WLONGVARCHAR;
+	   else
+#endif
+	     sql_type = SQL_LONGVARCHAR;
+	   /*return ODBC_BACKUP_LONG_BIND_TYPE_VALUE;*/
            if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
                TRACE3(imp_sth, "%s, sv=%"UVuf" bytes, defaulting to %d\n",
-                      why, (UV)SvCUR(phs->sv), ODBC_BACKUP_LONG_BIND_TYPE_VALUE);
-            return ODBC_BACKUP_LONG_BIND_TYPE_VALUE;
+                      why, (UV)SvCUR(phs->sv), sql_type);
         } else {
+#if defined(WITH_UNICODE)
+	   if (SvUTF8(phs->sv))
+	     sql_type = SQL_WVARCHAR;
+	   else
+#endif
+	     sql_type = SQL_VARCHAR;
+	   /*return ODBC_BACKUP_BIND_TYPE_VALUE;*/
            if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 3))
                TRACE3(imp_sth, "%s, sv=%"UVuf" bytes, defaulting to %d\n",
-                      why, (UV)SvCUR(phs->sv), ODBC_BACKUP_BIND_TYPE_VALUE);
-            return ODBC_BACKUP_BIND_TYPE_VALUE;
+                      why, (UV)SvCUR(phs->sv), sql_type);
         }
     }
+    return sql_type;
 }
 
 
@@ -7475,6 +7553,37 @@ static int taf_callback_wrapper (
 
     PUTBACK;
     return ret;
+}
+
+static void check_for_unicode_param(
+    imp_sth_t *imp_sth,
+    phs_t *phs) {
+
+    if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 5)) {
+        TRACE2(imp_sth, "check_for_unicode_param - sql_type=%s, described=%s",
+               S_SqlTypeToString(phs->sql_type), S_SqlTypeToString(phs->described_sql_type));
+    }
+
+    /* If we didn't called SQLDescribeParam successfully, we've defaulted/guessed so just return
+       as sql_type will already be set */
+    if (!phs->described_sql_type) return;
+
+    if (SvUTF8(phs->sv)) {
+        if (phs->described_sql_type == SQL_CHAR) {
+            phs->sql_type = SQL_WCHAR;
+        } else if (phs->described_sql_type == SQL_VARCHAR) {
+            phs->sql_type = SQL_WVARCHAR;
+        } else if (phs->described_sql_type == SQL_LONGVARCHAR) {
+            phs->sql_type = SQL_WLONGVARCHAR;
+        } else {
+            phs->sql_type = phs->described_sql_type;
+        }
+        if (DBIc_TRACE(imp_sth, DBD_TRACING, 0, 5) && (phs->sql_type != phs->described_sql_type))
+            TRACE1(imp_sth, "      SvUTF8 parameter - changing to %s type\n",
+                   S_SqlTypeToString(phs->sql_type));
+    } else {
+        phs->sql_type = phs->described_sql_type;
+    }
 }
 
 /* end */
